@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaterialManagementPro 使用帮助</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+  display: flex; justify-content: center;
+}
+.wrapper { display: flex; max-width: 1080px; width: 100%; }
+.sidebar {
+  width: 220px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #f5f5f5; padding: 24px 16px; flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+.sidebar h2 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; border: none; padding: 0; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; }
+.sidebar a:hover { background: #e0e0e0; color: #000; text-decoration: none; }
+.sidebar a.sub { padding-left: 20px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 800px; min-width: 0; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 20px 0 8px; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0 8px 24px; }
+li { margin: 4px 0; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+pre { background: #f8f8f8; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0; border: 1px solid #e0e0e0; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; }
+td { background: #fff; font-size: 13px; }
+img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #ddd; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; }
+.badge-red { background: #fdecea; color: #e74c3c; }
+.badge-orange { background: #fef5e7; color: #e67e22; }
+.badge-blue { background: #eaf2f8; color: #2980b9; }
+.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h2>目录</h2>
+  <a href="#overview">1. 插件整体结构</a>
+  <a href="#export">2. 导出资产</a>
+  <a href="#export-modes" class="sub">2.1 三种导出模式</a>
+  <a href="#export-thumb" class="sub">2.2 三种缩略图来源</a>
+  <a href="#export-formats" class="sub">2.3 支持的导出格式</a>
+  <a href="#export-timeline" class="sub">2.4 时间轴动画导出</a>
+  <a href="#import">3. 导入资产</a>
+  <a href="#import-external" class="sub">3.1 从外部文件导入</a>
+  <a href="#import-scene" class="sub">3.2 从库导入到场景</a>
+  <a href="#import-mcm" class="sub">3.3 MCM 材质匹配</a>
+  <a href="#import-manage" class="sub">3.4 资产管理操作</a>
+  <a href="#faq">4. 常见问题与避坑指南</a>
+</nav>
+
+<div class="content">
+
+<h1>MaterialManagementPro 使用帮助</h1>
+
+<img src="base_UI.png" alt="插件主界面">
+
+<h2 id="overview">1. 插件整体结构</h2>
+
+<p>MaterialManagementPro 是 Maya 2025 的材质与资产管理插件，插件文件夹名为 <code>squirrel_asset_manager</code>。</p>
+
+<h3>双库架构</h3>
+<table>
+<tr><th>标签页</th><th>用途</th><th>存储位置</th></tr>
+<tr><td><b>Category 库</b></td><td>长期积累的分类素材库，按类别整理</td><td>系统级目录 <code>AssetLibrary/category_library/</code></td></tr>
+<tr><td><b>Project 库</b></td><td>当前项目专属资产，按项目隔离</td><td>项目内 <code>AssetLibrary/project_library/</code></td></tr>
+</table>
+<p>两个库<b>完全独立</b>，资产不能跨库拖拽或复制。</p>
+
+<h3>六大子库</h3>
+<p>每个库下包含 6 个子库：<b>材质、模型、贴图、灯光、场景、HDR</b>。每个子库可自定义分类层级。</p>
+
+<h3>资产格式</h3>
+<p>所有资产统一为 <code>.zasset</code> 单文件 ZIP 格式，内含元数据（<code>meta.json</code>）、缩略图（<code>thumb.sicon</code> / <code>thumb.mp4</code>）、材质数据（<code>node.zmetal</code>）、几何体（<code>node.ma/fbx/abc...</code>）和贴图（<code>textures/</code> 目录）。一个文件即一个完整资产。</p>
+
+<h2 id="export">2. 导出资产</h2>
+<p>导出是将 Maya 场景中的材质、模型或物体打包为 <code>.zasset</code> 资产的过程。点击 <b>"导出资产"</b> 按钮打开导出对话框（详细按钮说明见对话框中的 "?" 帮助）。</p>
+
+<h3 id="export-modes">2.1 三种导出模式</h3>
+<table>
+<tr><th>模式</th><th>适用场景</th><th>行为</th></tr>
+<tr><td><span class="badge badge-blue">单资产</span></td><td>选 1 个或多个物体合并为 1 个资产</td><td>弹出对话框 → 指定名称/分类 → 交互截图 → 导出</td></tr>
+<tr><td><span class="badge badge-orange">全自动</span></td><td>选 N 个物体每个独立为资产</td><td>首资产交互取景 → 后续自动复用 → 全部导出</td></tr>
+<tr><td><span class="badge badge-red">半自动</span></td><td>选 N 个物体每个独立导出</td><td>每个资产弹出截图 UI → 手动确认 → 下一个</td></tr>
+</table>
+
+<h3 id="export-thumb">2.2 三种缩略图来源</h3>
+<table>
+<tr><th>来源</th><th>速度</th><th>质量</th><th>适合</th></tr>
+<tr><td><span class="badge badge-blue">截屏工具</span></td><td>最快</td><td>视口截图</td><td>模型、贴图等大多数资产</td></tr>
+<tr><td><span class="badge badge-orange">Maya 拍屏</span></td><td>较快</td><td>视口 playblast</td><td>需要动画预览的资产</td></tr>
+<tr><td><span class="badge badge-red">渲染图</span></td><td>最慢</td><td>Arnold 渲染</td><td>高质量材质/场景</td></tr>
+</table>
+<div class="note"><b>时间轴：</b>拍屏/渲染图 + 时间轴 → MP4 动图。缩略图在所有资产导出后统一生成，不中断几何体导出。</div>
+
+<h3 id="export-formats">2.3 支持的导出格式</h3>
+<table>
+<tr><th>类别</th><th>格式</th><th>说明</th></tr>
+<tr><td>几何体</td><td>ma / mb / fbx / obj / usd</td><td>标准建模格式</td></tr>
+<tr><td>缓存</td><td>abc (Alembic)</td><td>动画缓存</td></tr>
+<tr><td>代理</td><td>ass / rs / vrscene</td><td>渲染器代理</td></tr>
+</table>
+
+<h3 id="export-timeline">2.4 时间轴动画导出</h3>
+<p>勾选<b>"时间轴"</b>：abc/usd/ass/rs/vrscene 导出完整动画。渲染图逐帧合成 MP4（⚠️ 可能耗时数分钟，Maya 暂时无响应属正常）。</p>
+
+<h2 id="import">3. 导入资产</h2>
+
+<img src="input_UI.png" alt="导入界面">
+
+<h3 id="import-external">3.1 从外部文件导入</h3>
+<div class="step">
+<ol>
+<li>工具栏 <b>"导入" → "从文件导入"</b>（或 "从文件夹导入"）</li>
+<li>选择 Maya 文件或贴图文件，自动创建 <code>.zasset</code> 添加到当前分类</li>
+<li>导入文件夹时按名称自动分组，每组对应一个 .zasset</li>
+</ol>
+</div>
+
+<h3 id="import-scene">3.2 从库导入到场景</h3>
+<p>右键资产弹出菜单：</p>
+<table>
+<tr><th>菜单项</th><th>效果</th></tr>
+<tr><td><b>导入到场景</b></td><td>自动选择最合适的格式导入</td></tr>
+<tr><td><b>导入 → .zmetal</b></td><td>重建完整着色网络（节点、属性、连接、贴图）。材质名保持原名，冲突时 Maya 自动加数字编号</td></tr>
+<tr><td><b>导入 → .mcm</b></td><td>导入材质 + 自动匹配赋予选中物体（见 3.3）</td></tr>
+<tr><td><b>导入 → .ma/.fbx/.obj/...</b></td><td>按指定格式导入几何体</td></tr>
+<tr><td><b>导入 → .ass/.rs/.vrscene</b></td><td>创建渲染器代理引用节点</td></tr>
+</table>
+
+<div class="note"><b>.zmetal 原理：</b>记录 Maya 材质网络的完整信息。导入时在场景中重建整个着色网络。原始 Maya 文件不存在也能还原材质。</div>
+
+<h3 id="import-mcm">3.3 MCM 材质匹配</h3>
+<p><b>.mcm</b> 记录物体拓扑特征（<b>顶点数、面数、边数</b>），导入时通过三维特征精确匹配，自动赋予材质。</p>
+
+<div class="step">
+<b>典型场景：</b>abc/obj 等格式不包含材质数据。导入后物体无材质 → 选中物体 → 右键 <b>"导入 → .mcm"</b><br>
+<ol>
+<li>先导入 .zmetal（重建材质网络）</li>
+<li>计算选中物体顶点/面/边数</li>
+<li>在 .mcm 中查找三维特征精确匹配的原物体</li>
+<li>将材质自动赋予选中物体（含面级分配）</li>
+</ol>
+</div>
+
+<div class="note"><b>前提：</b>必须在 Maya 中选中目标物体。顶点/面/边数必须与原模型完全相同（无三角化、合点等）。资产导出时必须勾选 .mcm 复选框。</div>
+
+<h3 id="import-manage">3.4 资产管理操作</h3>
+<ul>
+<li><b>复制/粘贴：</b>跨分类粘贴。必须通过插件菜单</li>
+<li><b>重命名：</b>右侧属性面板修改后回车。不要直接改 .zasset 文件名</li>
+<li><b>删除：</b>二次确认</li>
+<li><b>导出 .zasset：</b>复制到指定文件夹用于跨库迁移或备份</li>
+</ul>
+
+<div class="warn"><b>⚠️ 禁止：</b>手动复制/移动/重命名 .zasset 文件。插件用数据库管理，手动操作导致资产不可见。</div>
+
+<h2 id="faq">4. 常见问题</h2>
+
+<h3>❌ 手动复制 .zasset 文件</h3>
+<p>复制的资产在插件中不显示。<b>正确：</b>右键 → 复制 → 粘贴。</p>
+
+<h3>❌ 直接重命名 .zasset</h3>
+<p>资产消失。<b>正确：</b>属性面板修改名称后回车。</p>
+
+<h3>❌ 删除插件文件夹</h3>
+<p>分类下资产集体消失。<b>正确：</b>插件内逐个删除。</p>
+
+<h3>❌ 跨库拖拽</h3>
+<p>Category 和 Project 独立。<b>正确：</b>导出 .zasset → 目标库导入。</p>
+
+<h3>❌ 时间轴 + 渲染图后 Maya 卡死</h3>
+<p>正常渲染过程，等待完成。急用选拍屏。</p>
+
+<h3>❌ 导入 abc/obj 无材质</h3>
+<p>选中物体 → 右键 → <b>导入 → .mcm</b>（资产须含 .mcm）。</p>
+
+<h3>❌ MCM 匹配失败</h3>
+<p>顶点/面/边数与原模型不一致（可能三角化/合点过）。确保拓扑完全一致。</p>
+
+<h3>❌ 导入后贴图路径错误</h3>
+<p>重新导出该资产（贴图自动重定向到项目 sourceimages 目录）。</p>
+
+<div class="footer">
+MaterialManagementPro v2.0 — Maya 2025 材质/资产管理插件
+</div>
+
+</div><!-- content -->
+</div><!-- wrapper -->
+</body>
+</html>
