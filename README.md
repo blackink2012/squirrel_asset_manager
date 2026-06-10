@@ -9,10 +9,14 @@ Maya 插件级别的资产管理与批量操作平台。支持材质、模型、
 ### 下载
 
 ```bash
-git clone https://gitee.com/zhangzhangle/squirrel_asset_manager.git
+git clone https://gitee.com/zhangzhangle/MayaSquirrelAssetManager.git
 ```
 
-克隆后文件夹名为 `squirrel_asset_manager`，直接将此文件夹放入 Maya 脚本路径即可。
+克隆后文件夹名为 `MayaSquirrelAssetManager`，**使用前需重命名**为 `squirrel_asset_manager`：
+
+```bash
+ren MayaSquirrelAssetManager squirrel_asset_manager
+```
 
 ### 安装
 
