@@ -1,0 +1,1002 @@
+{
+  "version": "1.0",
+  "description": "PBR贴图命名规则与OpenPBR属性映射配置",
+  "default_material_type": "openPBRSurface",
+  "resolution_subdirs": [
+    "2k",
+    "4k",
+    "8k",
+    "1k",
+    "16k",
+    "512",
+    "1024",
+    "2048",
+    "4096",
+    "8192"
+  ],
+  "resolution_patterns": [
+    "_(2k|4k|8k|1k|16k|512|1024|2048|4096|8192)$",
+    "_(2k|4k|8k|1k|16k|512|1024|2048|4096|8192)_"
+  ],
+  "texture_type_rules": {
+    "baseColor": {
+      "aliases": [
+        "basecolor",
+        "base_color",
+        "albedo",
+        "diffuse",
+        "col",
+        "color",
+        "base",
+        "diff"
+      ],
+      "priority": 1,
+      "color_space": "sRGB",
+      "is_color": true
+    },
+    "normal": {
+      "aliases": [
+        "nrm",
+        "n",
+        "normalmap",
+        "norm",
+        "nor",
+        "nor_dx",
+        "nor_gl",
+        "normal"
+      ],
+      "priority": 2,
+      "color_space": "Raw",
+      "is_color": false
+    },
+    "roughness": {
+      "aliases": [
+        "rough",
+        "rgh",
+        "roughnessmap",
+        "rough_map",
+        "roughness"
+      ],
+      "priority": 3,
+      "color_space": "Raw",
+      "is_color": false,
+      "invert_if": [
+        "glossiness",
+        "gloss",
+        "smoothness"
+      ]
+    },
+    "metallic": {
+      "aliases": [
+        "metal",
+        "mtl",
+        "metalness",
+        "metal_map",
+        "metallic_map"
+      ],
+      "priority": 4,
+      "color_space": "Raw",
+      "is_color": false
+    },
+    "ao": {
+      "aliases": [
+        "ambient",
+        "occlusion",
+        "ambient_occlusion",
+        "ao_map",
+        "ao",
+        "occ"
+      ],
+      "priority": 5,
+      "color_space": "Raw",
+      "is_color": false
+    },
+    "arm": {
+      "aliases": [
+        "arm"
+      ],
+      "priority": 5,
+      "color_space": "Raw",
+      "is_color": false,
+      "is_combo": true,
+      "channels": {
+        "r": "ao",
+        "g": "roughness",
+        "b": "metallic"
+      }
+    },
+    "orm": {
+      "aliases": [
+        "orm"
+      ],
+      "priority": 5,
+      "color_space": "Raw",
+      "is_color": false,
+      "is_combo": true,
+      "channels": {
+        "r": "ao",
+        "g": "roughness",
+        "b": "metallic"
+      }
+    },
+    "emissive": {
+      "aliases": [
+        "emit",
+        "emission",
+        "illumination",
+        "emissive_map",
+        "glow"
+      ],
+      "priority": 6,
+      "color_space": "sRGB",
+      "is_color": true
+    },
+    "height": {
+      "aliases": [
+        "bump",
+        "disp",
+        "displacement",
+        "heightmap",
+        "height_map",
+        "disp_map",
+        "height",
+        "bump_map"
+      ],
+      "priority": 7,
+      "color_space": "Raw",
+      "is_color": false
+    },
+    "opacity": {
+      "aliases": [
+        "alpha",
+        "transparency",
+        "mask",
+        "opacity_map",
+        "alpha_map",
+        "mask_map"
+      ],
+      "priority": 8,
+      "color_space": "Raw",
+      "is_color": false
+    },
+    "clearcoat": {
+      "aliases": [
+        "coat",
+        "coating",
+        "clearcoat_map"
+      ],
+      "priority": 9,
+      "color_space": "Raw",
+      "is_color": false
+    },
+    "clearcoatRoughness": {
+      "aliases": [
+        "coatRough",
+        "ccRough",
+        "clearcoat_rough",
+        "clearcoat_roughness"
+      ],
+      "priority": 10,
+      "color_space": "Raw",
+      "is_color": false
+    },
+    "specular": {
+      "aliases": [
+        "spec",
+        "refl",
+        "reflection",
+        "specular_map",
+        "reflectivity"
+      ],
+      "priority": 11,
+      "color_space": "Raw",
+      "is_color": false
+    },
+    "subsurface": {
+      "aliases": [
+        "sss",
+        "subsurface_color",
+        "translucency",
+        "sss_map",
+        "translucent"
+      ],
+      "priority": 12,
+      "color_space": "sRGB",
+      "is_color": true
+    },
+    "anisotropy": {
+      "aliases": [
+        "aniso",
+        "anisotropy_map",
+        "direction"
+      ],
+      "priority": 13,
+      "color_space": "Raw",
+      "is_color": false
+    },
+    "ior": {
+      "aliases": [
+        "index_of_refraction",
+        "refractive_index"
+      ],
+      "priority": 14,
+      "color_space": "Raw",
+      "is_color": false,
+      "is_numeric": true
+    }
+  },
+  "material_property_mappings": {
+    "openPBRSurface": {
+      "label": "OpenPBR Surface",
+      "baseColor": {
+        "node_attribute": "baseColor",
+        "connection_type": "color"
+      },
+      "normal": {
+        "node_attribute": "normalCamera",
+        "connection_type": "vector",
+        "requires_conversion": true,
+        "conversion_node": "bump2d"
+      },
+      "roughness": {
+        "node_attribute": "specularRoughness",
+        "connection_type": "scalar"
+      },
+      "metallic": {
+        "node_attribute": "baseMetalness",
+        "connection_type": "scalar"
+      },
+      "emissive": {
+        "node_attribute": "emissionColor",
+        "connection_type": "color"
+      },
+      "opacity": {
+        "node_attribute": "geometryOpacity",
+        "connection_type": "scalar"
+      },
+      "height": {
+        "node_attribute": "displacement",
+        "connection_type": "scalar",
+        "requires_conversion": true,
+        "conversion_node": "displacementShader"
+      },
+      "clearcoat": {
+        "node_attribute": "coatWeight",
+        "connection_type": "scalar"
+      },
+      "clearcoatRoughness": {
+        "node_attribute": "coatRoughness",
+        "connection_type": "scalar"
+      },
+      "specular": {
+        "node_attribute": "specularColor",
+        "connection_type": "color"
+      },
+      "subsurface": {
+        "node_attribute": "subsurfaceColor",
+        "connection_type": "color"
+      },
+      "anisotropy": {
+        "node_attribute": "specularRoughnessAnisotropy",
+        "connection_type": "scalar"
+      },
+      "ior": {
+        "node_attribute": "specularIOR",
+        "connection_type": "scalar",
+        "is_numeric": true
+      },
+      "arm": {
+        "is_combo": true,
+        "channels": {
+          "r": {
+            "usage": "ao"
+          },
+          "g": {
+            "node_attribute": "specularRoughness",
+            "connection_type": "scalar"
+          },
+          "b": {
+            "node_attribute": "baseMetalness",
+            "connection_type": "scalar"
+          }
+        }
+      },
+      "orm": {
+        "is_combo": true,
+        "channels": {
+          "r": {
+            "usage": "ao"
+          },
+          "g": {
+            "node_attribute": "specularRoughness",
+            "connection_type": "scalar"
+          },
+          "b": {
+            "node_attribute": "baseMetalness",
+            "connection_type": "scalar"
+          }
+        }
+      }
+    },
+    "aiStandardSurface": {
+      "label": "Arnold Standard Surface",
+      "baseColor": {
+        "node_attribute": "baseColor",
+        "connection_type": "color"
+      },
+      "normal": {
+        "node_attribute": "normalCamera",
+        "connection_type": "vector",
+        "requires_conversion": true,
+        "conversion_node": "bump2d"
+      },
+      "roughness": {
+        "node_attribute": "specularRoughness",
+        "connection_type": "scalar"
+      },
+      "metallic": {
+        "node_attribute": "metalness",
+        "connection_type": "scalar"
+      },
+      "emissive": {
+        "node_attribute": "emissionColor",
+        "connection_type": "color"
+      },
+      "opacity": {
+        "node_attribute": "opacity",
+        "connection_type": "scalar"
+      },
+      "height": {
+        "node_attribute": "displacement",
+        "connection_type": "scalar",
+        "requires_conversion": true,
+        "conversion_node": "displacementShader"
+      },
+      "clearcoat": {
+        "node_attribute": "coat",
+        "connection_type": "scalar"
+      },
+      "clearcoatRoughness": {
+        "node_attribute": "coatRoughness",
+        "connection_type": "scalar"
+      },
+      "specular": {
+        "node_attribute": "specularColor",
+        "connection_type": "color"
+      },
+      "subsurface": {
+        "node_attribute": "subsurfaceColor",
+        "connection_type": "color"
+      },
+      "anisotropy": {
+        "node_attribute": "specularAnisotropy",
+        "connection_type": "scalar"
+      },
+      "ior": {
+        "node_attribute": "specularIOR",
+        "connection_type": "scalar",
+        "is_numeric": true
+      },
+      "arm": {
+        "is_combo": true,
+        "channels": {
+          "r": {
+            "usage": "ao"
+          },
+          "g": {
+            "node_attribute": "specularRoughness",
+            "connection_type": "scalar"
+          },
+          "b": {
+            "node_attribute": "metalness",
+            "connection_type": "scalar"
+          }
+        }
+      },
+      "orm": {
+        "is_combo": true,
+        "channels": {
+          "r": {
+            "usage": "ao"
+          },
+          "g": {
+            "node_attribute": "specularRoughness",
+            "connection_type": "scalar"
+          },
+          "b": {
+            "node_attribute": "metalness",
+            "connection_type": "scalar"
+          }
+        }
+      }
+    },
+    "VRayMtl": {
+      "label": "V-Ray Material",
+      "baseColor": {
+        "node_attribute": "color",
+        "connection_type": "color"
+      },
+      "normal": {
+        "node_attribute": "bumpMap",
+        "connection_type": "vector",
+        "requires_conversion": true,
+        "conversion_node": "bump2d"
+      },
+      "roughness": {
+        "node_attribute": "reflectionGlossiness",
+        "connection_type": "scalar",
+        "invert": true
+      },
+      "metallic": {
+        "node_attribute": "metalness",
+        "connection_type": "scalar"
+      },
+      "emissive": {
+        "node_attribute": "illumColor",
+        "connection_type": "color"
+      },
+      "opacity": {
+        "node_attribute": "opacityMap",
+        "connection_type": "scalar"
+      },
+      "height": {
+        "node_attribute": "displacement",
+        "connection_type": "scalar",
+        "requires_conversion": true,
+        "conversion_node": "displacementShader"
+      },
+      "clearcoat": {
+        "node_attribute": "coatAmount",
+        "connection_type": "scalar"
+      },
+      "clearcoatRoughness": {
+        "node_attribute": "coatRoughness",
+        "connection_type": "scalar"
+      },
+      "specular": {
+        "node_attribute": "reflectionColor",
+        "connection_type": "color"
+      },
+      "arm": {
+        "is_combo": true,
+        "channels": {
+          "r": {
+            "usage": "ao"
+          },
+          "g": {
+            "node_attribute": "reflectionGlossiness",
+            "connection_type": "scalar"
+          },
+          "b": {
+            "node_attribute": "metalness",
+            "connection_type": "scalar"
+          }
+        }
+      },
+      "orm": {
+        "is_combo": true,
+        "channels": {
+          "r": {
+            "usage": "ao"
+          },
+          "g": {
+            "node_attribute": "reflectionGlossiness",
+            "connection_type": "scalar"
+          },
+          "b": {
+            "node_attribute": "metalness",
+            "connection_type": "scalar"
+          }
+        }
+      }
+    },
+    "RedshiftMaterial": {
+      "label": "Redshift Material",
+      "baseColor": {
+        "node_attribute": "diffuse_color",
+        "connection_type": "color"
+      },
+      "normal": {
+        "node_attribute": "normalCamera",
+        "connection_type": "vector",
+        "requires_conversion": true,
+        "conversion_node": "bump2d"
+      },
+      "roughness": {
+        "node_attribute": "refl_roughness",
+        "connection_type": "scalar"
+      },
+      "metallic": {
+        "node_attribute": "refl_metalness",
+        "connection_type": "scalar"
+      },
+      "emissive": {
+        "node_attribute": "emission_color",
+        "connection_type": "color"
+      },
+      "opacity": {
+        "node_attribute": "opacity",
+        "connection_type": "scalar"
+      },
+      "height": {
+        "node_attribute": "displacement",
+        "connection_type": "scalar",
+        "requires_conversion": true,
+        "conversion_node": "displacementShader"
+      },
+      "clearcoat": {
+        "node_attribute": "coat_amount",
+        "connection_type": "scalar"
+      },
+      "clearcoatRoughness": {
+        "node_attribute": "coat_roughness",
+        "connection_type": "scalar"
+      },
+      "arm": {
+        "is_combo": true,
+        "channels": {
+          "r": {
+            "usage": "ao"
+          },
+          "g": {
+            "node_attribute": "refl_roughness",
+            "connection_type": "scalar"
+          },
+          "b": {
+            "node_attribute": "refl_metalness",
+            "connection_type": "scalar"
+          }
+        }
+      },
+      "orm": {
+        "is_combo": true,
+        "channels": {
+          "r": {
+            "usage": "ao"
+          },
+          "g": {
+            "node_attribute": "refl_roughness",
+            "connection_type": "scalar"
+          },
+          "b": {
+            "node_attribute": "refl_metalness",
+            "connection_type": "scalar"
+          }
+        }
+      }
+    },
+    "standardSurface": {
+      "label": "Maya Standard Surface",
+      "baseColor": {
+        "node_attribute": "baseColor",
+        "connection_type": "color"
+      },
+      "normal": {
+        "node_attribute": "normalCamera",
+        "connection_type": "vector",
+        "requires_conversion": true,
+        "conversion_node": "bump2d"
+      },
+      "roughness": {
+        "node_attribute": "specularRoughness",
+        "connection_type": "scalar"
+      },
+      "metallic": {
+        "node_attribute": "metalness",
+        "connection_type": "scalar"
+      },
+      "emissive": {
+        "node_attribute": "emission",
+        "connection_type": "color"
+      },
+      "opacity": {
+        "node_attribute": "opacity",
+        "connection_type": "scalar"
+      },
+      "height": {
+        "node_attribute": "displacement",
+        "connection_type": "scalar",
+        "requires_conversion": true,
+        "conversion_node": "displacementShader"
+      },
+      "clearcoat": {
+        "node_attribute": "coat",
+        "connection_type": "scalar"
+      },
+      "clearcoatRoughness": {
+        "node_attribute": "coatRoughness",
+        "connection_type": "scalar"
+      },
+      "specular": {
+        "node_attribute": "specularColor",
+        "connection_type": "color"
+      },
+      "subsurface": {
+        "node_attribute": "subsurfaceColor",
+        "connection_type": "color"
+      },
+      "anisotropy": {
+        "node_attribute": "anisotropy",
+        "connection_type": "scalar"
+      },
+      "ior": {
+        "node_attribute": "indexOfRefraction",
+        "connection_type": "scalar",
+        "is_numeric": true
+      },
+      "arm": {
+        "is_combo": true,
+        "channels": {
+          "r": {
+            "usage": "ao"
+          },
+          "g": {
+            "node_attribute": "specularRoughness",
+            "connection_type": "scalar"
+          },
+          "b": {
+            "node_attribute": "metalness",
+            "connection_type": "scalar"
+          }
+        }
+      },
+      "orm": {
+        "is_combo": true,
+        "channels": {
+          "r": {
+            "usage": "ao"
+          },
+          "g": {
+            "node_attribute": "specularRoughness",
+            "connection_type": "scalar"
+          },
+          "b": {
+            "node_attribute": "metalness",
+            "connection_type": "scalar"
+          }
+        }
+      }
+    },
+    "lambert": {
+      "label": "Lambert",
+      "baseColor": {
+        "node_attribute": "color",
+        "connection_type": "color"
+      },
+      "opacity": {
+        "node_attribute": "transparency",
+        "connection_type": "color"
+      },
+      "emissive": {
+        "node_attribute": "incandescence",
+        "connection_type": "color"
+      }
+    }
+  },
+  "openpbr_property_mapping": {
+    "baseColor": {
+      "node_attribute": "baseColor",
+      "connection_type": "color",
+      "default_value": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "normal": {
+      "node_attribute": "normalCamera",
+      "connection_type": "vector",
+      "requires_conversion": true,
+      "conversion_node": "bump2d",
+      "default_value": [
+        0.5,
+        0.5,
+        1.0
+      ]
+    },
+    "roughness": {
+      "node_attribute": "roughness",
+      "connection_type": "scalar",
+      "default_value": 0.5
+    },
+    "metallic": {
+      "node_attribute": "metallic",
+      "connection_type": "scalar",
+      "default_value": 0.0
+    },
+    "ao": {
+      "node_attribute": "ao",
+      "connection_type": "scalar",
+      "default_value": 1.0
+    },
+    "emissive": {
+      "node_attribute": "emissive",
+      "connection_type": "color",
+      "default_value": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "height": {
+      "node_attribute": "displacement",
+      "connection_type": "scalar",
+      "requires_conversion": true,
+      "conversion_node": "displacementShader",
+      "default_value": 0.0
+    },
+    "opacity": {
+      "node_attribute": "opacity",
+      "connection_type": "scalar",
+      "default_value": 1.0
+    },
+    "clearcoat": {
+      "node_attribute": "clearcoat",
+      "connection_type": "scalar",
+      "default_value": 0.0
+    },
+    "clearcoatRoughness": {
+      "node_attribute": "clearcoatRoughness",
+      "connection_type": "scalar",
+      "default_value": 0.2
+    },
+    "specular": {
+      "node_attribute": "specular",
+      "connection_type": "color",
+      "default_value": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "subsurface": {
+      "node_attribute": "subsurfaceColor",
+      "connection_type": "color",
+      "default_value": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "anisotropy": {
+      "node_attribute": "anisotropy",
+      "connection_type": "scalar",
+      "default_value": 0.0
+    },
+    "ior": {
+      "node_attribute": "ior",
+      "connection_type": "scalar",
+      "is_numeric": true,
+      "default_value": 1.5
+    }
+  },
+  "connection_recipes": {
+    "ao_multiply": {
+      "description": "AO remap → × Albedo → shader。AO 暗部补偿标准连接",
+      "requires": ["ao", "baseColor"],
+      "exclusive": [],
+      "nodes": [
+        {"id": "ao_mult_div", "type": "multiplyDivide", "attrs": {"operation": 1}},
+        {"id": "ao_remap", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}}
+      ],
+      "connections": [
+        {"from": "{ao}.outColorR", "to": "{ao_remap}.inputValue"},
+        {"from": "{ao_remap}.outValue", "to": "{ao_mult_div}.input2X"},
+        {"from": "{ao_remap}.outValue", "to": "{ao_mult_div}.input2Y"},
+        {"from": "{ao_remap}.outValue", "to": "{ao_mult_div}.input2Z"},
+        {"from": "{baseColor}.outColor", "to": "{ao_mult_div}.input1"},
+        {"from": "{ao_mult_div}.output", "to": "{shader}.{pbr:baseColor}"}
+      ],
+      "skip_direct": ["ao", "baseColor"]
+    },
+    "arm_channel_split": {
+      "description": "ARM 组合贴图通道拆分：R=AO, G=Roughness, B=Metallic。属性名自动适配当前着色器",
+      "requires": ["arm"],
+      "nodes": [
+        {"id": "arm_remap_ao", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}},
+        {"id": "arm_remap_mtl", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}},
+        {"id": "arm_mult_div", "type": "multiplyDivide", "attrs": {"operation": 1}}
+      ],
+      "connections": [
+        {"from": "{arm}.outColorR", "to": "{arm_remap_ao}.inputValue"},
+        {"from": "{arm_remap_ao}.outValue", "to": "{arm_mult_div}.input2X"},
+        {"from": "{arm_remap_ao}.outValue", "to": "{arm_mult_div}.input2Y"},
+        {"from": "{arm_remap_ao}.outValue", "to": "{arm_mult_div}.input2Z"},
+        {"from": "{baseColor}.outColor", "to": "{arm_mult_div}.input1", "if_has": "baseColor"},
+        {"from": "{arm_mult_div}.output", "to": "{shader}.{pbr:baseColor}", "if_has": "baseColor"},
+        {"from": "{arm}.outColorG", "to": "{shader}.{pbr:roughness}"},
+        {"from": "{arm}.outColorB", "to": "{arm_remap_mtl}.inputValue"},
+        {"from": "{arm_remap_mtl}.outValue", "to": "{shader}.{pbr:metallic}"}
+      ],
+      "skip_direct": ["arm", "ao", "baseColor"]
+    },
+    "orm_channel_split": {
+      "description": "ORM 组合贴图通道拆分：R=AO, G=Roughness, B=Metallic。属性名自动适配当前着色器",
+      "requires": ["orm"],
+      "nodes": [
+        {"id": "orm_remap_ao", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}},
+        {"id": "orm_remap_mtl", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}},
+        {"id": "orm_mult_div", "type": "multiplyDivide", "attrs": {"operation": 1}}
+      ],
+      "connections": [
+        {"from": "{orm}.outColorR", "to": "{orm_remap_ao}.inputValue"},
+        {"from": "{orm_remap_ao}.outValue", "to": "{orm_mult_div}.input2X"},
+        {"from": "{orm_remap_ao}.outValue", "to": "{orm_mult_div}.input2Y"},
+        {"from": "{orm_remap_ao}.outValue", "to": "{orm_mult_div}.input2Z"},
+        {"from": "{baseColor}.outColor", "to": "{orm_mult_div}.input1", "if_has": "baseColor"},
+        {"from": "{orm_mult_div}.output", "to": "{shader}.{pbr:baseColor}", "if_has": "baseColor"},
+        {"from": "{orm}.outColorG", "to": "{shader}.{pbr:roughness}"},
+        {"from": "{orm}.outColorB", "to": "{orm_remap_mtl}.inputValue"},
+        {"from": "{orm_remap_mtl}.outValue", "to": "{shader}.{pbr:metallic}"}
+      ],
+      "skip_direct": ["orm", "ao", "baseColor"]
+    },
+    "normal_height_cascade": {
+      "description": "高度图 bump2d 输出喂入法线 bump2d 的 normalCamera，法线上叠加微凹凸",
+      "requires": ["normal", "height"],
+      "nodes": [
+        {"id": "height_bump", "type": "bump2d", "attrs": {"bumpDepth": 0.001}},
+        {"id": "normal_bump", "type": "bump2d", "attrs": {"bumpInterp": 1.0}}
+      ],
+      "connections": [
+        {"from": "{height}.outAlpha", "to": "{height_bump}.bumpValue"},
+        {"from": "{normal}.outAlpha", "to": "{normal_bump}.bumpValue"},
+        {"from": "{height_bump}.outNormal", "to": "{normal_bump}.normalCamera"},
+        {"from": "{normal_bump}.outNormal", "to": "{shader}.{pbr:normal}"}
+      ],
+      "skip_direct": ["normal", "height"]
+    },
+    "normal_simple": {
+      "description": "单法线贴图连接：normal → bump2d → shader（无高度图时的降级方案）",
+      "requires": ["normal"],
+      "exclusive": ["height"],
+      "nodes": [
+        {"id": "normal_bump", "type": "bump2d", "attrs": {"bumpInterp": 1.0}}
+      ],
+      "connections": [
+        {"from": "{normal}.outAlpha", "to": "{normal_bump}.bumpValue"},
+        {"from": "{normal_bump}.outNormal", "to": "{shader}.{pbr:normal}"}
+      ],
+      "skip_direct": ["normal"]
+    },
+    "scalar_remap": {
+      "description": "标量贴图通过 remapValue 重映射后连入着色器（可用于 roughness/metallic 等）",
+      "requires_any": ["roughness", "metallic"],
+      "optional": true,
+      "nodes": [
+        {"id": "remap", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}}
+      ],
+      "connections": [
+        {"from": "{source}.outColorR", "to": "{remap}.inputValue"},
+        {"from": "{remap}.outValue", "to": "{shader}.{pbr:{source}}"}
+      ],
+      "per_texture": true,
+      "skip_direct": ["roughness", "metallic"]
+    },
+    "place2dTexture_shared": {
+      "description": "所有 file 节点共享一个 place2dTexture，统一 UV 控制（Megascans 模式）",
+      "optional": true,
+      "nodes": [
+        {"id": "coords", "type": "place2dTexture", "attrs": {}}
+      ],
+      "connect_all_files": true
+    }
+  },
+  "file_routing": {
+    "textures": [
+      ".png",
+      ".jpg",
+      ".jpeg",
+      ".exr",
+      ".hdr",
+      ".tga",
+      ".tiff",
+      ".tif",
+      ".bmp",
+      ".psd"
+    ],
+    "root": [
+      ".ma",
+      ".mb"
+    ]
+  },
+  "naming_conventions": {
+    "separator": "_",
+    "suffix_position": "end",
+    "allow_mixed_case": true
+  },
+  "category_mapping": {
+    "metal": [
+      "metal",
+      "steel",
+      "iron",
+      "copper",
+      "gold",
+      "silver",
+      "chrome",
+      "aluminum"
+    ],
+    "fabric": [
+      "fabric",
+      "cloth",
+      "textile",
+      "cotton",
+      "wool",
+      "silk"
+    ],
+    "plastic": [
+      "plastic",
+      "polymer",
+      "acrylic",
+      "vinyl"
+    ],
+    "glass": [
+      "glass",
+      "crystal",
+      "translucent"
+    ],
+    "wood": [
+      "wood",
+      "timber",
+      "oak",
+      "maple",
+      "pine"
+    ],
+    "stone": [
+      "stone",
+      "marble",
+      "granite",
+      "concrete"
+    ],
+    "skin": [
+      "skin",
+      "flesh",
+      "human",
+      "character"
+    ],
+    "liquid": [
+      "liquid",
+      "water",
+      "metal",
+      "glass"
+    ],
+    "foliage": [
+      "foliage",
+      "leaf",
+      "plant",
+      "grass",
+      "tree"
+    ]
+  },
+  "thumbnail_search_paths": [
+    "{folderName}_ma_fileDependencies/thumbnail.png",
+    "{materialName}_Preview.png"
+  ],
+  "metadata_sources": [
+    {
+      "file_pattern": "{folderName}_ma_fileDependencies/{folderName}.zooInfo",
+      "file_format": "json",
+      "field_mapping": [
+        {
+          "source": "tags",
+          "target": "tags",
+          "processor": "split_comma"
+        }
+      ]
+    },
+    {
+      "file_pattern": "{materialName}.json",
+      "file_format": "json",
+      "field_mapping": [
+        {
+          "source": "tags",
+          "target": "tags"
+        },
+        {
+          "source": "name",
+          "target": "description"
+        }
+      ]
+    }
+  ]
+}

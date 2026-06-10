@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>设置 — 使用说明</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+  display: flex; justify-content: center;
+}
+.wrapper { display: flex; max-width: 1080px; width: 100%; }
+.sidebar {
+  width: 220px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #f5f5f5; padding: 24px 16px; flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+.sidebar h3 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; }
+.sidebar a:hover { background: #e0e0e0; color: #000; text-decoration: none; }
+.sidebar a.sub { padding-left: 20px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 800px; min-width: 0; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 20px 0 8px; }
+p, li { margin: 6px 0; }
+ol, ul { margin: 8px 0 8px 24px; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; }
+td { background: #fff; font-size: 13px; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h3>目录</h3>
+  <a href="#general">常规</a>
+  <a href="#general-display" class="sub">显示设置</a>
+  <a href="#general-library" class="sub">资产库管理</a>
+  <a href="#general-conflict" class="sub">同名冲突</a>
+  <a href="#export-defaults">导出默认值</a>
+  <a href="#formats">支持格式</a>
+  <a href="#texture-suffixes">贴图后缀</a>
+  <a href="#tags">常用标签</a>
+  <a href="#subs">子库与分类</a>
+  <a href="#advanced">高级配置</a>
+</nav>
+
+<div class="content">
+
+<h1>设置 — 界面说明</h1>
+
+<h2 id="general">常规</h2>
+
+<h3 id="general-display">显示设置</h3>
+
+<table>
+<tr><th>设置项</th><th>说明</th></tr>
+<tr><td><b>字体大小</b></td><td>调整界面所有文字大小（10-24px），拖动滑块实时预览</td></tr>
+<tr><td><b>默认视图</b></td><td>图标网格或列表视图。资产浏览的默认显示方式</td></tr>
+<tr><td><b>缩略图大小</b></td><td>资产网格中缩略图的尺寸（100-1024px）</td></tr>
+</table>
+
+<h3 id="general-library">资产库管理</h3>
+
+<p>管理多个资产库的位置和名称。支持添加、删除、设为默认操作。</p>
+
+<ol>
+<li><b>+ 添加资产库</b> — 选择磁盘上的资产库文件夹，输入显示名称</li>
+<li><b>- 删除选中</b> — 从列表中移除（不删除磁盘文件）。至少保留一个库</li>
+<li><b>☆ 设为默认</b> — 标记为 <code>[默认]</code> 的库在插件启动时自动加载</li>
+</ol>
+
+<div class="note">
+<b>提示：</b>新建的空文件夹在首次切换到该库时自动创建核心目录结构（<code>materials/</code>、<code>models/</code> 等）。
+</div>
+
+<h3 id="general-conflict">同名冲突处理</h3>
+
+<p>当导出的资产与已有资产同名时的处理策略：</p>
+
+<table>
+<tr><th>策略</th><th>说明</th></tr>
+<tr><td><b>每次询问</b></td><td>弹出对话框，可选择追加 LOD / 创建新版本 / 重命名</td></tr>
+<tr><td><b>自动重命名</b></td><td>自动追加 <code>_001</code>、<code>_002</code>…</td></tr>
+<tr><td><b>手动输入</b></td><td>弹出输入框让用户输入新名称</td></tr>
+</table>
+
+<h2 id="export-defaults">导出默认值</h2>
+
+<p>按资产类型（材质/模型/灯光/贴图/场景/HDR/动态）分别设置导出格式的默认勾选状态。</p>
+
+<table>
+<tr><th>分组</th><th>包含格式</th></tr>
+<tr><td><b>材质格式</b></td><td>材质节点 (.zmetal)、合并材质、材质映射 (.mcm)</td></tr>
+<tr><td><b>几何体格式</b></td><td>Maya ASCII (.ma)、Maya Binary (.mb)、FBX (.fbx)、OBJ (.obj)、USD (.usd)</td></tr>
+<tr><td><b>缓存与代理</b></td><td>Alembic (.abc)、Arnold (.ass)、V-Ray (.vrscene)、Redshift (.rs)、V-Ray 代理 (.vrmesh)</td></tr>
+</table>
+
+<div class="note">
+<b>作用：</b>新建导出对话框时，各格式的复选框默认值会按当前资产类型读取这些预设。例如模型类资产默认勾选 FBX，材质类默认不勾选几何体。
+</div>
+
+<h2 id="formats">支持格式</h2>
+
+<p>定义哪些文件扩展名被视为可导入的资产文件。每行一个扩展名（不含点号）。</p>
+
+<p>数据存储在 <code>config.json</code> 的 <code>asset_file_extensions</code> 字段。</p>
+
+<div class="warn">
+<b>注意：</b>修改后需点击「应用」生效。错误的配置可能导致资产导入功能异常。
+</div>
+
+<h2 id="texture-suffixes">贴图后缀</h2>
+
+<p>配置 PBR 贴图类型的文件名匹配规则。</p>
+
+<table>
+<tr><th>配置项</th><th>说明</th></tr>
+<tr><td><b>左侧类型列表</b></td><td>PBR 贴图类型（albedo / normal / roughness / metallic / ao 等）</td></tr>
+<tr><td><b>右侧别名列表</b></td><td>该类型对应的文件名关键词，引擎用这些关键词识别贴图类型</td></tr>
+</table>
+
+<p>例如：<code>normal</code> 类型的别名包含 <code>_normal</code>、<code>_nrm</code>、<code>_n</code>，文件名 <code>crate_n.png</code> 会被识别为法线贴图。</p>
+
+<div class="note">
+<b>提示：</b>点击「恢复默认」可重置所有别名为出厂设置。数据来自 <code>Assets/preset/pbr_mapping.json</code>。
+</div>
+
+<h2 id="tags">常用标签</h2>
+
+<p>按子库类型（材质/模型/灯光/贴图/场景/HDR）分别管理常用标签列表。</p>
+
+<ul>
+<li>左侧选择子库类型 → 右侧编辑该类型的标签（每行一个）</li>
+<li>标签在导出对话框中以快捷按钮形式呈现，点击即可添加</li>
+<li>数据存储在 <code>config.json</code> 的 <code>common_tags</code> 字段</li>
+</ul>
+
+<h2 id="subs">子库与分类</h2>
+
+<p>管理子库的 ID、显示名和默认分类列表。</p>
+
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><b>子库ID</b></td><td>子库的唯一标识符（如 <code>materials</code>），不可与其他子库重复</td></tr>
+<tr><td><b>显示名</b></td><td>在 UI 中显示的名称（如"材质"）</td></tr>
+<tr><td><b>默认分类列表</b></td><td>首次创建该子库时自动生成的分类文件夹，格式：<code>id 名称</code></td></tr>
+</table>
+
+<div class="warn">
+<b>注意：</b>六个核心子库（materials / models / lights / textures / scenes / hdr）不可删除，修改 ID 可能导致已有数据不可用。
+</div>
+
+<h2 id="advanced">高级配置</h2>
+
+<p>高级用户自定义文件扩展名识别规则和材质节点类型。</p>
+
+<table>
+<tr><th>配置项</th><th>说明</th></tr>
+<tr><td><b>几何体扩展名</b></td><td>导入时识别几何体文件的扩展名列表（如 .ma .fbx .obj）</td></tr>
+<tr><td><b>图像/贴图扩展名</b></td><td>导入时识别贴图文件的扩展名（如 .png .exr .tga）</td></tr>
+<tr><td><b>材质节点类型</b></td><td>导出时识别场景中哪些节点是材质节点（如 standardSurface, VRayMtl）</td></tr>
+</table>
+
+<div class="warn">
+<b>⚠ 解锁编辑：</b>高级配置默认锁定。勾选底部「解锁编辑」复选框后才能修改。错误的配置可能导致资产库功能异常，请确认清楚每一项的含义后再修改。
+</div>
+
+</div>
+</div>
+</body>
+</html>

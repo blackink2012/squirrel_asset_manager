@@ -1,0 +1,49 @@
+{
+    "category_mapping": {
+        "character": ["character", "char", "person", "human", "hero", "avatar"],
+        "building": ["building", "house", "architecture", "structure", "castle"],
+        "vehicle": ["vehicle", "car", "truck", "plane", "ship", "boat", "tank"],
+        "weapon": ["weapon", "gun", "sword", "rifle", "pistol"],
+        "furniture": ["furniture", "chair", "table", "sofa", "bed", "cabinet"],
+        "props": ["prop", "object", "item", "tool", "device"],
+        "nature": ["tree", "plant", "rock", "mountain", "flower", "grass"],
+        "mechanical": ["mechanical", "robot", "machine", "gear", "engine"],
+        "electronics": ["electronic", "computer", "phone", "tv", "monitor"]
+    },
+    "file_routing": {
+        "root": [".ma", ".mb", ".obj", ".fbx", ".usd", ".usda", ".usdc", ".abc", ".mcm", ".zmetal", ".mtl"],
+        "textures": [".jpg", ".jpeg", ".png", ".tga", ".tif", ".tiff", ".exr", ".hdr", ".bmp", ".tx", ".dds"],
+        "ass": [".ass"]
+    },
+    "thumbnail_search_paths": [
+        "{assetName}_fileDependencies/thumbnail.jpg",
+        "{assetName}_fileDependencies/thumbnail.png",
+        "{assetName}_ma_fileDependencies/thumbnail.jpg",
+        "{assetName}_ma_fileDependencies/thumbnail.png"
+    ],
+    "metadata_sources": [
+        {
+            "file_pattern": "{assetName}_fileDependencies/{assetName}.zooInfo",
+            "file_format": "json",
+            "field_mapping": [
+                {"source": "description", "target": "description"},
+                {"source": "tags", "target": "tags", "processor": "split_comma"},
+                {"source": "creators", "target": "author"},
+                {"source": "version", "target": "version"},
+                {"source": "websites", "target": "source_url"}
+            ]
+        },
+        {
+            "file_pattern": "{assetName}_ma_fileDependencies/{assetName}.zooInfo",
+            "file_format": "json",
+            "field_mapping": [
+                {"source": "description", "target": "description"},
+                {"source": "tags", "target": "tags", "processor": "split_comma"},
+                {"source": "creators", "target": "author"},
+                {"source": "version", "target": "version"},
+                {"source": "websites", "target": "source_url"}
+            ]
+        }
+    ],
+    "format_priority": ["ma", "mb", "usd", "usda", "usdc", "abc", "fbx", "obj", "ass"]
+}

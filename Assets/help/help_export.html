@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>导出资产 — 使用说明</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+  display: flex; justify-content: center;
+}
+.wrapper { display: flex; max-width: 1080px; width: 100%; }
+.sidebar {
+  width: 220px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #f5f5f5; padding: 24px 16px; flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+.sidebar h3 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; }
+.sidebar a:hover { background: #e0e0e0; color: #000; text-decoration: none; }
+.sidebar a.sub { padding-left: 20px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 800px; min-width: 0; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 20px 0 8px; }
+p, li { margin: 6px 0; }
+ol, ul { margin: 8px 0 8px 24px; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; }
+td { background: #fff; font-size: 13px; }
+img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #ddd; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.ui-elem { background: #f8f8f8; border-radius: 6px; padding: 10px 14px; margin: 6px 0; border: 1px solid #eee; }
+.ui-elem strong { color: #2980b9; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h3>目录</h3>
+  <a href="#overview">界面总览</a>
+  <a href="#left-panel">左侧面板</a>
+  <a href="#left-panel" class="sub">导出按钮</a>
+  <a href="#left-panel" class="sub">导出模式</a>
+  <a href="#left-panel" class="sub">缩略图来源</a>
+  <a href="#left-panel" class="sub">截图延迟</a>
+  <a href="#right-panel">右侧面板</a>
+  <a href="#right-panel" class="sub">资产名称与标签</a>
+  <a href="#right-panel" class="sub">材质选项</a>
+  <a href="#right-panel" class="sub">几何体格式</a>
+  <a href="#right-panel" class="sub">动画导出</a>
+  <a href="#right-panel" class="sub">缓存格式</a>
+  <a href="#right-panel" class="sub">代理格式</a>
+  <a href="#flow">完整导出流程</a>
+  <a href="#variants">LOD 与版本管理</a>
+  <a href="#variant-concept" class="sub">概念</a>
+  <a href="#variant-add-lod" class="sub">追加 LOD</a>
+  <a href="#variant-new-ver" class="sub">创建新版本</a>
+  <a href="#variant-import" class="sub">导入变体几何体</a>
+  <a href="#variant-material" class="sub">版本独立材质</a>
+  <a href="#variant-delete" class="sub">删除版本/LOD</a>
+  <a href="#tips">常见错误</a>
+</nav>
+
+<div class="content">
+
+<h1>导出资产 — 界面说明</h1>
+
+<h2 id="overview">界面总览</h2>
+<img src="out_UI.png" alt="导出资产对话框">
+<p>导出对话框分<b>左右两列</b>：左控制流程，右配置内容。</p>
+
+<h2 id="left-panel">左侧面板 — 导出控制</h2>
+
+<div class="ui-elem">
+<strong>导出资产</strong>（蓝色按钮）<br>点击后开始导出。对话框非模态，导出时可操作其他 UI。
+</div>
+
+<div class="ui-elem">
+<strong>导出模式</strong>（三个单选按钮）<br>
+<table>
+<tr><th>选项</th><th>说明</th></tr>
+<tr><td>全自动</td><td>多物体时每个独立导出。首次取景后自动复用，全程无需手动截图</td></tr>
+<tr><td>半自动</td><td>每个物体独立导出，每个弹出截图 UI 供手动调整视角</td></tr>
+<tr><td>单资产</td><td>无论选中多少物体，全部合并为一个资产</td></tr>
+</table>
+</div>
+
+<div class="ui-elem">
+<strong>缩略图来源</strong>（三个单选按钮）<br>
+<table>
+<tr><th>选项</th><th>速度</th><th>适用</th></tr>
+<tr><td>截屏工具</td><td>最快</td><td>视口截图，适合大多数资产</td></tr>
+<tr><td>Maya 拍屏</td><td>较快</td><td>playblast，适合动画预览</td></tr>
+<tr><td>渲染图</td><td>最慢</td><td>Arnold 渲染，质量最高</td></tr>
+</table>
+</div>
+
+<div class="ui-elem">
+<strong>截图延迟</strong>（仅全自动模式）<br>0~60 秒。每资产导出后等 N 秒再截图。0 = 无延迟。
+</div>
+
+<h2 id="right-panel">右侧面板 — 导出内容</h2>
+
+<div class="ui-elem"><strong>资产名称</strong> — 输入框，默认选中物体名。资产以 <code>{名称}.zasset</code> 存入分类文件夹。</div>
+<div class="ui-elem"><strong>中文名称</strong> — 可选。UI 中显示友好中文名。</div>
+<div class="ui-elem"><strong>标签</strong> — 逗号分隔（如 <code>金属, 高光</code>）。用于搜索和筛选。</div>
+
+<div class="note">名称、中文名称、标签也会更新导入到该分类下已有同名资产时的新名称和标签。</div>
+
+<div class="ui-elem"><strong>材质预设 .zmetal</strong> — 勾选后导出 Maya 材质节点数据。多材质可选"合并"或分别导出。</div>
+<div class="ui-elem"><strong>材质映射 .mcm</strong> — 记录物体顶点/面/边数，用于导入时自动匹配模型。仅在勾选 .zmetal 时可用。</div>
+<div class="ui-elem"><strong>仅导出材质</strong> — 只导出材质/贴图，不导出几何体。</div>
+<div class="ui-elem"><strong>贴图 textures/</strong> — 默认勾选，将材质关联的贴图文件收集到 <code>textures/</code> 目录。取消勾选则不打包贴图，适用于纯几何体导出或贴图由外部管理的情况。</div>
+
+<h3>几何体格式</h3>
+<table>
+<tr><th>格式</th><th>扩展名</th><th>说明</th></tr>
+<tr><td>Maya ASCII</td><td>.ma</td><td>Maya 原生，可读文本</td></tr>
+<tr><td>Maya Binary</td><td>.mb</td><td>Maya 原生，二进制</td></tr>
+<tr><td>FBX</td><td>.fbx</td><td>通用交换格式</td></tr>
+<tr><td>OBJ</td><td>.obj</td><td>经典多边形格式</td></tr>
+<tr><td>USD</td><td>.usd</td><td>Pixar 通用场景描述</td></tr>
+</table>
+
+<h3>动画导出</h3>
+<p>决定 abc/usd/ass/rs/vrmesh 的帧范围：</p>
+<ul>
+<li><b>当前帧</b> — 静帧资产</li>
+<li><b>时间轴</b> — 完整动画。同时触发 MP4 动态缩略图生成</li>
+</ul>
+<div class="warn">时间轴 + 渲染图：渲染在资产导出后统一执行。Maya 会暂时无响应——正常渲染，请等待。</div>
+
+<h3>缓存格式</h3>
+<p>Alembic (.abc) — 动画缓存，支持顶点动画和时间轴导出。</p>
+
+<h3>代理格式</h3>
+<table>
+<tr><th>格式</th><th>扩展名</th><th>渲染器</th></tr>
+<tr><td>Arnold</td><td>.ass</td><td>Arnold</td></tr>
+<tr><td>Redshift</td><td>.rs</td><td>Redshift</td></tr>
+<tr><td>V-Ray Scene</td><td>.vrscene</td><td>V-Ray</td></tr>
+</table>
+
+<h2 id="flow">完整导出流程</h2>
+<div class="step">
+<ol>
+<li>Maya 场景中<b>选中要导出的物体</b></li>
+<li>点击工具栏<b>导出</b>按钮</li>
+<li>选择<b>导出模式</b>和<b>缩略图来源</b></li>
+<li>右侧配置导出内容（几何/缓存/代理格式）</li>
+<li>需动画导出选<b>"时间轴"</b></li>
+<li>输入资产名称和标签</li>
+<li>点击<b>"导出资产"</b></li>
+<li>按提示截图</li>
+<li>导出完成，资产出现在网格中</li>
+</ol>
+</div>
+
+<div class="note">
+<b>缩略图生成时机：</b>截屏工具在截图 UI 中立即生成；拍屏/渲染图在所有资产导出后统一生成，不中断几何体导出。
+</div>
+
+<h2 id="variants">LOD 与版本管理</h2>
+
+<h3 id="variant-concept">概念</h3>
+<p><b>LOD</b>（精度级别）和<b>版本</b>是两个核心变体维度，<b>LOD 从属于版本</b>：</p>
+
+<ul>
+<li><b>版本</b> — 同一资产的内容迭代（v1=基础版 → v2=破损版），材质和贴图所有版本共享</li>
+<li><b>LOD</b> — 同一版本的几何精度变化（lod0=高精度 → lod1=中精度 → lod2=低精度）</li>
+</ul>
+
+<p>目录结构示意：</p>
+<pre><code>SciFi_Crate.zasset/
+├── meta.json           # 元数据（共享）
+├── node.zmetal          # 材质节点（共享）
+├── textures/            # 贴图（所有变体共享）
+└── variants/            # 变体目录
+    ├── v1/              # 版本1 — 基础版
+    │   ├── lod0/        #   高精度 (15,420面)
+    │   ├── lod1/        #   中精度 (5,020面)
+    │   └── lod2/        #   低精度 (1,200面)
+    └── v2/              # 版本2 — 优化版
+        ├── lod0/        #   高精度 (16,800面)
+        └── lod1/        #   中精度 (5,500面)</code></pre>
+
+<h3 id="variant-add-lod">追加 LOD — 为已有版本增加精度级别</h3>
+
+<div class="step">
+<ol>
+<li>在 Maya 视口中<b>选中减面后的几何体</b>（如 lod1 模型）</li>
+<li>右键资产缩略图 → <b>「更新资产」</b></li>
+<li>在导出对话框中<b>勾选几何体格式</b>（ma / fbx 等）</li>
+<li>点击「导出资产」</li>
+<li>弹出对话框 → 选择 <b>「追加为 LOD」</b></li>
+<li>系统自动检测面数并写入 <code>variants/{版本}/lod{N}/</code></li>
+</ol>
+</div>
+
+<div class="note">
+<b>注意：</b>追加 LOD 前请确保「更新资产」对话框中勾选了几何体格式（ma/fbx/obj 等）。多版本时点击「追加为 LOD」后会弹出版本选择框，可选择将 LOD 追加到哪个版本。
+</div>
+
+<h3 id="variant-new-ver">创建新版本 — 模型内容变化时使用</h3>
+
+<div class="step">
+<ol>
+<li>修改模型（添加破损/改 UV 等）</li>
+<li>在 Maya 视口中<b>选中修改后的模型</b></li>
+<li>右键资产 → <b>「更新资产」</b></li>
+<li>勾选几何体格式 → 点击「导出资产」</li>
+<li>选择 <b>「创建新版本」</b></li>
+<li>自动创建 <code>variants/v2/lod0/</code>，后续可继续为 v2 追加 lod1</li>
+</ol>
+</div>
+
+<div class="note">
+<b>版本与材质：</b>创建新版本时如果<b>勾选了 .zmetal 材质格式</b>，系统会将材质和贴图一起导出到 <code>variants/{版本}/node.zmetal</code> 和 <code>variants/{版本}/textures/</code>，实现版本独立材质。不勾选则所有版本共享根目录材质。
+</div>
+
+<h3 id="variant-material">版本独立材质</h3>
+
+<p>当不同版本需要使用不同的材质/贴图时（如 v2 添加了破损贴图）：</p>
+
+<div class="step">
+<ol>
+<li>在 Maya 中设置好新版本的材质和贴图</li>
+<li>选中修改后的模型</li>
+<li>右键资产 → <b>「更新资产」</b></li>
+<li><b>勾选 .zmetal 材质格式</b> + 几何体格式</li>
+<li>点击导出 → 选择 <b>「创建新版本」</b></li>
+<li>材质和贴图自动写入 <code>variants/v2/</code></li>
+</ol>
+</div>
+
+<p>目录结构：</p>
+<pre><code>SciFi_Crate.zasset/
+├── node.zmetal          # v1 材质（根目录，兼容老资产）
+├── textures/            # v1 贴图
+└── variants/
+    ├── v1/
+    │   └── lod0/node.ma  # 仅几何体，材质用根目录
+    └── v2/
+        ├── node.zmetal   # v2 独立材质
+        ├── textures/     # v2 独立贴图
+        └── lod0/node.ma</code></pre>
+
+<p>导入时，有独立材质的版本在右键菜单「切换版本」下会显示 <b>「导入 {版本号} 版本材质」</b>，点击即可导入该版本的独立材质。无独立材质的版本回退使用根目录材质。</p>
+
+<h3 id="variant-delete">删除版本 / LOD</h3>
+
+<p>右键菜单「导入几何体」子菜单底部提供了删除功能：</p>
+
+<table>
+<tr><th>菜单位置</th><th>操作</th><th>效果</th></tr>
+<tr><td><b>LOD 精度 → 🗑 删除 {精度}</b></td><td>删除单个 LOD</td><td>移除 <code>variants/{版本}/{lodN}/</code> 目录</td></tr>
+<tr><td><b>切换版本 → 🗑 删除 {版本号}</b></td><td>删除整个版本</td><td>移除 <code>variants/{版本}/</code> 目录及所有 LOD 和材质</td></tr>
+</table>
+
+<div class="warn">
+<b>删除操作不可撤销！</b>删除前会弹出确认对话框。删除版本会同时移除该版本下的所有 LOD 和独立材质文件。删除所有版本后变体系统自动关闭。
+</div>
+
+<h3 id="variant-import">导入变体几何体</h3>
+
+<p>右键有变体的资产，菜单中会额外出现 <b>「📦 导入几何体」</b>：</p>
+
+<table>
+<tr><th>菜单项</th><th>说明</th></tr>
+<tr><td><b>LOD 精度</b></td><td>列出当前版本的所有 LOD（含面数），点击直接导入</td></tr>
+<tr><td><b>切换版本</b></td><td>列出所有可用版本，选择后以该版本默认 LOD 导入；有独立材质的版本额外显示「导入版本材质」</td></tr>
+<tr><td><b>选择版本和LOD...</b></td><td>弹出完整选择对话框，可同时选择版本和 LOD 精度</td></tr>
+</table>
+
+<p>菜单规则：</p>
+<ul>
+<li>仅 1 个版本 → 不显示"切换版本"，直接用该版本</li>
+<li>仅 1 个 LOD → 不显示"LOD 精度"子菜单，直接导入</li>
+<li>无变体 → 不显示"导入几何体"，保持原有行为</li>
+</ul>
+
+<div class="warn">
+<b>导入前注意：</b>导入几何体会将模型加载到当前 Maya 场景。如需替换已有模型，请先手动删除旧模型。
+</div>
+
+<h3 id="variant-compare">替换资产 vs 追加变体</h3>
+
+<p>更新资产时有三种选择：</p>
+<table>
+<tr><th>选项</th><th>适用场景</th><th>结果</th></tr>
+<tr><td><b>追加为 LOD</b></td><td>制作了减面版，需添加到某个版本</td><td>写入 <code>variants/{版本}/lod{N}/</code>，多版本时弹窗选择目标版本</td></tr>
+<tr><td><b>创建新版本</b></td><td>模型内容变化（破损/UV/新增细节）</td><td>写入 <code>variants/v{N}/lod0/</code>；若勾选.zmetal 同时写入独立材质</td></tr>
+<tr><td><b>替换资产</b></td><td>修复 bug，完全覆盖旧资产</td><td>覆盖整个 .zasset 文件夹，保留 UUID</td></tr>
+</table>
+
+<h2 id="tips">常见错误</h2>
+<p><b>❌ 无几何体：</b>确保勾选至少一种格式</p>
+<p><b>❌ 时间轴 + 渲染图卡死：</b>正常，等完成或改用拍屏</p>
+<p><b>❌ 缺失格式：</b>确认导出时勾选了对应复选框</p>
+<p><b>❌ 「更新资产」没有弹出 LOD/版本对话框：</b>检查是否勾选了几何体格式（ma/fbx/obj 等），只有导出几何体时才会出现</p>
+<p><b>❌ 点击 LOD 后无反应：</b>确保在 Maya 视口中<b>选中了要导出的几何体物体</b>后再点确定</p>
+
+</div>
+</div>
+</body>
+</html>

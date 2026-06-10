@@ -1,0 +1,105 @@
+//Maya ASCII 2025ff03 scene
+//Name: VRayLightDomeShape1_001.ma
+//Last modified: Thu, Jun 04, 2026 03:26:49 PM
+//Codeset: 936
+requires maya "2025ff03";
+requires "redshift4maya" "2026.3.1";
+requires "stereoCamera" "10.0";
+requires -nodeType "VRayLightDomeShape" -nodeType "VRayPlaceEnvTex" -dataType "VRaySunParams"
+		 -dataType "vrayFloatVectorData" -dataType "vrayFloatVectorData" -dataType "vrayIntData"
+		 "vrayformaya" "7";
+requires "stereoCamera" "10.0";
+currentUnit -l centimeter -a degree -t pal;
+fileInfo "application" "maya";
+fileInfo "product" "Maya 2025";
+fileInfo "version" "2025";
+fileInfo "cutIdentifier" "202409190603-cbdc5a7e54";
+fileInfo "osv" "Windows 10 Pro v2009 (Build: 19045)";
+fileInfo "UUID" "D02BFB4F-4A3C-6F8F-E006-689BC58CD8F1";
+createNode transform -n "VRayLightDome1";
+	rename -uid "556EAFBB-41A5-32A7-00F1-FB8037025F64";
+createNode VRayLightDomeShape -n "VRayLightDomeShape1" -p "VRayLightDome1";
+	rename -uid "EBF4AB4E-42A8-330F-01A8-8A91B1339640";
+	addAttr -ci true -h true -sn "aal" -ln "attributeAliasList" -dt "attributeAlias";
+	setAttr -k off ".v";
+	setAttr ".vpte" 2;
+	setAttr ".udt" yes;
+	setAttr ".dsp" yes;
+	setAttr ".dadapt" yes;
+	setAttr ".aal" -type "attributeAlias" 6 "lightColor" "color" "intensityMult" "intensity" "shadows" "useRayTraceShadows" ;
+createNode file -n "file2";
+	rename -uid "D60EFA38-4F06-295A-ED53-0493F6F6EB41";
+	setAttr ".ftn" -type "string" "W:/VOYAH_ZhuFeng_Projec//sourceimages/squirrel_asset/VRayLightDomeShape1_4847/VRayLightDomeShape1/dancing_hall_4k_A.exr";
+	setAttr ".cs" -type "string" "Raw";
+createNode VRayPlaceEnvTex -n "VRayPlaceEnvTex1";
+	rename -uid "E33B2901-4F3E-23E6-0092-81BC2071AE2B";
+	setAttr ".mt" 2;
+createNode place2dTexture -n "place2dTexture3";
+	rename -uid "D3DBAE3C-4AA9-18EF-09DA-32815B8CD148";
+select -ne :time1;
+	setAttr ".o" 1001;
+	setAttr ".unw" 1001;
+select -ne :hardwareRenderingGlobals;
+	setAttr ".otfna" -type "stringArray" 22 "NURBS Curves" "NURBS Surfaces" "Polygons" "Subdiv Surface" "Particles" "Particle Instance" "Fluids" "Strokes" "Image Planes" "UI" "Lights" "Cameras" "Locators" "Joints" "IK Handles" "Deformers" "Motion Trails" "Components" "Hair Systems" "Follicles" "Misc. UI" "Ornaments"  ;
+	setAttr ".otfva" -type "Int32Array" 22 0 1 1 1 1 1
+		 1 1 1 0 0 0 0 0 0 0 0 0
+		 0 0 0 0 ;
+	setAttr ".fprt" yes;
+	setAttr ".rtfm" 1;
+select -ne :renderPartition;
+	setAttr -s 3 ".st";
+select -ne :renderGlobalsList1;
+select -ne :defaultShaderList1;
+	setAttr -s 8 ".s";
+select -ne :postProcessList1;
+	setAttr -s 2 ".p";
+select -ne :defaultRenderUtilityList1;
+	setAttr -s 5 ".u";
+select -ne :defaultRenderingList1;
+select -ne :lightList1;
+	setAttr -s 3 ".l";
+select -ne :defaultTextureList1;
+	setAttr -s 7 ".tx";
+select -ne :standardSurface1;
+	setAttr ".bc" -type "float3" 0.40000001 0.40000001 0.40000001 ;
+	setAttr ".sr" 0.5;
+select -ne :initialShadingGroup;
+	setAttr ".ro" yes;
+select -ne :initialParticleSE;
+	setAttr ".ro" yes;
+select -ne :defaultRenderGlobals;
+	setAttr ".ren" -type "string" "arnold";
+	setAttr ".fs" 1;
+	setAttr ".ef" 10;
+select -ne :defaultResolution;
+	setAttr ".pa" 1;
+select -ne :defaultLightSet;
+	setAttr -s 3 ".dsm";
+select -ne :defaultColorMgtGlobals;
+	setAttr ".cfe" yes;
+	setAttr ".cfp" -type "string" "<MAYA_RESOURCES>/OCIO-configs/Maya2022-default/config.ocio";
+	setAttr ".vtn" -type "string" "ACES 1.0 SDR-video (sRGB)";
+	setAttr ".vn" -type "string" "ACES 1.0 SDR-video";
+	setAttr ".dn" -type "string" "sRGB";
+	setAttr ".wsn" -type "string" "ACEScg";
+	setAttr ".otn" -type "string" "ACES 1.0 SDR-video (sRGB)";
+	setAttr ".potn" -type "string" "ACES 1.0 SDR-video (sRGB)";
+select -ne :hardwareRenderGlobals;
+	setAttr ".ctrs" 256;
+	setAttr ".btrs" 512;
+select -ne :ikSystem;
+	setAttr -s 4 ".sol";
+connectAttr "file2.oc" "VRayLightDomeShape1.dt";
+connectAttr ":defaultColorMgtGlobals.cme" "file2.cme";
+connectAttr ":defaultColorMgtGlobals.cfe" "file2.cmcf";
+connectAttr ":defaultColorMgtGlobals.cfp" "file2.cmcp";
+connectAttr ":defaultColorMgtGlobals.wsn" "file2.ws";
+connectAttr "VRayPlaceEnvTex1.ouv" "file2.uv";
+connectAttr "place2dTexture3.uv" "VRayPlaceEnvTex1.ouv";
+connectAttr "VRayLightDome1.wm" "VRayPlaceEnvTex1.tm";
+connectAttr "VRayPlaceEnvTex1.msg" ":defaultRenderUtilityList1.u" -na;
+connectAttr "place2dTexture3.msg" ":defaultRenderUtilityList1.u" -na;
+connectAttr "VRayLightDomeShape1.ltd" ":lightList1.l" -na;
+connectAttr "file2.msg" ":defaultTextureList1.tx" -na;
+connectAttr "VRayLightDome1.iog" ":defaultLightSet.dsm" -na;
+// End of VRayLightDomeShape1_001.ma

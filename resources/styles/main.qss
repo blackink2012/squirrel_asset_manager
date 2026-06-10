@@ -1,0 +1,224 @@
+/* ============================================
+   Maya Material Library Pro - Main Stylesheet
+   Dark theme, Maya 2024+ compatible, 4K optimized
+   Content Browser & Hypershade inspired
+   ============================================ */
+
+/* --- Global --- */
+QMainWindow {
+    background-color: #2a2a2a;
+}
+
+QWidget {
+    background-color: #2a2a2a;
+    color: #d0d0d0;
+    font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    font-size: 13px;
+}
+
+/* --- Splitter --- */
+QSplitter::handle {
+    background-color: #3a3a3a;
+}
+
+QSplitter::handle:horizontal {
+    width: 4px;
+}
+
+QSplitter::handle:vertical {
+    height: 4px;
+}
+
+QSplitter::handle:hover {
+    background-color: #5294e2;
+}
+
+/* --- Scrollbar --- */
+QScrollBar:vertical {
+    background: #252525;
+    width: 10px;
+    border: none;
+    margin: 0;
+}
+QScrollBar::handle:vertical {
+    background: #4a4a4a;
+    min-height: 36px;
+    border-radius: 5px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #5a5a5a;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+QScrollBar:horizontal {
+    background: #252525;
+    height: 10px;
+    border: none;
+}
+QScrollBar::handle:horizontal {
+    background: #4a4a4a;
+    min-width: 36px;
+    border-radius: 5px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #5a5a5a;
+}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+/* --- Thumbnail Card --- */
+#thumbnailCard {
+    background-color: #333333;
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+}
+
+#thumbnailCard:hover {
+    border: 1px solid #5a5a5a;
+    background-color: #383838;
+}
+
+#thumbnailImage {
+    background-color: #3a3a3a;
+    border-radius: 4px;
+}
+
+#thumbnailName {
+    color: #c0c0c0;
+    padding: 3px 6px;
+}
+
+/* --- Menu --- */
+QMenu {
+    background-color: #333333;
+    color: #e0e0e0;
+    border: 1px solid #4a4a4a;
+    border-radius: 6px;
+    padding: 6px 0;
+}
+
+QMenu::item {
+    padding: 8px 32px 8px 20px;
+    font-size: 13px;
+}
+
+QMenu::item:selected {
+    background-color: #4a4a4a;
+}
+
+QMenu::separator {
+    height: 1px;
+    background: #4a4a4a;
+    margin: 6px 12px;
+}
+
+/* --- Tooltip --- */
+QToolTip {
+    background-color: #3a3a3a;
+    color: #e0e0e0;
+    border: 1px solid #5a5a5a;
+    border-radius: 4px;
+    padding: 7px 12px;
+    font-size: 12px;
+}
+
+/* --- Message Box --- */
+QMessageBox {
+    background-color: #2a2a2a;
+}
+QMessageBox QLabel {
+    color: #e0e0e0;
+    font-size: 13px;
+}
+QMessageBox QPushButton {
+    background-color: #3a3a3a;
+    color: #e0e0e0;
+    border: none;
+    padding: 7px 18px;
+    border-radius: 4px;
+    min-width: 70px;
+    font-size: 13px;
+}
+QMessageBox QPushButton:hover {
+    background-color: #4a4a4a;
+}
+
+/* --- Input Dialog --- */
+QInputDialog {
+    background-color: #2a2a2a;
+}
+QInputDialog QLabel {
+    color: #d0d0d0;
+    font-size: 13px;
+}
+QInputDialog QLineEdit {
+    background-color: #333333;
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    padding: 7px 10px;
+    color: #e0e0e0;
+    font-size: 13px;
+}
+
+/* --- File Dialog --- */
+QFileDialog {
+    background-color: #2a2a2a;
+}
+QFileDialog QListView,
+QFileDialog QTreeView {
+    background-color: #2a2a2a;
+    color: #d0d0d0;
+    font-size: 13px;
+}
+
+/* --- Tab Bar Styled Buttons --- */
+QPushButton[checkable="true"] {
+    border: none;
+}
+
+/* --- ComboBox dropdown --- */
+QComboBox QAbstractItemView {
+    background-color: #333333;
+    color: #d0d0d0;
+    selection-background-color: #4a4a4a;
+    border: 1px solid #4a4a4a;
+    outline: none;
+}
+
+/* --- Preview Panel --- */
+#previewMetadata {
+    background-color: #252525;
+}
+
+#previewViewport {
+    background-color: #1a1a1a;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+}
+
+#previewShapeBtn {
+    background-color: #333333;
+    color: #707070;
+    border: none;
+    border-radius: 3px;
+    font-size: 10px;
+    padding: 2px;
+}
+
+#previewShapeBtn:hover {
+    color: #a0a0a0;
+}
+
+#previewShapeBtn:checked {
+    background-color: #2d4a6f;
+    color: #5294e2;
+}
