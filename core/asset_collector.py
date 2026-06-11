@@ -239,51 +239,55 @@ class AssetCollector:
 
     @staticmethod
     def _collect_arnold_standin(obj: str, result: Dict[str, str]):
-        AssetCollector._collect_by_shape_type(obj, 'aiStandIn',
+        AssetCollector._collect_or_scene_scan(obj, 'aiStandIn',
             ('dso', 'filename', 'fileName', 'cacheFileName'), result)
-        all_shapes = AssetCollector._get_all_shapes(obj)
-        for s in all_shapes:
-            if cmds.nodeType(s) == 'aiStandIn' and s not in result:
-                try:
-                    val = cmds.getAttr(s + '.dso', asString=True)
-                    _dbg(f"    [aiStandIn] asString dso = {val!r}")
-                    path = _get_file_path(val)
-                    if path:
-                        result[s] = path
-                except Exception:
-                    pass
 
     @staticmethod
     def _collect_vray_proxy(obj: str, result: Dict[str, str]):
-        AssetCollector._collect_by_shape_type(obj, 'VRayProxy',
+        AssetCollector._collect_or_scene_scan(obj, 'VRayProxy',
             ('fileName', 'filename', 'dso', 'cacheFileName'), result)
 
     @staticmethod
     def _collect_redshift_proxy(obj: str, result: Dict[str, str]):
-        AssetCollector._collect_by_shape_type(obj, 'RedshiftProxyMesh',
-            ('fileName', 'filename', 'cacheFileName', 'cacheName'), result)
-        _dbg(f"    [Redshift] _collect_by_shape_type 找到 {sum(1 for k in result if cmds.nodeType(k) == 'RedshiftProxyMesh')} 个")
-        all_shapes = AssetCollector._get_all_shapes(obj)
-        for s in all_shapes:
-            nt = cmds.nodeType(s)
-            _dbg(f"    [Redshift] shape={s} type={nt}")
-            if s in result:
-                continue
-            if nt in ('RedshiftProxyMesh', 'RedshiftProxyShape', 'mesh'):
-                for attr in ('fileName', 'filename', 'cacheFileName', 'exoFile', 'rsProxyFile', 'proxyFile'):
+        AssetCollector._collect_or_scene_scan(obj, 'RedshiftProxyMesh',
+            ('fileName', 'filename', 'cacheFileName', 'cacheName',
+             'exoFile', 'rsProxyFile', 'proxyFile'), result)
+
+    @staticmethod
+    def _collect_or_scene_scan(obj: str, node_type: str, attrs: tuple, result: Dict[str, str]):
+        old_len = len(result)
+        AssetCollector._collect_by_shape_type(obj, node_type, attrs, result)
+        found = len(result) - old_len
+        _dbg(f"    [{node_type}] DAG 扫描找到 {found} 个")
+        if found == 0:
+            _dbg(f"    [{node_type}] DAG 未发现, 全场景扫描...")
+            all_nodes = cmds.ls(type=node_type)
+            _dbg(f"      场景共 {len(all_nodes)} 个 {node_type}")
+            obj_shapes = set(AssetCollector._get_all_shapes(obj))
+            for p_node in all_nodes:
+                if not cmds.objExists(p_node):
+                    continue
+                dests = cmds.listConnections(p_node, d=True, s=False) or []
+                connected = any(d in obj_shapes for d in dests)
+                _dbg(f"      {p_node}: 下游={dests[:3]}{'...' if len(dests)>3 else ''}, 关联={connected}")
+                if not connected:
+                    continue
+                for attr in attrs:
+                    val = None
                     try:
-                        val = cmds.getAttr(s + '.' + attr, asString=True)
+                        val = cmds.getAttr(p_node + '.' + attr, asString=True)
                     except Exception:
                         try:
-                            val = cmds.getAttr(s + '.' + attr)
+                            val = cmds.getAttr(p_node + '.' + attr)
                         except Exception:
                             continue
-                    _dbg(f"      [{nt}] {s}.{attr} = {val!r}")
-                    path = _get_file_path(val)
-                    if path:
-                        _dbg(f"      => 找到文件: {path}")
-                        result[s] = path
-                        break
+                    if val:
+                        _dbg(f"        getAttr({p_node}.{attr}) = {val!r}")
+                        path = _get_file_path(val)
+                        if path:
+                            _dbg(f"        => 找到文件: {path}")
+                            result[p_node] = path
+                            break
 
     @staticmethod
     def _collect_by_shape_type(obj: str, node_type: str, attrs: tuple, result: Dict[str, str]):
