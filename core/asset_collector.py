@@ -254,6 +254,44 @@ class AssetCollector:
         AssetCollector._collect_or_scene_scan(obj, 'RedshiftProxyMesh',
             ('fn', 'f', 'fileName', 'filename', 'cacheFileName', 'cacheName',
              'exoFile', 'rsProxyFile', 'proxyFile'), result)
+        for p_node in list(result.keys()):
+            try:
+                if cmds.objExists(p_node):
+                    use_ext = cmds.getAttr(p_node + '.useFrameExtension')
+                    _dbg(f"    [Redshift] {p_node}.useFrameExtension = {use_ext}")
+                    if use_ext:
+                        old_path = result[p_node]
+                        sequence_path = AssetCollector._build_frame_sequence_from_single(old_path)
+                        if sequence_path != old_path:
+                            _dbg(f"    [Redshift] 帧序列模式: {old_path} -> {sequence_path}")
+                            result[p_node] = sequence_path
+            except Exception:
+                pass
+
+    @staticmethod
+    def _build_frame_sequence_from_single(path: str) -> str:
+        import re
+        import glob as _glob
+        d = os.path.dirname(path)
+        base = os.path.basename(path)
+        m = re.search(r'(\d+)\.(\w+)$', base)
+        if not m:
+            return path
+        digits = m.group(1)
+        ext = m.group(2)
+        padding = len(digits)
+        prefix = base[:m.start()]
+        pattern = os.path.join(d, f"{prefix}*{ext}")
+        candidates = sorted(_glob.glob(pattern))
+        nums = []
+        for f in candidates:
+            m2 = re.search(r'(\d+)\.', os.path.basename(f))
+            if m2:
+                nums.append(int(m2.group(1)))
+        nums = sorted(set(nums))
+        if not nums or nums[0] != int(digits):
+            return path
+        return os.path.join(d, f"{prefix}{'#' * padding}.{ext}").replace('\\', '/')
 
     @staticmethod
     def _collect_or_scene_scan(obj: str, node_type: str, attrs: tuple, result: Dict[str, str]):
