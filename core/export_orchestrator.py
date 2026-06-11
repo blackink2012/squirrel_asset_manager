@@ -1351,8 +1351,9 @@ class ExportOrchestrator:
                                   type=maya_type, force=True,
                                   options="exportUVs=1;exportDisplayColor=1;exportMaterial=1;exportVisibility=1")
                 else:
-                    # 非 USD 格式：通过 cmds.file 导出
-                    cmds.file(geom_path, exportSelected=True, type=maya_type, force=True)
+                    # 非 USD 格式：通过 cmds.file 导出，preserveReferences 保持引用不被烘焙
+                    cmds.file(geom_path, exportSelected=True, type=maya_type, force=True,
+                              preserveReferences=True)
 
                 if os.path.isfile(geom_path):
                     files.append(geom_path)
