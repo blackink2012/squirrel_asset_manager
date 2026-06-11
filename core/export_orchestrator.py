@@ -1406,8 +1406,12 @@ class ExportOrchestrator:
         associated_dir = os.path.join(staging_dir, "associated")
         collected = AssetCollector.collect_all(config.associated_objects)
 
-        has_any = any(v for v in collected.values() if v)
-        if not has_any:
+        cache_count = len(collected.get("caches", {}))
+        proxy_count = len(collected.get("proxies", {}))
+        ref_count = len(collected.get("references", {}))
+        print(f"[Export] 关联文件扫描: 缓存={cache_count}, 代理={proxy_count}, 引用={ref_count}")
+
+        if not any((cache_count, proxy_count, ref_count)):
             print("[Export] 未发现关联的缓存/代理/引用文件")
             return
 
