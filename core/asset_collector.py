@@ -337,16 +337,50 @@ class AssetCollector:
             cat_dir = os.path.join(dest_dir, category)
             os.makedirs(cat_dir, exist_ok=True)
             for node_name, src_path in collected.get(category, {}).items():
-                if not os.path.isfile(src_path):
-                    _dbg(f"  跳过不存在的文件: {src_path}")
-                    continue
-                try:
-                    base = os.path.basename(src_path)
-                    dst = os.path.join(cat_dir, base)
-                    if os.path.normcase(os.path.abspath(src_path)) != os.path.normcase(os.path.abspath(dst)):
-                        shutil.copy2(src_path, dst)
-                    target_map[category][node_name] = os.path.join(category, base).replace("\\", "/")
-                    _dbg(f"  已复制 {category}: {src_path}")
-                except Exception as e:
-                    _dbg(f"  复制失败 {src_path}: {e}")
+                if '####' in src_path or '%0' in src_path:
+                    target_map[category][node_name] = AssetCollector._copy_frame_sequence(
+                        src_path, cat_dir)
+                else:
+                    target_map[category][node_name] = AssetCollector._copy_single_file(
+                        src_path, cat_dir)
+                    if target_map[category][node_name]:
+                        _dbg(f"  已复制 {category}: {src_path}")
         return target_map
+
+    @staticmethod
+    def _copy_single_file(src: str, dest_dir: str) -> str:
+        if not os.path.isfile(src):
+            _dbg(f"  跳过不存在的文件: {src}")
+            return ""
+        try:
+            base = os.path.basename(src)
+            dst = os.path.join(dest_dir, base)
+            if os.path.normcase(os.path.abspath(src)) != os.path.normcase(os.path.abspath(dst)):
+                shutil.copy2(src, dst)
+            return base.replace("\\", "/")
+        except Exception as e:
+            _dbg(f"  复制失败 {src}: {e}")
+            return ""
+
+    @staticmethod
+    def _copy_frame_sequence(src_pattern: str, dest_dir: str) -> str:
+        import glob as _glob
+        pattern = src_pattern.replace('####', '*').replace('%04d', '*').replace('%4d', '*')
+        files = sorted(_glob.glob(pattern))
+        if not files:
+            _dbg(f"  跳过不存在的序列: {src_pattern} (pattern={pattern})")
+            return ""
+        base = os.path.basename(src_pattern)
+        if '####' in base:
+            base = base.replace('####', '####')
+        elif '%04d' in base:
+            base = base.replace('%04d', '%04d')
+        elif '%4d' in base:
+            base = base.replace('%4d', '%4d')
+        _dbg(f"  复制帧序列: {src_pattern} -> {len(files)} 帧")
+        for f in files:
+            frame_name = os.path.basename(f)
+            dst = os.path.join(dest_dir, frame_name)
+            if os.path.normcase(os.path.abspath(f)) != os.path.normcase(os.path.abspath(dst)):
+                shutil.copy2(f, dst)
+        return base.replace("\\", "/")
