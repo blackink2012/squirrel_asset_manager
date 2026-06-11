@@ -5057,6 +5057,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 target_dir=tmp_dir,  # 导出到临时目录
                 associated_objects=sel,
                 material_node=mat_node or base_config.material_node or mat.name,
+                collect_associated=getattr(base_config, 'collect_associated', False),
             )
             print(f"[UpdateAsset] ExportConfig material_node={cfg.material_node}, zmetal={cfg.export_zmetal}")
 
@@ -5346,6 +5347,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 export_mode=export_mode,
                 delay_ms=base_config.delay_ms,
                 thumb_source=getattr(base_config, 'thumb_source', 'screenshot'),
+                collect_associated=getattr(base_config, 'collect_associated', False),
             )
             if field_map:
                 kwargs.update(field_map)
