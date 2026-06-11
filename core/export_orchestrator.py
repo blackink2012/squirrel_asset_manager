@@ -78,6 +78,7 @@ class ExportConfig:
     export_usd: bool = False
     # ── 缓存格式 ──
     export_abc: bool = False                           # Alembic 缓存
+    collect_associated: bool = False                    # 收集关联的缓存/代理/引用文件
     ani_frame_mode: str = "current"                    # "current" | "timeline" | "keyframe"
     export_material_only: bool = False    # True=仅导出材质，跳过几何体/代理，截图取当前视口
     export_textures: bool = True         # True=收集并打包贴图，False=跳过贴图
@@ -348,6 +349,10 @@ class ExportOrchestrator:
                 for gf in geom_files:
                     if gf.lower().endswith(".ma"):
                         self._sync_ma_texture_paths(gf, tex_path_map)
+
+            # Stage 4c: 收集关联缓存/代理/引用 → staging_dir/associated/
+            if config.collect_associated and not config.export_material_only:
+                self._stage_collected_files(config, staging_dir)
 
             # Stage 5: 缩略图（始终 / 可占位）
             if skip_thumbnail:
@@ -1392,6 +1397,23 @@ class ExportOrchestrator:
                 print(f"[Export] abc 导出失败: {e}")
 
         return files
+
+    # ── Stage 4c: 收集关联文件 ──────────────────────────
+
+    def _stage_collected_files(self, config: ExportConfig, staging_dir: str):
+        from squirrel_asset_manager.core.asset_collector import AssetCollector
+
+        associated_dir = os.path.join(staging_dir, "associated")
+        collected = AssetCollector.collect_all(config.associated_objects)
+
+        has_any = any(v for v in collected.values() if v)
+        if not has_any:
+            print("[Export] 未发现关联的缓存/代理/引用文件")
+            return
+
+        target_map = AssetCollector.copy_collected_files(collected, associated_dir)
+        total = sum(len(v) for v in target_map.values())
+        print(f"[Export] 已收集 {total} 个关联文件")
 
     # ── Stage 5: 缩略图 ──────────────────────────────────────
 

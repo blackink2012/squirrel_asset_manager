@@ -573,6 +573,16 @@ class AssetCreateDialog(QtWidgets.QDialog):
         )
         self._checkboxes["abc"] = self._cb_abc
 
+        # 收集关联文件
+        self._cb_collect_associated = QtWidgets.QCheckBox("收集关联的缓存/代理/引用文件")
+        self._cb_collect_associated.setStyleSheet(self._checkbox_style())
+        self._checkboxes["collect_associated"] = self._cb_collect_associated
+        row_ca = QtWidgets.QHBoxLayout()
+        row_ca.setContentsMargins(8, 2, 0, 2)
+        row_ca.addWidget(self._cb_collect_associated)
+        row_ca.addStretch()
+        right.addLayout(row_ca)
+
         # ▸ 代理格式
 
         # ▸ 代理格式
@@ -926,6 +936,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
             export_obj=self._checkboxes.get("obj") and self._checkboxes["obj"].isChecked(),
             export_usd=self._checkboxes.get("usd") and self._checkboxes["usd"].isChecked(),
             export_abc=self._checkboxes.get("abc") and self._checkboxes["abc"].isChecked(),
+            collect_associated=self._checkboxes.get("collect_associated") and self._checkboxes["collect_associated"].isChecked(),
             ani_frame_mode="keyframe" if self._rb_ani_keyframe.isChecked() else ("timeline" if self._rb_ani_timeline.isChecked() else "current"),
             proxy_formats=proxy_list,
             export_material_only=self._cb_material_only.isChecked(),
