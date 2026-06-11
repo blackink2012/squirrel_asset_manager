@@ -1,6 +1,6 @@
 import os
 import shutil
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 try:
     import maya.cmds as cmds
@@ -44,32 +44,46 @@ class AssetCollector:
     @staticmethod
     def _collect_alembic(obj: str, result: Dict[str, str]):
         try:
-            alembic_nodes = cmds.listConnections(obj, type='AlembicNode')
-            if not alembic_nodes:
-                return
-            for a_node in set(alembic_nodes):
-                if not cmds.objExists(a_node):
-                    continue
-                path = cmds.getAttr(a_node + '.abc_File')
-                if path and os.path.isfile(path):
-                    result[a_node] = path
+            descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
+            descendants.append(obj)
+            seen = set()
+            for d in descendants:
+                shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
+                for s in shapes:
+                    if s in seen or cmds.nodeType(s) != 'AlembicNode':
+                        continue
+                    seen.add(s)
+                    for attr in ('abc_File', 'cacheName', 'cacheFileName', 'fileName'):
+                        try:
+                            path = cmds.getAttr(s + '.' + attr)
+                            if path and os.path.isfile(path):
+                                result[s] = path
+                                break
+                        except Exception:
+                            continue
         except Exception as e:
             print(f"[AssetCollector] Alembic 收集失败 ({obj}): {e}")
 
     @staticmethod
     def _collect_gpu_cache(obj: str, result: Dict[str, str]):
         try:
-            gpu_nodes = cmds.ls(type='gpuCache')
-            if not gpu_nodes:
-                return
-            for g_node in gpu_nodes:
-                if not cmds.objExists(g_node):
-                    continue
-                shapes = cmds.listRelatives(g_node, shapes=True, type='gpuCache') or []
+            descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
+            descendants.append(obj)
+            seen = set()
+            for d in descendants:
+                shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
                 for s in shapes:
-                    path = cmds.getAttr(s + '.cacheFileName')
-                    if path and os.path.isfile(path):
-                        result[s] = path
+                    if s in seen or cmds.nodeType(s) != 'gpuCache':
+                        continue
+                    seen.add(s)
+                    for attr in ('cacheFileName', 'cacheFile', 'cacheName'):
+                        try:
+                            path = cmds.getAttr(s + '.' + attr)
+                            if path and os.path.isfile(path):
+                                result[s] = path
+                                break
+                        except Exception:
+                            continue
         except Exception as e:
             print(f"[AssetCollector] GPU Cache 收集失败: {e}")
 
@@ -100,50 +114,52 @@ class AssetCollector:
         if not _IN_MAYA:
             return node_to_path
 
-        AssetCollector._collect_arnold_standin(node_to_path)
-        AssetCollector._collect_vray_proxy(node_to_path)
-        AssetCollector._collect_redshift_proxy(node_to_path)
+        for obj in associated_objects or []:
+            if not cmds.objExists(obj):
+                continue
+            AssetCollector._collect_arnold_standin(obj, node_to_path)
+            AssetCollector._collect_vray_proxy(obj, node_to_path)
+            AssetCollector._collect_redshift_proxy(obj, node_to_path)
 
         return node_to_path
 
     @staticmethod
-    def _collect_arnold_standin(result: Dict[str, str]):
-        try:
-            standins = cmds.ls(type='aiStandIn')
-            for s in standins:
-                if not cmds.objExists(s):
-                    continue
-                path = cmds.getAttr(s + '.dso')
-                if path and os.path.isfile(path):
-                    result[s] = path
-        except Exception as e:
-            print(f"[AssetCollector] Arnold StandIn 收集失败: {e}")
+    def _collect_arnold_standin(obj: str, result: Dict[str, str]):
+        AssetCollector._collect_by_shape_type(obj, 'aiStandIn',
+            ('dso', 'filename', 'fileName', 'cacheFileName'), result)
 
     @staticmethod
-    def _collect_vray_proxy(result: Dict[str, str]):
-        try:
-            proxies = cmds.ls(type='VRayProxy')
-            for vp in proxies:
-                if not cmds.objExists(vp):
-                    continue
-                path = cmds.getAttr(vp + '.fileName')
-                if path and os.path.isfile(path):
-                    result[vp] = path
-        except Exception as e:
-            print(f"[AssetCollector] VRayProxy 收集失败: {e}")
+    def _collect_vray_proxy(obj: str, result: Dict[str, str]):
+        AssetCollector._collect_by_shape_type(obj, 'VRayProxy',
+            ('fileName', 'filename', 'dso', 'cacheFileName'), result)
 
     @staticmethod
-    def _collect_redshift_proxy(result: Dict[str, str]):
+    def _collect_redshift_proxy(obj: str, result: Dict[str, str]):
+        AssetCollector._collect_by_shape_type(obj, 'RedshiftProxyMesh',
+            ('fileName', 'filename', 'cacheFileName'), result)
+
+    @staticmethod
+    def _collect_by_shape_type(obj: str, node_type: str, attrs: tuple, result: Dict[str, str]):
         try:
-            proxies = cmds.ls(type='RedshiftProxyMesh')
-            for rp in proxies:
-                if not cmds.objExists(rp):
-                    continue
-                path = cmds.getAttr(rp + '.fileName')
-                if path and os.path.isfile(path):
-                    result[rp] = path
+            descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
+            descendants.append(obj)
+            seen = set()
+            for d in descendants:
+                shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
+                for s in shapes:
+                    if s in seen or cmds.nodeType(s) != node_type:
+                        continue
+                    seen.add(s)
+                    for attr in attrs:
+                        try:
+                            path = cmds.getAttr(s + '.' + attr)
+                            if path and os.path.isfile(path):
+                                result[s] = path
+                                break
+                        except Exception:
+                            continue
         except Exception as e:
-            print(f"[AssetCollector] RedshiftProxy 收集失败: {e}")
+            print(f"[AssetCollector] {node_type} 收集失败: {e}")
 
     @staticmethod
     def collect_reference_files(associated_objects: List[str]) -> Dict[str, str]:
