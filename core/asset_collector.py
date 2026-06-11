@@ -34,6 +34,7 @@ def _get_file_path(attr_value) -> Optional[str]:
         for v in attr_value:
             if v and isinstance(v, str):
                 expanded = os.path.expandvars(os.path.expanduser(v))
+                expanded = os.path.normpath(expanded).replace('\\', '/')
                 resolved = _resolve_frame_pattern(expanded)
                 if os.path.isfile(resolved):
                     return expanded
@@ -42,6 +43,7 @@ def _get_file_path(attr_value) -> Optional[str]:
         return None
     if attr_value and isinstance(attr_value, str):
         expanded = os.path.expandvars(os.path.expanduser(attr_value))
+        expanded = os.path.normpath(expanded).replace('\\', '/')
         resolved = _resolve_frame_pattern(expanded)
         if os.path.isfile(resolved):
             return expanded
@@ -250,7 +252,7 @@ class AssetCollector:
     @staticmethod
     def _collect_redshift_proxy(obj: str, result: Dict[str, str]):
         AssetCollector._collect_or_scene_scan(obj, 'RedshiftProxyMesh',
-            ('fileName', 'filename', 'cacheFileName', 'cacheName',
+            ('fn', 'f', 'fileName', 'filename', 'cacheFileName', 'cacheName',
              'exoFile', 'rsProxyFile', 'proxyFile'), result)
 
     @staticmethod
@@ -263,7 +265,9 @@ class AssetCollector:
             _dbg(f"    [{node_type}] DAG 未发现, 全场景扫描...")
             all_nodes = cmds.ls(type=node_type)
             _dbg(f"      场景共 {len(all_nodes)} 个 {node_type}")
-            obj_shapes = set(AssetCollector._get_all_shapes(obj))
+            obj_shapes_full = set(AssetCollector._get_all_shapes(obj))
+            obj_shapes_short = set(s.split('|')[-1] for s in obj_shapes_full)
+            obj_shapes = obj_shapes_full | obj_shapes_short
             for p_node in all_nodes:
                 if not cmds.objExists(p_node):
                     continue
