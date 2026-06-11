@@ -261,7 +261,29 @@ class AssetCollector:
     @staticmethod
     def _collect_redshift_proxy(obj: str, result: Dict[str, str]):
         AssetCollector._collect_by_shape_type(obj, 'RedshiftProxyMesh',
-            ('fileName', 'filename', 'cacheFileName'), result)
+            ('fileName', 'filename', 'cacheFileName', 'cacheName'), result)
+        _dbg(f"    [Redshift] _collect_by_shape_type 找到 {sum(1 for k in result if cmds.nodeType(k) == 'RedshiftProxyMesh')} 个")
+        all_shapes = AssetCollector._get_all_shapes(obj)
+        for s in all_shapes:
+            nt = cmds.nodeType(s)
+            _dbg(f"    [Redshift] shape={s} type={nt}")
+            if s in result:
+                continue
+            if nt in ('RedshiftProxyMesh', 'RedshiftProxyShape', 'mesh'):
+                for attr in ('fileName', 'filename', 'cacheFileName', 'exoFile', 'rsProxyFile', 'proxyFile'):
+                    try:
+                        val = cmds.getAttr(s + '.' + attr, asString=True)
+                    except Exception:
+                        try:
+                            val = cmds.getAttr(s + '.' + attr)
+                        except Exception:
+                            continue
+                    _dbg(f"      [{nt}] {s}.{attr} = {val!r}")
+                    path = _get_file_path(val)
+                    if path:
+                        _dbg(f"      => 找到文件: {path}")
+                        result[s] = path
+                        break
 
     @staticmethod
     def _collect_by_shape_type(obj: str, node_type: str, attrs: tuple, result: Dict[str, str]):
