@@ -1344,6 +1344,14 @@ class ExportOrchestrator:
                 else:
                     skip_ref = config.collect_associated and fmt_key in ("ma", "mb")
                     export_objs = self._resolve_export_objects(config, skip_references=skip_ref)
+                    if skip_ref and not export_objs:
+                        mats = self._get_materials_from_objects(config.associated_objects)
+                        if mats:
+                            export_objs = mats
+                            print(f"[Export] 全部为引用对象, {fmt_key} 仅导出材质节点 (引用源在 associated/references/)")
+                        elif config.material_node and cmds.objExists(config.material_node):
+                            export_objs = [config.material_node]
+                            print(f"[Export] 全部为引用对象, {fmt_key} 仅导出材质 (引用源在 associated/references/)")
                 if not export_objs:
                     print(f"[Export] 跳过 {fmt_key} 导出：无关联物体且未找到材质关联物体")
                     continue
