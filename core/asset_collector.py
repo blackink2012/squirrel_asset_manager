@@ -403,18 +403,37 @@ class AssetCollector:
             return ref_to_path
 
         try:
-            ref_nodes = cmds.file(query=True, reference=True) or []
-            _dbg(f"  引用: 场景共 {len(ref_nodes)} 个引用节点")
-            for rn in ref_nodes:
-                if not cmds.objExists(rn):
+            ref_nodes_all = cmds.file(query=True, reference=True) or []
+            _dbg(f"  引用: 场景共 {len(ref_nodes_all)} 个引用节点: {ref_nodes_all}")
+
+            obj_ref_set = set()
+            for obj in associated_objects or []:
+                if not cmds.objExists(obj):
                     continue
                 try:
-                    filename = cmds.referenceQuery(rn, filename=True)
-                    if filename and os.path.isfile(filename):
-                        _dbg(f"  引用: {rn} -> {filename}")
-                        ref_to_path[rn] = filename
+                    rn = cmds.referenceQuery(obj, referenceNode=True)
+                    if rn:
+                        obj_ref_set.add(rn)
+                        _dbg(f"  引用: {obj} 属于引用节点 {rn}")
                 except Exception:
-                    continue
+                    pass
+
+            target_refs = list(obj_ref_set) if obj_ref_set else list(ref_nodes_all)
+
+            for rn in target_refs:
+                try:
+                    filename = cmds.referenceQuery(rn, filename=True, withoutCopyNumber=True)
+                    if not filename:
+                        _dbg(f"  引用: {rn} -> 无文件路径")
+                        continue
+                    exists = os.path.isfile(filename)
+                    _dbg(f"  引用: {rn} -> {filename} (存在={exists})")
+                    if exists:
+                        ref_to_path[rn] = filename
+                    else:
+                        _dbg(f"  引用: {rn} 文件不存在, 跳过")
+                except Exception as ex:
+                    _dbg(f"  引用: {rn} 查询异常: {ex}")
         except Exception as e:
             _dbg(f"  引用收集异常: {e}")
 
