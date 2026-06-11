@@ -494,6 +494,25 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         refresh_btn.clicked.connect(self._on_refresh)
         layout.addWidget(refresh_btn)
 
+        ai_btn_style = f"""
+            QPushButton {{ background-color: #2d3a5a; color: #d0e0ff; border: none;
+                padding: {btn_padding}px 14px; font-size: {font_size}px; border-radius: 4px; }}
+            QPushButton:hover {{ background-color: #3d4a6a; }}
+            QPushButton:pressed {{ background-color: #1d2a4a; }}
+        """
+        self._ai_tools_btn = QtWidgets.QPushButton("🤖 AI 工具")
+        self._ai_tools_btn.setStyleSheet(ai_btn_style)
+        self._ai_tools_menu = QtWidgets.QMenu(self)
+        self._ai_tools_menu.setStyleSheet(f"""
+            QMenu {{ background-color:#2a2a2a; color:#d0d0d0; border:1px solid #3a3a3a; padding:4px; }}
+            QMenu::item {{ padding:6px 24px 6px 14px; font-size:{font_size}px; }}
+            QMenu::item:selected {{ background-color:#2d4a6f; color:#5294e2; }}
+        """)
+        self._ai_tools_btn.setMenu(self._ai_tools_menu)
+        self._ai_tools_menu.aboutToShow.connect(self._refresh_ai_tools_menu)
+        self._refresh_ai_tools_menu()
+        layout.addWidget(self._ai_tools_btn)
+
         self._quick_tools_btn = QtWidgets.QPushButton("快捷工具")
         self._quick_tools_btn.setStyleSheet(btn_style)
         self._quick_tools_menu = QtWidgets.QMenu(self)
@@ -525,6 +544,26 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         layout.addWidget(help_btn)
 
         return toolbar
+
+    def _refresh_ai_tools_menu(self):
+        self._ai_tools_menu.clear()
+
+        selected = self._thumbnail_grid.get_selected_materials_list()
+        selected_count = len(selected)
+
+        if selected_count > 0:
+            action = self._ai_tools_menu.addAction(
+                f"🤖 AI 分析缩略图 ({selected_count} 个选中资产)")
+        else:
+            action = self._ai_tools_menu.addAction(
+                "🤖 AI 分析缩略图 (右键资产→AI 分析)")
+        action.triggered.connect(self._on_ai_analysis_batch)
+
+        self._ai_tools_menu.addSeparator()
+
+        no_action = self._ai_tools_menu.addAction(
+            "更多 AI 工具请添加到此菜单...")
+        no_action.setEnabled(False)
 
     def _refresh_quick_tools_menu(self):
         """刷新快捷工具菜单，从 quicktools 文件夹加载脚本"""
@@ -893,6 +932,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._thumbnail_grid.importSingleTextureRequested.connect(self._on_import_single_texture)
         self._thumbnail_grid.importTexturesSharedUVRequested.connect(self._on_import_textures_shared_uv)
         self._thumbnail_grid.assignTextureToMaterialRequested.connect(self._on_assign_texture_to_material)
+        self._thumbnail_grid.aiAnalysisRequested.connect(self._on_ai_analysis)
 
         self._clipboard = []  # 复制的材质 ID 列表
         self._asset_overlay = None  # 资产创建截图窗口（跨批次复用）
@@ -4650,6 +4690,175 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         except Exception:
             pass
         return None
+
+    def _on_ai_analysis(self, material):
+        """AI 分析缩略图（右键菜单单资产）"""
+        self._do_ai_analysis_for_material(material, show_dialog=True)
+
+    def _on_ai_analysis_batch(self):
+        """AI 分析缩略图（AI 工具下拉按钮批量）"""
+        selected = self._thumbnail_grid.get_selected_materials_list()
+        if not selected:
+            QtWidgets.QMessageBox.information(self, "AI 分析",
+                "请先在网格中选中要分析的资产")
+            return
+
+        total = len(selected)
+        reply = QtWidgets.QMessageBox.question(
+            self, "批量 AI 分析",
+            f"将对已选中的 {total} 个资产进行 AI 分析，是否继续？\n\n"
+            "分析结果将自动应用（分类、标签、注释、易读名）。",
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.Yes
+        )
+        if reply != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            from ..core.ai_analyzer import AIAnalyzer
+            analyzer = AIAnalyzer()
+            if not analyzer.is_available():
+                QtWidgets.QMessageBox.warning(self, "AI 分析",
+                    "无法连接到 Ollama 服务，请确保 Ollama 已启动")
+                return
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, "AI 分析", f"初始化失败: {e}")
+            return
+
+        progress = QtWidgets.QProgressDialog(
+            f"正在分析 0/{total} ...", "取消", 0, total, self)
+        progress.setWindowTitle("批量 AI 分析")
+        progress.setModal(True)
+        progress.setMinimumDuration(0)
+        progress.show()
+        QtCore.QCoreApplication.processEvents()
+
+        success_count = 0
+        failed_count = 0
+
+        for i, mat in enumerate(selected):
+            if progress.wasCanceled():
+                break
+
+            progress.setLabelText(f"正在分析 {i + 1}/{total}: {mat.get('name', '')}")
+            progress.setValue(i)
+            QtCore.QCoreApplication.processEvents()
+
+            thumb_bytes = mat.get('thumb_bytes', None)
+            if not thumb_bytes:
+                failed_count += 1
+                print(f"[AI Batch] 跳过无缩略图: {mat.get('name', '')}")
+                continue
+
+            sub_library = mat.get('sub_library', 'materials')
+            result = analyzer.analyze_image(thumb_bytes, sub_library)
+            if not result:
+                failed_count += 1
+                print(f"[AI Batch] 分析失败: {mat.get('name', '')}")
+                continue
+
+            updates = result.copy()
+            updates.pop('sub_category', None)
+            category = result.get('sub_category', '')
+            if category:
+                updates['category'] = category
+
+            material_id = mat.get('id', '')
+            if material_id and updates:
+                mgr = self._active_mgr
+                if mgr:
+                    ok = mgr.update_material(material_id, updates)
+                    if ok:
+                        success_count += 1
+                        print(f"[AI Batch] 已更新: {mat.get('name', '')} → {updates.get('name_cn', '')}")
+                    else:
+                        failed_count += 1
+                else:
+                    failed_count += 1
+            else:
+                failed_count += 1
+
+        progress.setValue(total)
+        progress.close()
+
+        self._refresh_material_grid()
+        QtWidgets.QMessageBox.information(self, "批量 AI 分析",
+            f"分析完成!\n成功: {success_count}  失败: {failed_count}  总计: {total}")
+
+    def _do_ai_analysis_for_material(self, material, show_dialog=True):
+        mgr = self._active_mgr
+        if not mgr:
+            return
+
+        material_id = material.get('id', '')
+        if not material_id:
+            return
+
+        thumb_bytes = material.get('thumb_bytes', None)
+        if not thumb_bytes:
+            QtWidgets.QMessageBox.warning(self, "AI 分析", "该资产没有缩略图可分析")
+            return
+
+        sub_library = material.get('sub_library', 'materials')
+
+        try:
+            from ..core.ai_analyzer import AIAnalyzer
+
+            analyzer = AIAnalyzer()
+            if not analyzer.is_available():
+                QtWidgets.QMessageBox.warning(self, "AI 分析",
+                    "无法连接到 Ollama 服务，请确保 Ollama 已启动")
+                return
+
+            progress_dlg = QtWidgets.QProgressDialog("正在分析缩略图...", "取消", 0, 0, self)
+            progress_dlg.setWindowTitle("AI 分析")
+            progress_dlg.setModal(True)
+            progress_dlg.show()
+            QtCore.QCoreApplication.processEvents()
+
+            result = analyzer.analyze_image(thumb_bytes, sub_library)
+
+            progress_dlg.close()
+
+            if not result:
+                QtWidgets.QMessageBox.warning(self, "AI 分析", "分析失败，请重试")
+                return
+
+            if show_dialog:
+                from .ai_analysis_dialog import AIAnalysisDialog
+                dlg = AIAnalysisDialog(self, material=material, analysis_result=result)
+                dlg.analysisApplied.connect(
+                    lambda updates: self._on_ai_analysis_applied(material_id, updates))
+                dlg.exec()
+            else:
+                updates = result.copy()
+                category = updates.pop('sub_category', '')
+                if category:
+                    updates['category'] = category
+                self._on_ai_analysis_applied(material_id, updates)
+
+        except Exception as e:
+            print(f"[AI Analysis] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.warning(self, "AI 分析", f"分析过程发生错误: {str(e)}")
+
+    def _on_ai_analysis_applied(self, material_id, updates):
+        """应用 AI 分析结果到元数据"""
+        mgr = self._active_mgr
+        if not mgr:
+            return
+
+        material_id = updates.pop('material_id', material_id)
+        if not material_id:
+            return
+
+        success = mgr.update_material(material_id, updates)
+        if success:
+            self._refresh_material_grid()
+            QtWidgets.QMessageBox.information(self, "AI 分析", "元数据已更新")
+        else:
+            QtWidgets.QMessageBox.warning(self, "AI 分析", "更新元数据失败")
 
     def _on_update_asset(self, mid):
         """右键→更新资产：弹出预填对话框，确认后替换原 .zasset"""
