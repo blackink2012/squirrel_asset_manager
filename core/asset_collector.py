@@ -19,11 +19,15 @@ def _dbg(msg: str):
 def _get_file_path(attr_value) -> Optional[str]:
     if isinstance(attr_value, (list, tuple)):
         for v in attr_value:
-            if v and isinstance(v, str) and os.path.isfile(v):
-                return v
+            if v and isinstance(v, str):
+                expanded = os.path.expandvars(os.path.expanduser(v))
+                if os.path.isfile(expanded):
+                    return expanded
         return None
-    if attr_value and isinstance(attr_value, str) and os.path.isfile(attr_value):
-        return attr_value
+    if attr_value and isinstance(attr_value, str):
+        expanded = os.path.expandvars(os.path.expanduser(attr_value))
+        if os.path.isfile(expanded):
+            return expanded
     return None
 
 
@@ -207,6 +211,7 @@ class AssetCollector:
         for obj in associated_objects or []:
             if not cmds.objExists(obj):
                 continue
+            _dbg(f"  代理收集: 检查 {obj}")
             AssetCollector._collect_arnold_standin(obj, node_to_path)
             AssetCollector._collect_vray_proxy(obj, node_to_path)
             AssetCollector._collect_redshift_proxy(obj, node_to_path)
@@ -217,6 +222,17 @@ class AssetCollector:
     def _collect_arnold_standin(obj: str, result: Dict[str, str]):
         AssetCollector._collect_by_shape_type(obj, 'aiStandIn',
             ('dso', 'filename', 'fileName', 'cacheFileName'), result)
+        all_shapes = AssetCollector._get_all_shapes(obj)
+        for s in all_shapes:
+            if cmds.nodeType(s) == 'aiStandIn' and s not in result:
+                try:
+                    val = cmds.getAttr(s + '.dso', asString=True)
+                    _dbg(f"    [aiStandIn] asString dso = {val!r}")
+                    path = _get_file_path(val)
+                    if path:
+                        result[s] = path
+                except Exception:
+                    pass
 
     @staticmethod
     def _collect_vray_proxy(obj: str, result: Dict[str, str]):
@@ -233,23 +249,36 @@ class AssetCollector:
         try:
             descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
             descendants.append(obj)
+            _dbg(f"    [{node_type}] DAG 扫描 {len(descendants)} 个节点")
+
             seen = set()
+            all_shapes = AssetCollector._get_all_shapes(obj)
+            _dbg(f"    [{node_type}] 对象下共 {len(all_shapes)} 个 shape")
+            shape_types = sorted(set(cmds.nodeType(s) for s in all_shapes))
+            _dbg(f"    [{node_type}] shape 类型: {shape_types}")
+
             for d in descendants:
                 shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
                 for s in shapes:
-                    if s in seen or cmds.nodeType(s) != node_type:
+                    nt = cmds.nodeType(s)
+                    if s in seen or nt != node_type:
                         continue
                     seen.add(s)
+                    _dbg(f"    [{node_type}] 发现 shape: {s}")
                     for attr in attrs:
                         try:
                             val = cmds.getAttr(s + '.' + attr)
+                            _dbg(f"      getAttr({s}.{attr}) = {val!r}")
                             path = _get_file_path(val)
                             if path:
-                                _dbg(f"  {node_type}: {s} -> {path}")
+                                _dbg(f"      => 找到文件: {path}")
                                 result[s] = path
                                 break
-                        except Exception:
-                            continue
+                        except Exception as ex:
+                            _dbg(f"      getAttr({s}.{attr}) 异常: {ex}")
+
+                    if s not in result:
+                        _dbg(f"      => 未能从 {s} 提取到文件路径")
         except Exception as e:
             _dbg(f"  {node_type} 收集异常: {e}")
 
