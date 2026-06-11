@@ -69,10 +69,11 @@ class AssetCollector:
         try:
             descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
             descendants.append(obj)
-            _dbg(f"  Alembic: 扫描 {len(descendants)} 个后代节点 (含自身)")
+            _dbg(f"  Alembic: DAG 扫描 {len(descendants)} 个节点 (含自身)")
 
             seen = set()
             found_shapes = []
+
             for d in descendants:
                 shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
                 for s in shapes:
@@ -80,7 +81,31 @@ class AssetCollector:
                     if nt == 'AlembicNode':
                         found_shapes.append((d, s))
 
-            _dbg(f"  Alembic: 发现 {len(found_shapes)} 个 AlembicNode shape")
+            if not found_shapes:
+                _dbg(f"  Alembic: DAG 未发现, 尝试 DG 连接...")
+                shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
+                for s in shapes:
+                    conns = cmds.listConnections(s, type='AlembicNode') or []
+                    for a_node in set(conns):
+                        if cmds.objExists(a_node) and cmds.nodeType(a_node) == 'AlembicNode':
+                            _dbg(f"    DG 连接: {s} -> {a_node}")
+                            found_shapes.append(('(DG)', a_node))
+
+            if not found_shapes:
+                _dbg(f"  Alembic: DG 未发现, 全场景扫描 AlembicNode...")
+                all_alembic = cmds.ls(type='AlembicNode')
+                _dbg(f"    场景共 {len(all_alembic)} 个 AlembicNode")
+                obj_shapes = set(cmds.listRelatives(obj, shapes=True, fullPath=True) or [])
+                for a_node in all_alembic:
+                    if not cmds.objExists(a_node):
+                        continue
+                    dests = cmds.listConnections(a_node, d=True, s=False) or []
+                    matched = any(d in obj_shapes for d in dests)
+                    _dbg(f"    {a_node}: 下游={dests[:5]}{'...' if len(dests)>5 else ''}, 匹配={matched}")
+                    if matched:
+                        found_shapes.append(('(scene)', a_node))
+
+            _dbg(f"  Alembic: 共发现 {len(found_shapes)} 个 AlembicNode")
 
             for parent, s in found_shapes:
                 if s in seen:
