@@ -548,6 +548,11 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
     def _refresh_ai_tools_menu(self):
         self._ai_tools_menu.clear()
 
+        if not hasattr(self, '_thumbnail_grid'):
+            no_action = self._ai_tools_menu.addAction("初始化中...")
+            no_action.setEnabled(False)
+            return
+
         selected = self._thumbnail_grid.get_selected_materials_list()
         selected_count = len(selected)
 
@@ -4706,8 +4711,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         total = len(selected)
         reply = QtWidgets.QMessageBox.question(
             self, "批量 AI 分析",
-            f"将对已选中的 {total} 个资产进行 AI 分析，是否继续？\n\n"
-            "分析结果将自动应用（分类、标签、注释、易读名）。",
+            f"将对已选中的 {total} 个资产进行 AI 分析。\n\n"
+            "分析完成后将弹出确认窗口，\n您可勾选要应用结果的资产。",
             QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
             QtWidgets.QMessageBox.StandardButton.Yes
         )
@@ -4733,8 +4738,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         progress.show()
         QtCore.QCoreApplication.processEvents()
 
-        success_count = 0
-        failed_count = 0
+        collected = []
 
         for i, mat in enumerate(selected):
             if progress.wasCanceled():
@@ -4746,44 +4750,62 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
             thumb_bytes = mat.get('thumb_bytes', None)
             if not thumb_bytes:
-                failed_count += 1
                 print(f"[AI Batch] 跳过无缩略图: {mat.get('name', '')}")
                 continue
 
             sub_library = mat.get('sub_library', 'materials')
             result = analyzer.analyze_image(thumb_bytes, sub_library)
             if not result:
-                failed_count += 1
                 print(f"[AI Batch] 分析失败: {mat.get('name', '')}")
                 continue
 
-            updates = result.copy()
-            updates.pop('sub_category', None)
-            category = result.get('sub_category', '')
-            if category:
-                updates['category'] = category
-
-            material_id = mat.get('id', '')
-            if material_id and updates:
-                mgr = self._active_mgr
-                if mgr:
-                    ok = mgr.update_material(material_id, updates)
-                    if ok:
-                        success_count += 1
-                        print(f"[AI Batch] 已更新: {mat.get('name', '')} → {updates.get('name_cn', '')}")
-                    else:
-                        failed_count += 1
-                else:
-                    failed_count += 1
-            else:
-                failed_count += 1
+            collected.append({
+                'material': mat,
+                'result': result,
+            })
 
         progress.setValue(total)
         progress.close()
 
+        if not collected:
+            QtWidgets.QMessageBox.warning(self, "批量 AI 分析", "没有资产分析成功")
+            return
+
+        from .ai_analysis_dialog import AIBatchResultsDialog
+        dlg = AIBatchResultsDialog(self, results=collected)
+        dlg.batchApplied.connect(self._on_batch_ai_applied)
+        dlg.exec()
+
+    def _on_batch_ai_applied(self, selected_results):
+        mgr = self._active_mgr
+        if not mgr:
+            return
+
+        success = 0
+        failed = 0
+
+        for entry in selected_results:
+            mat = entry.get('material', {})
+            result = entry.get('result', {})
+            material_id = mat.get('id', '')
+
+            updates = result.copy()
+            category = updates.pop('sub_category', '')
+            if category:
+                updates['category'] = category
+
+            if material_id and updates:
+                ok = mgr.update_material(material_id, updates)
+                if ok:
+                    success += 1
+                else:
+                    failed += 1
+            else:
+                failed += 1
+
         self._refresh_material_grid()
         QtWidgets.QMessageBox.information(self, "批量 AI 分析",
-            f"分析完成!\n成功: {success_count}  失败: {failed_count}  总计: {total}")
+            f"应用完成!\n成功: {success}  失败: {failed}")
 
     def _do_ai_analysis_for_material(self, material, show_dialog=True):
         mgr = self._active_mgr
