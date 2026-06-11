@@ -225,6 +225,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
     createDomeLightRequested = QtCore.Signal(str, dict)  # (preset_path, hdr_material)
     assignHdrToDomeRequested = QtCore.Signal(dict)  # (hdr_material) HDR→指定给选中dome灯
     importSingleTextureRequested = QtCore.Signal(str, str)  # (zasset_path, texture_name)
+    aiAnalysisRequested = QtCore.Signal(dict)  # AI 分析请求
     importTexturesSharedUVRequested = QtCore.Signal(str, list)  # (zasset_path, texture_names) — 共享UV批量导入 单个贴图导入
     assignTextureToMaterialRequested = QtCore.Signal(dict)  # (texture_material) 贴图→指定给选中材质
     dragDroppedOnViewport = QtCore.Signal(list, int, int)  # ([material_ids], global_x, global_y)
@@ -1737,6 +1738,9 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         cap_action = thumb_menu.addAction('📷 截取')
         imp_thumb_action = thumb_menu.addAction('📂 导入')
         menu.addMenu(thumb_menu)
+        
+        ai_action = menu.addAction('\U0001f9e0 AI 分析缩略图')
+        
         update_asset_action = menu.addAction('更新资产')
         delete_action = menu.addAction('删除')
 
@@ -1754,6 +1758,8 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             self.openFolderRequested.emit(mat)
         elif action == edit_action:
             self.editMaterialRequested.emit(mat)
+        elif action == ai_action:
+            self.aiAnalysisRequested.emit(mat)
         elif action == cap_action:
             self.thumbnailCaptureRequested.emit(mat.get('id', ''))
         elif action == imp_thumb_action:
