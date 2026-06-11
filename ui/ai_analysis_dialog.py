@@ -69,74 +69,107 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         super(AIBatchResultsDialog, self).__init__(parent)
         self._results = results or []
         self._checkboxes = {}
+        self._edit_widgets = {}
         self._setup_ui()
 
     def _setup_ui(self):
         total = len(self._results)
         self.setWindowTitle(f'批量 AI 分析结果 — {total} 个资产')
-        self.setMinimumSize(650, 300)
-        self.resize(700, min(600, 120 + total * 100))
+        self.setMinimumSize(900, 400)
+        self.resize(1000, min(700, 150 + total * 160))
         self.setStyleSheet(_STYLE)
 
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        root = QtWidgets.QVBoxLayout(self)
+        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(12)
 
-        # 顶部操作栏
         top_row = QtWidgets.QHBoxLayout()
-        summary = f'共 {total} 个资产分析完成，请勾选要应用的资产：'
-        top_label = QtWidgets.QLabel(summary)
-        top_label.setStyleSheet('color: #ffffff; font-size: 14px;')
-        top_row.addWidget(top_label)
+        top_row.addWidget(QtWidgets.QLabel(f'共 {total} 个资产分析完成，可编辑后勾选应用：'))
         top_row.addStretch()
-
         select_all = QtWidgets.QPushButton('全选')
         select_all.setObjectName('selectAllBtn')
         select_all.clicked.connect(self._select_all)
         top_row.addWidget(select_all)
-
         deselect_all = QtWidgets.QPushButton('取消全选')
         deselect_all.setObjectName('deselectAllBtn')
         deselect_all.clicked.connect(self._deselect_all)
         top_row.addWidget(deselect_all)
+        root.addLayout(top_row)
 
-        layout.addLayout(top_row)
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        splitter.setStyleSheet('QSplitter::handle { background-color: #3a3a3a; width: 2px; }')
 
-        # 滚动列表
+        # ====== 左侧: 可编辑列表 ======
+        left_panel = QtWidgets.QWidget()
+        left_layout = QtWidgets.QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         scroll.setStyleSheet('QScrollArea { background: transparent; }')
 
         list_widget = QtWidgets.QWidget()
-        list_layout = QtWidgets.QVBoxLayout(list_widget)
-        list_layout.setContentsMargins(0, 0, 0, 0)
-        list_layout.setSpacing(4)
+        self._list_layout = QtWidgets.QVBoxLayout(list_widget)
+        self._list_layout.setContentsMargins(0, 0, 0, 0)
+        self._list_layout.setSpacing(6)
 
         for i, entry in enumerate(self._results):
             row = self._build_result_row(i, entry)
-            list_layout.addWidget(row)
+            self._list_layout.addWidget(row)
 
-        list_layout.addStretch()
+        self._list_layout.addStretch()
         scroll.setWidget(list_widget)
-        layout.addWidget(scroll, 1)
+        left_layout.addWidget(scroll)
+        splitter.addWidget(left_panel)
+
+        # ====== 右侧: 大缩略图预览 ======
+        right_panel = QtWidgets.QWidget()
+        right_panel.setFixedWidth(220)
+        right_layout = QtWidgets.QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(12, 0, 0, 0)
+        right_layout.setSpacing(8)
+
+        self._preview_thumb = QtWidgets.QLabel()
+        self._preview_thumb.setFixedSize(200, 200)
+        self._preview_thumb.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._preview_thumb.setStyleSheet(
+            'background-color: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 8px;')
+        right_layout.addWidget(self._preview_thumb)
+
+        self._preview_name = QtWidgets.QLabel('')
+        self._preview_name.setStyleSheet('color: #ffffff; font-size: 14px; font-weight: bold;')
+        self._preview_name.setWordWrap(True)
+        self._preview_name.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        right_layout.addWidget(self._preview_name)
+
+        self._preview_info = QtWidgets.QLabel('点击左侧资产查看缩略图')
+        self._preview_info.setStyleSheet('color: #808080; font-size: 12px;')
+        self._preview_info.setWordWrap(True)
+        self._preview_info.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        right_layout.addWidget(self._preview_info)
+
+        right_layout.addStretch()
+        splitter.addWidget(right_panel)
+
+        splitter.setSizes([700, 240])
+        root.addWidget(splitter, 1)
 
         # 底部按钮
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.setSpacing(10)
         btn_row.addStretch()
-
         cancel_btn = QtWidgets.QPushButton('取消')
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
+        self._apply_btn = QtWidgets.QPushButton(f'应用选中的资产 ({total} 个)')
+        self._apply_btn.setObjectName('applyBtn')
+        self._apply_btn.clicked.connect(self._on_apply)
+        btn_row.addWidget(self._apply_btn)
+        root.addLayout(btn_row)
 
-        apply_btn = QtWidgets.QPushButton(f'应用选中的资产 ({total} 个)')
-        apply_btn.setObjectName('applyBtn')
-        apply_btn.clicked.connect(self._on_apply)
-        btn_row.addWidget(apply_btn)
-        self._apply_btn = apply_btn
-
-        layout.addLayout(btn_row)
+        if self._results:
+            self._show_thumbnail(0)
 
     def _build_result_row(self, index, entry):
         material = entry.get('material', {})
@@ -145,82 +178,110 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         frame = QtWidgets.QFrame()
         frame.setStyleSheet(
             'QFrame#resultCard { background-color: #2a2a2a; border: 1px solid #3a3a3a; '
-            'border-radius: 6px; padding: 4px; }')
+            'border-radius: 6px; }')
         frame.setObjectName('resultCard')
+        frame.setProperty('result_index', index)
 
-        row_layout = QtWidgets.QHBoxLayout(frame)
-        row_layout.setContentsMargins(10, 8, 10, 8)
-        row_layout.setSpacing(10)
+        outer = QtWidgets.QHBoxLayout(frame)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(8)
 
-        # 复选框
         cb = QtWidgets.QCheckBox()
         cb.setChecked(True)
         cb.toggled.connect(self._update_apply_btn_text)
-        row_layout.addWidget(cb)
+        outer.addWidget(cb)
         self._checkboxes[index] = cb
 
-        # 缩略图
-        thumb_label = QtWidgets.QLabel()
-        thumb_label.setFixedSize(50, 50)
-        thumb_label.setStyleSheet(
-            'background-color: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 4px;')
-        thumb_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        fields = QtWidgets.QVBoxLayout()
+        fields.setSpacing(4)
+
+        orig_name = material.get('name', '?')
+        name_row = QtWidgets.QHBoxLayout()
+        name_row.setSpacing(4)
+        name_row.addWidget(QtWidgets.QLabel(orig_name))
+        name_row.addStretch()
+        sub_lib = QtWidgets.QLabel(material.get('sub_library', ''))
+        sub_lib.setStyleSheet('color: #707070; font-size: 11px;')
+        name_row.addWidget(sub_lib)
+        fields.addLayout(name_row)
+
+        name_cn = QtWidgets.QLineEdit(result.get('name_cn', ''))
+        name_cn.setPlaceholderText('易读名')
+        name_cn.setMaximumHeight(28)
+        name_cn.setStyleSheet('font-size: 12px;')
+        name_cn.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
+        fields.addWidget(name_cn)
+
+        mid_row = QtWidgets.QHBoxLayout()
+        mid_row.setSpacing(6)
+
+        cat_edit = QtWidgets.QLineEdit(result.get('sub_category', ''))
+        cat_edit.setPlaceholderText('子分类')
+        cat_edit.setMaximumHeight(26)
+        cat_edit.setStyleSheet('font-size: 11px;')
+        cat_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
+        mid_row.addWidget(cat_edit)
+
+        tags_edit = QtWidgets.QLineEdit(', '.join(result.get('tags', [])))
+        tags_edit.setPlaceholderText('标签')
+        tags_edit.setMaximumHeight(26)
+        tags_edit.setStyleSheet('font-size: 11px;')
+        tags_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
+        mid_row.addWidget(tags_edit, 1)
+        fields.addLayout(mid_row)
+
+        notes_edit = QtWidgets.QLineEdit(result.get('notes', ''))
+        notes_edit.setPlaceholderText('注释')
+        notes_edit.setMaximumHeight(26)
+        notes_edit.setStyleSheet('font-size: 11px;')
+        notes_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
+        fields.addWidget(notes_edit)
+
+        self._edit_widgets[index] = {
+            'name_cn': name_cn,
+            'category': cat_edit,
+            'tags': tags_edit,
+            'notes': notes_edit,
+        }
+
+        outer.addLayout(fields, 1)
+        return frame
+
+    def _on_row_activated(self, index):
+        self._show_thumbnail(index)
+
+    def _show_thumbnail(self, index):
+        if index < 0 or index >= len(self._results):
+            return
+        entry = self._results[index]
+        material = entry.get('material', {})
+        result = entry.get('result', {})
+
         thumb_bytes = material.get('thumb_bytes')
         if thumb_bytes:
             pix = QtGui.QPixmap()
             pix.loadFromData(thumb_bytes)
             if not pix.isNull():
-                pix = pix.scaled(50, 50, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                pix = pix.scaled(200, 200, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                                  QtCore.Qt.TransformationMode.SmoothTransformation)
-                thumb_label.setPixmap(pix)
+                self._preview_thumb.setPixmap(pix)
             else:
-                thumb_label.setText('N/A')
+                self._preview_thumb.setText('无缩略图')
         else:
-            thumb_label.setText('N/A')
-        row_layout.addWidget(thumb_label)
+            self._preview_thumb.setText('无缩略图')
 
-        # 信息
-        info_layout = QtWidgets.QVBoxLayout()
-        info_layout.setSpacing(2)
-
-        orig_name = material.get('name', '?')
-        new_name = result.get('name_cn', '')
-        name_line = QtWidgets.QHBoxLayout()
-        name_line.setSpacing(6)
-        orig_lbl = QtWidgets.QLabel(orig_name)
-        orig_lbl.setStyleSheet('color: #808080; font-size: 12px;')
-        name_line.addWidget(orig_lbl)
-        if new_name:
-            arrow = QtWidgets.QLabel('→')
-            arrow.setStyleSheet('color: #5294e2; font-size: 12px;')
-            name_line.addWidget(arrow)
-            new_lbl = QtWidgets.QLabel(new_name)
-            new_lbl.setStyleSheet('color: #5294e2; font-size: 12px; font-weight: bold;')
-            name_line.addWidget(new_lbl)
-        name_line.addStretch()
-        info_layout.addLayout(name_line)
-
-        sub_cat = result.get('sub_category', '')
-        cat_line = QtWidgets.QLabel(f'分类: {sub_cat}') if sub_cat else QtWidgets.QLabel('')
-        cat_line.setStyleSheet('color: #a0a0a0; font-size: 11px;')
-        info_layout.addWidget(cat_line)
-
+        self._preview_name.setText(result.get('name_cn', '') or material.get('name', ''))
+        lines = []
+        cat = result.get('sub_category', '')
+        if cat:
+            lines.append(f'分类: {cat}')
         tags = result.get('tags', [])
         if tags:
-            tag_text = ', '.join(tags)
-            tag_line = QtWidgets.QLabel(f'标签: {tag_text}')
-            tag_line.setStyleSheet('color: #808080; font-size: 11px;')
-            info_layout.addWidget(tag_line)
-
+            lines.append(f'标签: {", ".join(tags)}')
         notes = result.get('notes', '')
         if notes:
-            note_line = QtWidgets.QLabel(notes[:80] + ('...' if len(notes) > 80 else ''))
-            note_line.setStyleSheet('color: #707070; font-size: 11px;')
-            info_layout.addWidget(note_line)
-
-        row_layout.addLayout(info_layout, 1)
-
-        return frame
+            lines.append(f'注释: {notes[:120]}')
+        self._preview_info.setText('\n'.join(lines))
 
     def _select_all(self):
         for cb in self._checkboxes.values():
@@ -240,7 +301,41 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.information(self, '提示', '没有选中任何资产')
             return
 
-        selected_results = [self._results[i] for i in checked_indices]
+        selected_results = []
+        for i in checked_indices:
+            entry = self._results[i]
+            result = entry.get('result', {}).copy()
+            w = self._edit_widgets.get(i, {})
+
+            name_cn = w.get('name_cn')
+            if name_cn:
+                val = name_cn.text().strip()
+                if val:
+                    result['name_cn'] = val
+
+            cat_w = w.get('category')
+            if cat_w:
+                val = cat_w.text().strip()
+                if val:
+                    result['sub_category'] = val
+
+            tags_w = w.get('tags')
+            if tags_w:
+                val = tags_w.text().strip()
+                if val:
+                    result['tags'] = [t.strip() for t in val.split(',') if t.strip()]
+
+            notes_w = w.get('notes')
+            if notes_w:
+                val = notes_w.text().strip()
+                if val:
+                    result['notes'] = val
+
+            selected_results.append({
+                'material': entry.get('material', {}),
+                'result': result,
+            })
+
         self.batchApplied.emit(selected_results)
         self.accept()
 
