@@ -418,7 +418,10 @@ class AssetCollector:
                 except Exception:
                     pass
 
-            target_refs = list(obj_ref_set) if obj_ref_set else list(ref_nodes_all)
+            target_refs = list(obj_ref_set)
+            if not target_refs:
+                _dbg(f"  引用: 选中对象均不属于引用, 跳过收集")
+                return ref_to_path
 
             for rn in target_refs:
                 try:
