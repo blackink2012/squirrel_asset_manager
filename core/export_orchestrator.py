@@ -1265,19 +1265,36 @@ class ExportOrchestrator:
 
     # ── Stage 4: 几何体 ──────────────────────────────────────
 
-    def _resolve_export_objects(self, config: ExportConfig) -> List[str]:
+    def _resolve_export_objects(self, config: ExportConfig, skip_references: bool = False) -> List[str]:
         """按 Maya 默认行为解析导出目标。
 
         用户选了什么就尝试导出什么。
         1. associated_objects → 用户选中的物体（不限于材质关联）
         2. material_node      → 仅选了材质节点，返回节点本身
         3. 空列表             → 跳过导出
+        4. skip_references    → 剔除引用对象（引用文件已在 associated/ 收集）
         """
         if config.associated_objects:
-            return [o for o in config.associated_objects if cmds.objExists(o)]
+            objs = [o for o in config.associated_objects if cmds.objExists(o)]
+            if skip_references:
+                objs = ExportOrchestrator._filter_referenced(objs)
+            return objs
         if _IN_MAYA and config.material_node and cmds.objExists(config.material_node):
             return [config.material_node]
         return []
+
+    @staticmethod
+    def _filter_referenced(objects: List[str]) -> List[str]:
+        local_objs = []
+        for o in objects:
+            try:
+                if cmds.referenceQuery(o, inr=True):
+                    print(f"[Export] 跳过引用对象: {o} (已在 associated/references/ 收集)")
+                    continue
+            except Exception:
+                pass
+            local_objs.append(o)
+        return local_objs
 
     @staticmethod
     def _is_dag_object(obj: str) -> bool:
@@ -1325,7 +1342,8 @@ class ExportOrchestrator:
                             _IN_MAYA and config.material_node and cmds.objExists(config.material_node)
                         ) else []
                 else:
-                    export_objs = self._resolve_export_objects(config)
+                    skip_ref = config.collect_associated and fmt_key in ("ma", "mb")
+                    export_objs = self._resolve_export_objects(config, skip_references=skip_ref)
                 if not export_objs:
                     print(f"[Export] 跳过 {fmt_key} 导出：无关联物体且未找到材质关联物体")
                     continue
