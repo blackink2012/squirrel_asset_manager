@@ -1284,15 +1284,35 @@ class ExportOrchestrator:
         return []
 
     @staticmethod
+    def _get_all_referenced_objects() -> set:
+        ref_objs = set()
+        if not _IN_MAYA:
+            return ref_objs
+        try:
+            ref_nodes = cmds.file(query=True, reference=True) or []
+            for rn in ref_nodes:
+                try:
+                    objs = cmds.referenceQuery(rn, nodes=True, dagPath=True) or []
+                    for o in objs:
+                        ref_objs.add(o)
+                        ref_objs.add(o.split('|')[-1])
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return ref_objs
+
+    @staticmethod
     def _filter_referenced(objects: List[str]) -> List[str]:
+        ref_objs = ExportOrchestrator._get_all_referenced_objects()
+        if not ref_objs:
+            return list(objects)
         local_objs = []
         for o in objects:
-            try:
-                if cmds.referenceQuery(o, inr=True):
-                    print(f"[Export] 跳过引用对象: {o} (已在 associated/references/ 收集)")
-                    continue
-            except Exception:
-                pass
+            short = o.split('|')[-1]
+            if o in ref_objs or short in ref_objs:
+                print(f"[Export] 跳过引用对象: {o} (已在 associated/references/ 收集)")
+                continue
             local_objs.append(o)
         return local_objs
 
