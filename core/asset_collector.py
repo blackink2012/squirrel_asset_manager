@@ -8,6 +8,24 @@ try:
 except ImportError:
     _IN_MAYA = False
 
+DEBUG = True
+
+
+def _dbg(msg: str):
+    if DEBUG:
+        print(f"[AssetCollector] {msg}")
+
+
+def _get_file_path(attr_value) -> Optional[str]:
+    if isinstance(attr_value, (list, tuple)):
+        for v in attr_value:
+            if v and isinstance(v, str) and os.path.isfile(v):
+                return v
+        return None
+    if attr_value and isinstance(attr_value, str) and os.path.isfile(attr_value):
+        return attr_value
+    return None
+
 
 class AssetCollector:
 
@@ -19,11 +37,14 @@ class AssetCollector:
             "references": {},
         }
         if not _IN_MAYA:
+            _dbg("不在 Maya 环境，跳过收集")
             return result
 
+        _dbg(f"开始收集，关联对象 {len(associated_objects)} 个: {associated_objects}")
         result["caches"] = AssetCollector.collect_cache_files(associated_objects)
         result["proxies"] = AssetCollector.collect_proxy_files(associated_objects)
         result["references"] = AssetCollector.collect_reference_files(associated_objects)
+        _dbg(f"收集完成: 缓存={len(result['caches'])}, 代理={len(result['proxies'])}, 引用={len(result['references'])}")
         return result
 
     @staticmethod
@@ -34,7 +55,9 @@ class AssetCollector:
 
         for obj in associated_objects or []:
             if not cmds.objExists(obj):
+                _dbg(f"跳过不存在的对象: {obj}")
                 continue
+            _dbg(f"--- 检查对象: {obj} ---")
             AssetCollector._collect_alembic(obj, node_to_path)
             AssetCollector._collect_gpu_cache(obj, node_to_path)
             AssetCollector._collect_ncache(obj, node_to_path)
@@ -46,23 +69,49 @@ class AssetCollector:
         try:
             descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
             descendants.append(obj)
+            _dbg(f"  Alembic: 扫描 {len(descendants)} 个后代节点 (含自身)")
+
             seen = set()
+            found_shapes = []
             for d in descendants:
                 shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
                 for s in shapes:
-                    if s in seen or cmds.nodeType(s) != 'AlembicNode':
-                        continue
-                    seen.add(s)
-                    for attr in ('abc_File', 'cacheName', 'cacheFileName', 'fileName'):
-                        try:
-                            path = cmds.getAttr(s + '.' + attr)
-                            if path and os.path.isfile(path):
-                                result[s] = path
-                                break
-                        except Exception:
-                            continue
+                    nt = cmds.nodeType(s)
+                    if nt == 'AlembicNode':
+                        found_shapes.append((d, s))
+
+            _dbg(f"  Alembic: 发现 {len(found_shapes)} 个 AlembicNode shape")
+
+            for parent, s in found_shapes:
+                if s in seen:
+                    continue
+                seen.add(s)
+
+                all_attrs = cmds.listAttr(s)
+                _dbg(f"    shape={s}, parent={parent}, 属性: {all_attrs}")
+
+                for attr in ('abc_File', 'cacheName', 'cacheFileName', 'fileName'):
+                    full_attr = s + '.' + attr
+                    try:
+                        val = cmds.getAttr(full_attr)
+                        _dbg(f"      getAttr({full_attr}) = {val!r}")
+                        path = _get_file_path(val)
+                        if path:
+                            _dbg(f"      => 找到文件: {path}")
+                            result[s] = path
+                            break
+                        else:
+                            _dbg(f"      => 值 {val!r} 不是有效文件路径")
+                    except Exception as ex:
+                        _dbg(f"      getAttr({full_attr}) 异常: {ex}")
+
+                if s not in result:
+                    _dbg(f"    => 未能从 {s} 提取到文件路径")
+
         except Exception as e:
-            print(f"[AssetCollector] Alembic 收集失败 ({obj}): {e}")
+            _dbg(f"  Alembic 收集异常 ({obj}): {e}")
+            import traceback
+            traceback.print_exc()
 
     @staticmethod
     def _collect_gpu_cache(obj: str, result: Dict[str, str]):
@@ -78,14 +127,16 @@ class AssetCollector:
                     seen.add(s)
                     for attr in ('cacheFileName', 'cacheFile', 'cacheName'):
                         try:
-                            path = cmds.getAttr(s + '.' + attr)
-                            if path and os.path.isfile(path):
+                            val = cmds.getAttr(s + '.' + attr)
+                            path = _get_file_path(val)
+                            if path:
+                                _dbg(f"  GPU Cache: {s} -> {path}")
                                 result[s] = path
                                 break
                         except Exception:
                             continue
         except Exception as e:
-            print(f"[AssetCollector] GPU Cache 收集失败: {e}")
+            _dbg(f"  GPU Cache 收集异常: {e}")
 
     @staticmethod
     def _collect_ncache(obj: str, result: Dict[str, str]):
@@ -96,17 +147,18 @@ class AssetCollector:
             for cf in set(cf_nodes):
                 if not cmds.objExists(cf):
                     continue
-                attrs = ['.cachePath', '.path']
-                for attr in attrs:
+                for attr in ('.cachePath', '.path'):
                     try:
-                        path = cmds.getAttr(cf + attr)
-                        if path and os.path.isfile(path):
+                        val = cmds.getAttr(cf + attr)
+                        path = _get_file_path(val)
+                        if path:
+                            _dbg(f"  nCache: {cf} -> {path}")
                             result[cf] = path
                             break
                     except Exception:
                         continue
         except Exception as e:
-            print(f"[AssetCollector] nCache 收集失败 ({obj}): {e}")
+            _dbg(f"  nCache 收集异常 ({obj}): {e}")
 
     @staticmethod
     def collect_proxy_files(associated_objects: List[str]) -> Dict[str, str]:
@@ -152,14 +204,16 @@ class AssetCollector:
                     seen.add(s)
                     for attr in attrs:
                         try:
-                            path = cmds.getAttr(s + '.' + attr)
-                            if path and os.path.isfile(path):
+                            val = cmds.getAttr(s + '.' + attr)
+                            path = _get_file_path(val)
+                            if path:
+                                _dbg(f"  {node_type}: {s} -> {path}")
                                 result[s] = path
                                 break
                         except Exception:
                             continue
         except Exception as e:
-            print(f"[AssetCollector] {node_type} 收集失败: {e}")
+            _dbg(f"  {node_type} 收集异常: {e}")
 
     @staticmethod
     def collect_reference_files(associated_objects: List[str]) -> Dict[str, str]:
@@ -169,17 +223,19 @@ class AssetCollector:
 
         try:
             ref_nodes = cmds.file(query=True, reference=True) or []
+            _dbg(f"  引用: 场景共 {len(ref_nodes)} 个引用节点")
             for rn in ref_nodes:
                 if not cmds.objExists(rn):
                     continue
                 try:
                     filename = cmds.referenceQuery(rn, filename=True)
                     if filename and os.path.isfile(filename):
+                        _dbg(f"  引用: {rn} -> {filename}")
                         ref_to_path[rn] = filename
                 except Exception:
                     continue
         except Exception as e:
-            print(f"[AssetCollector] 引用收集失败: {e}")
+            _dbg(f"  引用收集异常: {e}")
 
         return ref_to_path
 
@@ -196,7 +252,7 @@ class AssetCollector:
             os.makedirs(cat_dir, exist_ok=True)
             for node_name, src_path in collected.get(category, {}).items():
                 if not os.path.isfile(src_path):
-                    print(f"[AssetCollector] 跳过不存在的文件: {src_path}")
+                    _dbg(f"  跳过不存在的文件: {src_path}")
                     continue
                 try:
                     base = os.path.basename(src_path)
@@ -204,7 +260,7 @@ class AssetCollector:
                     if os.path.normcase(os.path.abspath(src_path)) != os.path.normcase(os.path.abspath(dst)):
                         shutil.copy2(src_path, dst)
                     target_map[category][node_name] = os.path.join(category, base).replace("\\", "/")
-                    print(f"[AssetCollector] 已复制 {category}: {src_path} -> {dst}")
+                    _dbg(f"  已复制 {category}: {src_path}")
                 except Exception as e:
-                    print(f"[AssetCollector] 复制失败 {src_path}: {e}")
+                    _dbg(f"  复制失败 {src_path}: {e}")
         return target_map
