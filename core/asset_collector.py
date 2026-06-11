@@ -65,6 +65,17 @@ class AssetCollector:
         return node_to_path
 
     @staticmethod
+    def _get_all_shapes(obj: str) -> List[str]:
+        shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
+        descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
+        for d in descendants:
+            sub_shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
+            for s in sub_shapes:
+                if s not in shapes:
+                    shapes.append(s)
+        return shapes
+
+    @staticmethod
     def _collect_alembic(obj: str, result: Dict[str, str]):
         try:
             descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
@@ -81,10 +92,12 @@ class AssetCollector:
                     if nt == 'AlembicNode':
                         found_shapes.append((d, s))
 
+            _all_obj_shapes = AssetCollector._get_all_shapes(obj)
+            _dbg(f"  Alembic: 对象下共 {len(_all_obj_shapes)} 个 shape")
+
             if not found_shapes:
                 _dbg(f"  Alembic: DAG 未发现, 尝试 DG 连接...")
-                shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
-                for s in shapes:
+                for s in _all_obj_shapes:
                     conns = cmds.listConnections(s, type='AlembicNode') or []
                     for a_node in set(conns):
                         if cmds.objExists(a_node) and cmds.nodeType(a_node) == 'AlembicNode':
@@ -95,12 +108,12 @@ class AssetCollector:
                 _dbg(f"  Alembic: DG 未发现, 全场景扫描 AlembicNode...")
                 all_alembic = cmds.ls(type='AlembicNode')
                 _dbg(f"    场景共 {len(all_alembic)} 个 AlembicNode")
-                obj_shapes = set(cmds.listRelatives(obj, shapes=True, fullPath=True) or [])
+                obj_shapes_set = set(_all_obj_shapes)
                 for a_node in all_alembic:
                     if not cmds.objExists(a_node):
                         continue
                     dests = cmds.listConnections(a_node, d=True, s=False) or []
-                    matched = any(d in obj_shapes for d in dests)
+                    matched = any(d in obj_shapes_set for d in dests)
                     _dbg(f"    {a_node}: 下游={dests[:5]}{'...' if len(dests)>5 else ''}, 匹配={matched}")
                     if matched:
                         found_shapes.append(('(scene)', a_node))
