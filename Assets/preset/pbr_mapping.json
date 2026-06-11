@@ -773,111 +773,329 @@
   "connection_recipes": {
     "ao_multiply": {
       "description": "AO remap → × Albedo → shader。AO 暗部补偿标准连接",
-      "requires": ["ao", "baseColor"],
+      "requires": [
+        "ao",
+        "baseColor"
+      ],
       "exclusive": [],
       "nodes": [
-        {"id": "ao_mult_div", "type": "multiplyDivide", "attrs": {"operation": 1}},
-        {"id": "ao_remap", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}}
+        {
+          "id": "ao_mult_div",
+          "type": "multiplyDivide",
+          "attrs": {
+            "operation": 1
+          }
+        },
+        {
+          "id": "ao_remap",
+          "type": "remapValue",
+          "attrs": {
+            "inputMin": 0.0,
+            "inputMax": 1.0
+          }
+        }
       ],
       "connections": [
-        {"from": "{ao}.outColorR", "to": "{ao_remap}.inputValue"},
-        {"from": "{ao_remap}.outValue", "to": "{ao_mult_div}.input2X"},
-        {"from": "{ao_remap}.outValue", "to": "{ao_mult_div}.input2Y"},
-        {"from": "{ao_remap}.outValue", "to": "{ao_mult_div}.input2Z"},
-        {"from": "{baseColor}.outColor", "to": "{ao_mult_div}.input1"},
-        {"from": "{ao_mult_div}.output", "to": "{shader}.{pbr:baseColor}"}
+        {
+          "from": "{ao}.outColorR",
+          "to": "{ao_remap}.inputValue"
+        },
+        {
+          "from": "{ao_remap}.outValue",
+          "to": "{ao_mult_div}.input2X"
+        },
+        {
+          "from": "{ao_remap}.outValue",
+          "to": "{ao_mult_div}.input2Y"
+        },
+        {
+          "from": "{ao_remap}.outValue",
+          "to": "{ao_mult_div}.input2Z"
+        },
+        {
+          "from": "{baseColor}.outColor",
+          "to": "{ao_mult_div}.input1"
+        },
+        {
+          "from": "{ao_mult_div}.output",
+          "to": "{shader}.{pbr:baseColor}"
+        }
       ],
-      "skip_direct": ["ao", "baseColor"]
+      "skip_direct": [
+        "ao",
+        "baseColor"
+      ]
     },
     "arm_channel_split": {
       "description": "ARM 组合贴图通道拆分：R=AO, G=Roughness, B=Metallic。属性名自动适配当前着色器",
-      "requires": ["arm"],
+      "requires": [
+        "arm"
+      ],
       "nodes": [
-        {"id": "arm_remap_ao", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}},
-        {"id": "arm_remap_mtl", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}},
-        {"id": "arm_mult_div", "type": "multiplyDivide", "attrs": {"operation": 1}}
+        {
+          "id": "arm_remap_ao",
+          "type": "remapValue",
+          "attrs": {
+            "inputMin": 0.0,
+            "inputMax": 1.0
+          }
+        },
+        {
+          "id": "arm_remap_mtl",
+          "type": "remapValue",
+          "attrs": {
+            "inputMin": 0.0,
+            "inputMax": 1.0
+          }
+        },
+        {
+          "id": "arm_mult_div",
+          "type": "multiplyDivide",
+          "attrs": {
+            "operation": 1
+          }
+        }
       ],
       "connections": [
-        {"from": "{arm}.outColorR", "to": "{arm_remap_ao}.inputValue"},
-        {"from": "{arm_remap_ao}.outValue", "to": "{arm_mult_div}.input2X"},
-        {"from": "{arm_remap_ao}.outValue", "to": "{arm_mult_div}.input2Y"},
-        {"from": "{arm_remap_ao}.outValue", "to": "{arm_mult_div}.input2Z"},
-        {"from": "{baseColor}.outColor", "to": "{arm_mult_div}.input1", "if_has": "baseColor"},
-        {"from": "{arm_mult_div}.output", "to": "{shader}.{pbr:baseColor}", "if_has": "baseColor"},
-        {"from": "{arm}.outColorG", "to": "{shader}.{pbr:roughness}"},
-        {"from": "{arm}.outColorB", "to": "{arm_remap_mtl}.inputValue"},
-        {"from": "{arm_remap_mtl}.outValue", "to": "{shader}.{pbr:metallic}"}
+        {
+          "from": "{arm}.outColorR",
+          "to": "{arm_remap_ao}.inputValue"
+        },
+        {
+          "from": "{arm_remap_ao}.outValue",
+          "to": "{arm_mult_div}.input2X"
+        },
+        {
+          "from": "{arm_remap_ao}.outValue",
+          "to": "{arm_mult_div}.input2Y"
+        },
+        {
+          "from": "{arm_remap_ao}.outValue",
+          "to": "{arm_mult_div}.input2Z"
+        },
+        {
+          "from": "{baseColor}.outColor",
+          "to": "{arm_mult_div}.input1",
+          "if_has": "baseColor"
+        },
+        {
+          "from": "{arm_mult_div}.output",
+          "to": "{shader}.{pbr:baseColor}",
+          "if_has": "baseColor"
+        },
+        {
+          "from": "{arm}.outColorG",
+          "to": "{shader}.{pbr:roughness}"
+        },
+        {
+          "from": "{arm}.outColorB",
+          "to": "{arm_remap_mtl}.inputValue"
+        },
+        {
+          "from": "{arm_remap_mtl}.outValue",
+          "to": "{shader}.{pbr:metallic}"
+        }
       ],
-      "skip_direct": ["arm", "ao", "baseColor"]
+      "skip_direct": [
+        "arm",
+        "ao",
+        "baseColor"
+      ]
     },
     "orm_channel_split": {
       "description": "ORM 组合贴图通道拆分：R=AO, G=Roughness, B=Metallic。属性名自动适配当前着色器",
-      "requires": ["orm"],
+      "requires": [
+        "orm"
+      ],
       "nodes": [
-        {"id": "orm_remap_ao", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}},
-        {"id": "orm_remap_mtl", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}},
-        {"id": "orm_mult_div", "type": "multiplyDivide", "attrs": {"operation": 1}}
+        {
+          "id": "orm_remap_ao",
+          "type": "remapValue",
+          "attrs": {
+            "inputMin": 0.0,
+            "inputMax": 1.0
+          }
+        },
+        {
+          "id": "orm_remap_mtl",
+          "type": "remapValue",
+          "attrs": {
+            "inputMin": 0.0,
+            "inputMax": 1.0
+          }
+        },
+        {
+          "id": "orm_mult_div",
+          "type": "multiplyDivide",
+          "attrs": {
+            "operation": 1
+          }
+        }
       ],
       "connections": [
-        {"from": "{orm}.outColorR", "to": "{orm_remap_ao}.inputValue"},
-        {"from": "{orm_remap_ao}.outValue", "to": "{orm_mult_div}.input2X"},
-        {"from": "{orm_remap_ao}.outValue", "to": "{orm_mult_div}.input2Y"},
-        {"from": "{orm_remap_ao}.outValue", "to": "{orm_mult_div}.input2Z"},
-        {"from": "{baseColor}.outColor", "to": "{orm_mult_div}.input1", "if_has": "baseColor"},
-        {"from": "{orm_mult_div}.output", "to": "{shader}.{pbr:baseColor}", "if_has": "baseColor"},
-        {"from": "{orm}.outColorG", "to": "{shader}.{pbr:roughness}"},
-        {"from": "{orm}.outColorB", "to": "{orm_remap_mtl}.inputValue"},
-        {"from": "{orm_remap_mtl}.outValue", "to": "{shader}.{pbr:metallic}"}
+        {
+          "from": "{orm}.outColorR",
+          "to": "{orm_remap_ao}.inputValue"
+        },
+        {
+          "from": "{orm_remap_ao}.outValue",
+          "to": "{orm_mult_div}.input2X"
+        },
+        {
+          "from": "{orm_remap_ao}.outValue",
+          "to": "{orm_mult_div}.input2Y"
+        },
+        {
+          "from": "{orm_remap_ao}.outValue",
+          "to": "{orm_mult_div}.input2Z"
+        },
+        {
+          "from": "{baseColor}.outColor",
+          "to": "{orm_mult_div}.input1",
+          "if_has": "baseColor"
+        },
+        {
+          "from": "{orm_mult_div}.output",
+          "to": "{shader}.{pbr:baseColor}",
+          "if_has": "baseColor"
+        },
+        {
+          "from": "{orm}.outColorG",
+          "to": "{shader}.{pbr:roughness}"
+        },
+        {
+          "from": "{orm}.outColorB",
+          "to": "{orm_remap_mtl}.inputValue"
+        },
+        {
+          "from": "{orm_remap_mtl}.outValue",
+          "to": "{shader}.{pbr:metallic}"
+        }
       ],
-      "skip_direct": ["orm", "ao", "baseColor"]
+      "skip_direct": [
+        "orm",
+        "ao",
+        "baseColor"
+      ]
     },
     "normal_height_cascade": {
       "description": "高度图 bump2d 输出喂入法线 bump2d 的 normalCamera，法线上叠加微凹凸",
-      "requires": ["normal", "height"],
+      "requires": [
+        "normal",
+        "height"
+      ],
       "nodes": [
-        {"id": "height_bump", "type": "bump2d", "attrs": {"bumpDepth": 0.001}},
-        {"id": "normal_bump", "type": "bump2d", "attrs": {"bumpInterp": 1.0}}
+        {
+          "id": "height_bump",
+          "type": "bump2d",
+          "attrs": {
+            "bumpDepth": 0.001
+          }
+        },
+        {
+          "id": "normal_bump",
+          "type": "bump2d",
+          "attrs": {
+            "bumpInterp": 1.0
+          }
+        }
       ],
       "connections": [
-        {"from": "{height}.outAlpha", "to": "{height_bump}.bumpValue"},
-        {"from": "{normal}.outAlpha", "to": "{normal_bump}.bumpValue"},
-        {"from": "{height_bump}.outNormal", "to": "{normal_bump}.normalCamera"},
-        {"from": "{normal_bump}.outNormal", "to": "{shader}.{pbr:normal}"}
+        {
+          "from": "{height}.outAlpha",
+          "to": "{height_bump}.bumpValue"
+        },
+        {
+          "from": "{normal}.outAlpha",
+          "to": "{normal_bump}.bumpValue"
+        },
+        {
+          "from": "{height_bump}.outNormal",
+          "to": "{normal_bump}.normalCamera"
+        },
+        {
+          "from": "{normal_bump}.outNormal",
+          "to": "{shader}.{pbr:normal}"
+        }
       ],
-      "skip_direct": ["normal", "height"]
+      "skip_direct": [
+        "normal",
+        "height"
+      ]
     },
     "normal_simple": {
       "description": "单法线贴图连接：normal → bump2d → shader（无高度图时的降级方案）",
-      "requires": ["normal"],
-      "exclusive": ["height"],
+      "requires": [
+        "normal"
+      ],
+      "exclusive": [
+        "height"
+      ],
       "nodes": [
-        {"id": "normal_bump", "type": "bump2d", "attrs": {"bumpInterp": 1.0}}
+        {
+          "id": "normal_bump",
+          "type": "bump2d",
+          "attrs": {
+            "bumpInterp": 1.0
+          }
+        }
       ],
       "connections": [
-        {"from": "{normal}.outAlpha", "to": "{normal_bump}.bumpValue"},
-        {"from": "{normal_bump}.outNormal", "to": "{shader}.{pbr:normal}"}
+        {
+          "from": "{normal}.outAlpha",
+          "to": "{normal_bump}.bumpValue"
+        },
+        {
+          "from": "{normal_bump}.outNormal",
+          "to": "{shader}.{pbr:normal}"
+        }
       ],
-      "skip_direct": ["normal"]
+      "skip_direct": [
+        "normal"
+      ]
     },
     "scalar_remap": {
       "description": "标量贴图通过 remapValue 重映射后连入着色器（可用于 roughness/metallic 等）",
-      "requires_any": ["roughness", "metallic"],
+      "requires_any": [
+        "roughness",
+        "metallic"
+      ],
       "optional": true,
       "nodes": [
-        {"id": "remap", "type": "remapValue", "attrs": {"inputMin": 0.0, "inputMax": 1.0}}
+        {
+          "id": "remap",
+          "type": "remapValue",
+          "attrs": {
+            "inputMin": 0.0,
+            "inputMax": 1.0
+          }
+        }
       ],
       "connections": [
-        {"from": "{source}.outColorR", "to": "{remap}.inputValue"},
-        {"from": "{remap}.outValue", "to": "{shader}.{pbr:{source}}"}
+        {
+          "from": "{source}.outColorR",
+          "to": "{remap}.inputValue"
+        },
+        {
+          "from": "{remap}.outValue",
+          "to": "{shader}.{pbr:{source}}"
+        }
       ],
       "per_texture": true,
-      "skip_direct": ["roughness", "metallic"]
+      "skip_direct": [
+        "roughness",
+        "metallic"
+      ]
     },
     "place2dTexture_shared": {
       "description": "所有 file 节点共享一个 place2dTexture，统一 UV 控制（Megascans 模式）",
       "optional": true,
       "nodes": [
-        {"id": "coords", "type": "place2dTexture", "attrs": {}}
+        {
+          "id": "coords",
+          "type": "place2dTexture",
+          "attrs": {}
+        }
       ],
       "connect_all_files": true
     }
