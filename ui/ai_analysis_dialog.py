@@ -4,13 +4,14 @@ QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 _STYLE = """
 QDialog, QWidget { background-color: #252525; }
-QLabel { color: #a0a0a0; }
+QLabel { color: #a0a0a0; font-size: 13px; }
 QLineEdit {
     background-color: #2a2a2a;
     border: 1px solid #3a3a3a;
     border-radius: 4px;
     color: #ffffff;
     padding: 6px 10px;
+    font-size: 13px;
 }
 QLineEdit:focus { border-color: #5294e2; }
 QTextEdit {
@@ -19,6 +20,7 @@ QTextEdit {
     border-radius: 4px;
     color: #ffffff;
     padding: 8px;
+    font-size: 13px;
 }
 QTextEdit:focus { border-color: #5294e2; }
 QPushButton {
@@ -27,6 +29,7 @@ QPushButton {
     border-radius: 4px;
     color: #d0d0d0;
     padding: 8px 16px;
+    font-size: 13px;
 }
 QPushButton:hover { background-color: #4a4a4a; }
 QPushButton#applyBtn { background-color: #5294e2; }
@@ -46,8 +49,22 @@ QGroupBox::title {
     left: 10px;
     padding: 0 5px;
 }
-QCheckBox { color: #d0d0d0; spacing: 6px; }
-QCheckBox::indicator { width: 16px; height: 16px; }
+QCheckBox { color: #d0d0d0; spacing: 6px; font-size: 13px; }
+QCheckBox::indicator { width: 18px; height: 18px; }
+QComboBox {
+    background-color: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    color: #ffffff;
+    padding: 5px 10px;
+    font-size: 13px;
+}
+QComboBox:hover { border-color: #5294e2; }
+QComboBox QAbstractItemView {
+    background-color: #2a2a2a;
+    color: #d0d0d0;
+    selection-background-color: #2d4a6f;
+}
 QScrollBar:vertical {
     background: #1a1a1a;
     width: 8px;
@@ -75,8 +92,8 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
     def _setup_ui(self):
         total = len(self._results)
         self.setWindowTitle(f'批量 AI 分析结果 — {total} 个资产')
-        self.setMinimumSize(900, 400)
-        self.resize(1000, min(700, 150 + total * 160))
+        self.setMinimumSize(1100, 500)
+        self.resize(1200, min(700, 200 + total * 200))
         self.setStyleSheet(_STYLE)
 
         root = QtWidgets.QVBoxLayout(self)
@@ -84,7 +101,9 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         root.setSpacing(12)
 
         top_row = QtWidgets.QHBoxLayout()
-        top_row.addWidget(QtWidgets.QLabel(f'共 {total} 个资产分析完成，可编辑后勾选应用：'))
+        top_label = QtWidgets.QLabel(f'共 {total} 个资产分析完成，可编辑后勾选应用：')
+        top_label.setStyleSheet('color: #ffffff; font-size: 14px;')
+        top_row.addWidget(top_label)
         top_row.addStretch()
         select_all = QtWidgets.QPushButton('全选')
         select_all.setObjectName('selectAllBtn')
@@ -125,26 +144,26 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
 
         # ====== 右侧: 大缩略图预览 ======
         right_panel = QtWidgets.QWidget()
-        right_panel.setFixedWidth(220)
+        right_panel.setFixedWidth(420)
         right_layout = QtWidgets.QVBoxLayout(right_panel)
         right_layout.setContentsMargins(12, 0, 0, 0)
         right_layout.setSpacing(8)
 
         self._preview_thumb = QtWidgets.QLabel()
-        self._preview_thumb.setFixedSize(200, 200)
+        self._preview_thumb.setFixedSize(400, 400)
         self._preview_thumb.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._preview_thumb.setStyleSheet(
             'background-color: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 8px;')
         right_layout.addWidget(self._preview_thumb)
 
         self._preview_name = QtWidgets.QLabel('')
-        self._preview_name.setStyleSheet('color: #ffffff; font-size: 14px; font-weight: bold;')
+        self._preview_name.setStyleSheet('color: #ffffff; font-size: 16px; font-weight: bold;')
         self._preview_name.setWordWrap(True)
         self._preview_name.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         right_layout.addWidget(self._preview_name)
 
         self._preview_info = QtWidgets.QLabel('点击左侧资产查看缩略图')
-        self._preview_info.setStyleSheet('color: #808080; font-size: 12px;')
+        self._preview_info.setStyleSheet('color: #808080; font-size: 13px;')
         self._preview_info.setWordWrap(True)
         self._preview_info.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         right_layout.addWidget(self._preview_info)
@@ -152,7 +171,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         right_layout.addStretch()
         splitter.addWidget(right_panel)
 
-        splitter.setSizes([700, 240])
+        splitter.setSizes([700, 420])
         root.addWidget(splitter, 1)
 
         # 底部按钮
@@ -181,6 +200,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
             'border-radius: 6px; }')
         frame.setObjectName('resultCard')
         frame.setProperty('result_index', index)
+        frame.installEventFilter(self)
 
         outer = QtWidgets.QHBoxLayout(frame)
         outer.setContentsMargins(8, 8, 8, 8)
@@ -201,14 +221,14 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         name_row.addWidget(QtWidgets.QLabel(orig_name))
         name_row.addStretch()
         sub_lib = QtWidgets.QLabel(material.get('sub_library', ''))
-        sub_lib.setStyleSheet('color: #707070; font-size: 11px;')
+        sub_lib.setStyleSheet('color: #707070; font-size: 12px;')
         name_row.addWidget(sub_lib)
         fields.addLayout(name_row)
 
         name_cn = QtWidgets.QLineEdit(result.get('name_cn', ''))
         name_cn.setPlaceholderText('易读名')
-        name_cn.setMaximumHeight(28)
-        name_cn.setStyleSheet('font-size: 12px;')
+        name_cn.setMaximumHeight(32)
+        name_cn.setStyleSheet('font-size: 13px;')
         name_cn.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
         fields.addWidget(name_cn)
 
@@ -217,23 +237,23 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
 
         cat_edit = QtWidgets.QLineEdit(result.get('sub_category', ''))
         cat_edit.setPlaceholderText('子分类')
-        cat_edit.setMaximumHeight(26)
-        cat_edit.setStyleSheet('font-size: 11px;')
+        cat_edit.setMaximumHeight(30)
+        cat_edit.setStyleSheet('font-size: 13px;')
         cat_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
         mid_row.addWidget(cat_edit)
 
         tags_edit = QtWidgets.QLineEdit(', '.join(result.get('tags', [])))
         tags_edit.setPlaceholderText('标签')
-        tags_edit.setMaximumHeight(26)
-        tags_edit.setStyleSheet('font-size: 11px;')
+        tags_edit.setMaximumHeight(30)
+        tags_edit.setStyleSheet('font-size: 13px;')
         tags_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
         mid_row.addWidget(tags_edit, 1)
         fields.addLayout(mid_row)
 
         notes_edit = QtWidgets.QLineEdit(result.get('notes', ''))
         notes_edit.setPlaceholderText('注释')
-        notes_edit.setMaximumHeight(26)
-        notes_edit.setStyleSheet('font-size: 11px;')
+        notes_edit.setMaximumHeight(30)
+        notes_edit.setStyleSheet('font-size: 13px;')
         notes_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
         fields.addWidget(notes_edit)
 
@@ -245,7 +265,29 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         }
 
         outer.addLayout(fields, 1)
+        self._install_filter_recursive(frame)
         return frame
+
+    def _install_filter_recursive(self, widget):
+        """递归给所有子控件安装 eventFilter"""
+        widget.installEventFilter(self)
+        for child in widget.findChildren(QtWidgets.QWidget):
+            child.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QtCore.QEvent.Type.MouseButtonPress:
+            idx = obj.property('result_index')
+            if idx is not None:
+                self._show_thumbnail(idx)
+                return False
+            parent = obj.parent()
+            while parent is not None:
+                idx = parent.property('result_index')
+                if idx is not None:
+                    self._show_thumbnail(idx)
+                    break
+                parent = parent.parent()
+        return super().eventFilter(obj, event)
 
     def _on_row_activated(self, index):
         self._show_thumbnail(index)
@@ -262,7 +304,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
             pix = QtGui.QPixmap()
             pix.loadFromData(thumb_bytes)
             if not pix.isNull():
-                pix = pix.scaled(200, 200, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                pix = pix.scaled(400, 400, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                                  QtCore.Qt.TransformationMode.SmoothTransformation)
                 self._preview_thumb.setPixmap(pix)
             else:
@@ -338,6 +380,94 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
 
         self.batchApplied.emit(selected_results)
         self.accept()
+
+
+class AIAnalysisConfigDialog(QtWidgets.QDialog):
+    configConfirmed = QtCore.Signal(dict)
+
+    def __init__(self, parent=None, available_models=None):
+        super(AIAnalysisConfigDialog, self).__init__(parent)
+        self._available_models = available_models or []
+        self._setup_ui()
+
+    def _setup_ui(self):
+        self.setWindowTitle('AI 分析配置')
+        self.setFixedSize(380, 280)
+        self.setStyleSheet(_STYLE)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        title = QtWidgets.QLabel('请选择 AI 分析参数')
+        title.setStyleSheet('color: #ffffff; font-size: 15px; font-weight: bold;')
+        layout.addWidget(title)
+
+        layout.addSpacing(4)
+
+        lang_layout = QtWidgets.QHBoxLayout()
+        lang_label = QtWidgets.QLabel('输出语言:')
+        lang_label.setFixedWidth(80)
+        lang_layout.addWidget(lang_label)
+        self._lang_combo = QtWidgets.QComboBox()
+        self._lang_combo.addItems(['中文', 'English'])
+        self._lang_combo.setCurrentIndex(0)
+        lang_layout.addWidget(self._lang_combo, 1)
+        layout.addLayout(lang_layout)
+
+        model_layout = QtWidgets.QHBoxLayout()
+        model_label = QtWidgets.QLabel('AI 模型:')
+        model_label.setFixedWidth(80)
+        model_layout.addWidget(model_label)
+        self._model_combo = QtWidgets.QComboBox()
+        if self._available_models:
+            self._model_combo.addItems(self._available_models)
+            default_model = 'qwen3-vl:8b'
+            if default_model in self._available_models:
+                self._model_combo.setCurrentText(default_model)
+            elif 'qwen3.5:9b' in self._available_models:
+                self._model_combo.setCurrentText('qwen3.5:9b')
+        else:
+            self._model_combo.addItem('qwen3-vl:8b')
+        model_layout.addWidget(self._model_combo, 1)
+        layout.addLayout(model_layout)
+
+        self._review_cb = QtWidgets.QCheckBox('分析完成后弹出窗口供我审查和编辑')
+        self._review_cb.setChecked(True)
+        layout.addWidget(self._review_cb)
+
+        layout.addSpacing(6)
+
+        btn_layout = QtWidgets.QHBoxLayout()
+        btn_layout.setSpacing(10)
+        btn_layout.addStretch()
+
+        cancel_btn = QtWidgets.QPushButton('取消')
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        start_btn = QtWidgets.QPushButton('开始分析')
+        start_btn.setObjectName('applyBtn')
+        start_btn.clicked.connect(self._on_confirm)
+        btn_layout.addWidget(start_btn)
+
+        layout.addLayout(btn_layout)
+
+    def _on_confirm(self):
+        config = {
+            'language': self._lang_combo.currentText(),
+            'review_output': self._review_cb.isChecked(),
+            'model': self._model_combo.currentText(),
+        }
+        self.configConfirmed.emit(config)
+        self.accept()
+
+    def get_config(self):
+        return {
+            'language': self._lang_combo.currentText(),
+            'review_output': self._review_cb.isChecked(),
+            'model': self._model_combo.currentText(),
+        }
 
 
 class AIAnalysisDialog(QtWidgets.QDialog):

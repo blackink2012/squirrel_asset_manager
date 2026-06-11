@@ -562,7 +562,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         else:
             action = self._ai_tools_menu.addAction(
                 "🤖 AI 分析缩略图 (右键资产→AI 分析)")
-        action.triggered.connect(self._on_ai_analysis_batch)
+        action.triggered.connect(self._on_ai_analysis_with_config)
 
         self._ai_tools_menu.addSeparator()
 
@@ -4700,8 +4700,36 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         """AI 分析缩略图（右键菜单单资产）"""
         self._do_ai_analysis_for_material(material, show_dialog=True)
 
-    def _on_ai_analysis_batch(self):
+    def _on_ai_analysis_with_config(self):
+        """弹出配置对话框 → 批量分析"""
+        selected = self._thumbnail_grid.get_selected_materials_list()
+        if not selected:
+            QtWidgets.QMessageBox.information(self, "AI 分析",
+                "请先在网格中选中要分析的资产")
+            return
+
+        try:
+            from ..core.ai_analyzer import AIAnalyzer
+            analyzer = AIAnalyzer()
+            models = analyzer.get_available_models()
+        except Exception:
+            models = []
+
+        from .ai_analysis_dialog import AIAnalysisConfigDialog
+        dlg = AIAnalysisConfigDialog(self, available_models=models)
+        if dlg.exec() != QtWidgets.QDialog.Accepted:
+            return
+
+        config = dlg.get_config()
+        self._on_ai_analysis_batch(config=config)
+
+    def _on_ai_analysis_batch(self, config=None):
         """AI 分析缩略图（AI 工具下拉按钮批量）"""
+        config = config or {}
+        language = config.get('language', '中文')
+        review = config.get('review_output', True)
+        model = config.get('model', '')
+
         selected = self._thumbnail_grid.get_selected_materials_list()
         if not selected:
             QtWidgets.QMessageBox.information(self, "AI 分析",
@@ -4709,19 +4737,12 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             return
 
         total = len(selected)
-        reply = QtWidgets.QMessageBox.question(
-            self, "批量 AI 分析",
-            f"将对已选中的 {total} 个资产进行 AI 分析。\n\n"
-            "分析完成后将弹出确认窗口，\n您可勾选要应用结果的资产。",
-            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
-            QtWidgets.QMessageBox.StandardButton.Yes
-        )
-        if reply != QtWidgets.QMessageBox.StandardButton.Yes:
-            return
 
         try:
             from ..core.ai_analyzer import AIAnalyzer
             analyzer = AIAnalyzer()
+            if model:
+                analyzer.model = model
             if not analyzer.is_available():
                 QtWidgets.QMessageBox.warning(self, "AI 分析",
                     "无法连接到 Ollama 服务，请确保 Ollama 已启动")
@@ -4730,8 +4751,13 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "AI 分析", f"初始化失败: {e}")
             return
 
+        if review:
+            label_text = "正在分析 0/{0} ...".format(total)
+        else:
+            label_text = "正在分析并应用 0/{0} ...".format(total)
+
         progress = QtWidgets.QProgressDialog(
-            f"正在分析 0/{total} ...", "取消", 0, total, self)
+            label_text, "取消", 0, total, self)
         progress.setWindowTitle("批量 AI 分析")
         progress.setModal(True)
         progress.setMinimumDuration(0)
@@ -4754,7 +4780,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 continue
 
             sub_library = mat.get('sub_library', 'materials')
-            result = analyzer.analyze_image(thumb_bytes, sub_library)
+            result = analyzer.analyze_image(thumb_bytes, sub_library, language=language)
             if not result:
                 print(f"[AI Batch] 分析失败: {mat.get('name', '')}")
                 continue
@@ -4771,10 +4797,13 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "批量 AI 分析", "没有资产分析成功")
             return
 
-        from .ai_analysis_dialog import AIBatchResultsDialog
-        dlg = AIBatchResultsDialog(self, results=collected)
-        dlg.batchApplied.connect(self._on_batch_ai_applied)
-        dlg.exec()
+        if review:
+            from .ai_analysis_dialog import AIBatchResultsDialog
+            dlg = AIBatchResultsDialog(self, results=collected)
+            dlg.batchApplied.connect(self._on_batch_ai_applied)
+            dlg.exec()
+        else:
+            self._on_batch_ai_applied(collected)
 
     def _on_batch_ai_applied(self, selected_results):
         mgr = self._active_mgr

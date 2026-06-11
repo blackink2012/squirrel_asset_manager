@@ -20,6 +20,14 @@ class AIAnalyzer:
         self._config_cache = None
 
     @property
+    def model(self):
+        return self._model
+
+    @model.setter
+    def model(self, value):
+        self._model = value
+
+    @property
     def _config(self) -> Dict[str, Any]:
         if self._config_cache is None:
             self._config_cache = self._load_json(self._config_path)
@@ -49,10 +57,15 @@ class AIAnalyzer:
         sub_cats_str = ", ".join(sub_cats)
         return prompt_template.replace("{sub_categories}", sub_cats_str)
 
-    def analyze_image(self, image_bytes: bytes, category_type: str) -> Optional[Dict[str, Any]]:
+    def analyze_image(self, image_bytes: bytes, category_type: str, language: str = "中文") -> Optional[Dict[str, Any]]:
         prompt = self._build_full_prompt(category_type)
         if not prompt:
             return None
+
+        if language == "English":
+            prompt = prompt + "\n\nImportant: Output all fields in English."
+        else:
+            prompt = prompt + "\n\n重要：所有输出字段请使用中文。"
 
         try:
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
