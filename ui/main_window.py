@@ -4711,6 +4711,14 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         try:
             from ..core.ai_analyzer import AIAnalyzer
             analyzer = AIAnalyzer()
+            if not analyzer.is_available():
+                QtWidgets.QMessageBox.warning(self, "AI 分析",
+                    "无法连接到 Ollama 服务。\n\n"
+                    "请确保 Ollama 已安装并启动：\n"
+                    "1. 下载安装: https://ollama.com\n"
+                    "2. 拉取模型: ollama pull qwen3-vl:8b\n"
+                    "3. 启动服务: ollama serve")
+                return
             models = analyzer.get_available_models()
         except Exception:
             models = []
