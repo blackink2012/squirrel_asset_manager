@@ -16,17 +16,36 @@ def _dbg(msg: str):
         print(f"[AssetCollector] {msg}")
 
 
+def _resolve_frame_pattern(path: str) -> str:
+    if not os.path.isabs(path):
+        return path
+    dir_name = os.path.dirname(path)
+    base = os.path.basename(path)
+    if '####' in base or '%' in base:
+        import glob as _glob
+        pattern = path.replace('####', '*').replace('%04d', '*').replace('%4d', '*')
+        candidates = sorted(_glob.glob(pattern))
+        if candidates:
+            return candidates[0]
+    return path
+
 def _get_file_path(attr_value) -> Optional[str]:
     if isinstance(attr_value, (list, tuple)):
         for v in attr_value:
             if v and isinstance(v, str):
                 expanded = os.path.expandvars(os.path.expanduser(v))
-                if os.path.isfile(expanded):
+                resolved = _resolve_frame_pattern(expanded)
+                if os.path.isfile(resolved):
+                    return expanded
+                if os.path.isdir(os.path.dirname(expanded)):
                     return expanded
         return None
     if attr_value and isinstance(attr_value, str):
         expanded = os.path.expandvars(os.path.expanduser(attr_value))
-        if os.path.isfile(expanded):
+        resolved = _resolve_frame_pattern(expanded)
+        if os.path.isfile(resolved):
+            return expanded
+        if os.path.isdir(os.path.dirname(expanded)):
             return expanded
     return None
 
