@@ -1265,56 +1265,13 @@ class ExportOrchestrator:
 
     # ── Stage 4: 几何体 ──────────────────────────────────────
 
-    def _resolve_export_objects(self, config: ExportConfig, skip_references: bool = False) -> List[str]:
-        """按 Maya 默认行为解析导出目标。
-
-        用户选了什么就尝试导出什么。
-        1. associated_objects → 用户选中的物体（不限于材质关联）
-        2. material_node      → 仅选了材质节点，返回节点本身
-        3. 空列表             → 跳过导出
-        4. skip_references    → 剔除引用对象（引用文件已在 associated/ 收集）
-        """
+    def _resolve_export_objects(self, config: ExportConfig) -> List[str]:
+        """按 Maya 默认行为解析导出目标。"""
         if config.associated_objects:
-            objs = [o for o in config.associated_objects if cmds.objExists(o)]
-            if skip_references:
-                objs = ExportOrchestrator._filter_referenced(objs)
-            return objs
+            return [o for o in config.associated_objects if cmds.objExists(o)]
         if _IN_MAYA and config.material_node and cmds.objExists(config.material_node):
             return [config.material_node]
         return []
-
-    @staticmethod
-    def _get_all_referenced_objects() -> set:
-        ref_objs = set()
-        if not _IN_MAYA:
-            return ref_objs
-        try:
-            ref_nodes = cmds.file(query=True, reference=True) or []
-            for rn in ref_nodes:
-                try:
-                    objs = cmds.referenceQuery(rn, nodes=True, dagPath=True) or []
-                    for o in objs:
-                        ref_objs.add(o)
-                        ref_objs.add(o.split('|')[-1])
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        return ref_objs
-
-    @staticmethod
-    def _filter_referenced(objects: List[str]) -> List[str]:
-        ref_objs = ExportOrchestrator._get_all_referenced_objects()
-        if not ref_objs:
-            return list(objects)
-        local_objs = []
-        for o in objects:
-            short = o.split('|')[-1]
-            if o in ref_objs or short in ref_objs:
-                print(f"[Export] 跳过引用对象: {o} (已在 associated/references/ 收集)")
-                continue
-            local_objs.append(o)
-        return local_objs
 
     @staticmethod
     def _is_dag_object(obj: str) -> bool:
@@ -1362,16 +1319,7 @@ class ExportOrchestrator:
                             _IN_MAYA and config.material_node and cmds.objExists(config.material_node)
                         ) else []
                 else:
-                    skip_ref = config.collect_associated and fmt_key in ("ma", "mb")
-                    export_objs = self._resolve_export_objects(config, skip_references=skip_ref)
-                    if skip_ref and not export_objs:
-                        mats = self._get_materials_from_objects(config.associated_objects)
-                        if mats:
-                            export_objs = mats
-                            print(f"[Export] 全部为引用对象, {fmt_key} 仅导出材质节点 (引用源在 associated/references/)")
-                        elif config.material_node and cmds.objExists(config.material_node):
-                            export_objs = [config.material_node]
-                            print(f"[Export] 全部为引用对象, {fmt_key} 仅导出材质 (引用源在 associated/references/)")
+                    export_objs = self._resolve_export_objects(config)
                 if not export_objs:
                     print(f"[Export] 跳过 {fmt_key} 导出：无关联物体且未找到材质关联物体")
                     continue
