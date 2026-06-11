@@ -303,29 +303,60 @@ class AssetCollector:
         AssetCollector._collect_by_shape_type(obj, node_type, attrs, result)
         found = len(result) - old_len
         _dbg(f"    [{node_type}] DAG 扫描找到 {found} 个")
-        if found == 0:
-            _dbg(f"    [{node_type}] DAG 未发现, 全场景收集...")
-            all_nodes = cmds.ls(type=node_type)
-            _dbg(f"      场景共 {len(all_nodes)} 个 {node_type}")
-            for p_node in all_nodes:
-                if not cmds.objExists(p_node):
-                    continue
-                for attr in attrs:
-                    val = None
+        if found > 0:
+            return
+
+        _dbg(f"    [{node_type}] DAG 未发现, 扫描场景中连接到该对象的节点...")
+        all_nodes = cmds.ls(type=node_type)
+        _dbg(f"      场景共 {len(all_nodes)} 个 {node_type}")
+
+        related = AssetCollector._get_all_related_nodes(obj)
+        _dbg(f"      关联节点集 ({len(related)} 个): {sorted(related)[:10]}{'...' if len(related)>10 else ''}")
+
+        for p_node in all_nodes:
+            if not cmds.objExists(p_node):
+                continue
+            downstream = cmds.listConnections(p_node, d=True, s=False) or []
+            if not any(d in related for d in downstream):
+                _dbg(f"      {p_node}: 下游={downstream[:3]}{'...' if len(downstream)>3 else ''} — 无关联, 跳过")
+                continue
+            for attr in attrs:
+                val = None
+                try:
+                    val = cmds.getAttr(p_node + '.' + attr, asString=True)
+                except Exception:
                     try:
-                        val = cmds.getAttr(p_node + '.' + attr, asString=True)
+                        val = cmds.getAttr(p_node + '.' + attr)
                     except Exception:
-                        try:
-                            val = cmds.getAttr(p_node + '.' + attr)
-                        except Exception:
-                            continue
-                    if val:
-                        _dbg(f"      getAttr({p_node}.{attr}) = {val!r}")
-                        path = _get_file_path(val)
-                        if path:
-                            _dbg(f"      => 找到文件: {path}")
-                            result[p_node] = path
-                            break
+                        continue
+                if val:
+                    _dbg(f"      getAttr({p_node}.{attr}) = {val!r}")
+                    path = _get_file_path(val)
+                    if path:
+                        _dbg(f"      => 找到文件: {path}")
+                        result[p_node] = path
+                        break
+
+    @staticmethod
+    def _get_all_related_nodes(obj: str) -> set:
+        related = set()
+        if not cmds.objExists(obj):
+            return related
+        related.add(obj)
+        related.add(obj.split('|')[-1])
+        shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
+        for s in shapes:
+            related.add(s)
+            related.add(s.split('|')[-1])
+        descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
+        for d in descendants:
+            related.add(d)
+            related.add(d.split('|')[-1])
+            d_shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
+            for s in d_shapes:
+                related.add(s)
+                related.add(s.split('|')[-1])
+        return related
 
     @staticmethod
     def _collect_by_shape_type(obj: str, node_type: str, attrs: tuple, result: Dict[str, str]):
