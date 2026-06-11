@@ -250,6 +250,8 @@ class AssetCollector:
             ('fileName', 'filename', 'dso', 'cacheFileName'), result)
         AssetCollector._collect_or_scene_scan(obj, 'VRayMesh',
             ('fn', 'fn2', 'f', 'fileName', 'filename', 'cacheFileName'), result)
+        AssetCollector._collect_or_scene_scan(obj, 'VRayScene',
+            ('fPath', 'fpath', 'f', 'fn', 'fileName', 'filename'), result)
 
     @staticmethod
     def _collect_redshift_proxy(obj: str, result: Dict[str, str]):
