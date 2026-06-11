@@ -262,19 +262,11 @@ class AssetCollector:
         found = len(result) - old_len
         _dbg(f"    [{node_type}] DAG 扫描找到 {found} 个")
         if found == 0:
-            _dbg(f"    [{node_type}] DAG 未发现, 全场景扫描...")
+            _dbg(f"    [{node_type}] DAG 未发现, 全场景收集...")
             all_nodes = cmds.ls(type=node_type)
             _dbg(f"      场景共 {len(all_nodes)} 个 {node_type}")
-            obj_shapes_full = set(AssetCollector._get_all_shapes(obj))
-            obj_shapes_short = set(s.split('|')[-1] for s in obj_shapes_full)
-            obj_shapes = obj_shapes_full | obj_shapes_short
             for p_node in all_nodes:
                 if not cmds.objExists(p_node):
-                    continue
-                dests = cmds.listConnections(p_node, d=True, s=False) or []
-                connected = any(d in obj_shapes for d in dests)
-                _dbg(f"      {p_node}: 下游={dests[:3]}{'...' if len(dests)>3 else ''}, 关联={connected}")
-                if not connected:
                     continue
                 for attr in attrs:
                     val = None
@@ -286,10 +278,10 @@ class AssetCollector:
                         except Exception:
                             continue
                     if val:
-                        _dbg(f"        getAttr({p_node}.{attr}) = {val!r}")
+                        _dbg(f"      getAttr({p_node}.{attr}) = {val!r}")
                         path = _get_file_path(val)
                         if path:
-                            _dbg(f"        => 找到文件: {path}")
+                            _dbg(f"      => 找到文件: {path}")
                             result[p_node] = path
                             break
 
