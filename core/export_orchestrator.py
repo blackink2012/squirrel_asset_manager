@@ -351,6 +351,7 @@ class ExportOrchestrator:
                         self._sync_ma_texture_paths(gf, tex_path_map)
 
             # Stage 4c: 收集关联缓存/代理/引用 → staging_dir/associated/
+            print(f"[Export] collect_associated={config.collect_associated}, material_only={config.export_material_only}")
             if config.collect_associated and not config.export_material_only:
                 self._stage_collected_files(config, staging_dir)
 
