@@ -5600,7 +5600,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._refresh_after_export()
 
         # ②¾ 模型类：截面前设置视口（fitAllPanels + isolateSelect 独显）
-        if not cfg.export_material_only:
+        # 单资产模式不自动隐藏/独显，由用户手动隔离物体
+        if not cfg.export_material_only and cfg.export_mode != "single":
             self._prepare_viewport_for_model_thumbnail(cfg)
 
         # ③ 截图 — 根据 thumb_source 分派
