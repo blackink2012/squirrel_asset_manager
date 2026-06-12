@@ -92,8 +92,8 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
     def _setup_ui(self):
         total = len(self._results)
         self.setWindowTitle(f'批量 AI 分析结果 — {total} 个资产')
-        self.setMinimumSize(1100, 500)
-        self.resize(1200, min(700, 200 + total * 200))
+        self.setMinimumSize(1140, 500)
+        self.resize(1240, min(700, 200 + total * 200))
         self.setStyleSheet(_STYLE)
 
         root = QtWidgets.QVBoxLayout(self)
