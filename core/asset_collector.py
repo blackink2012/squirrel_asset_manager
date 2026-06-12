@@ -236,8 +236,14 @@ class AssetCollector:
             AssetCollector._collect_arnold_standin(obj, node_to_path)
             AssetCollector._collect_vray_proxy(obj, node_to_path)
             AssetCollector._collect_redshift_proxy(obj, node_to_path)
+            AssetCollector._collect_usd_proxy(obj, node_to_path)
 
         return node_to_path
+
+    @staticmethod
+    def _collect_usd_proxy(obj: str, result: Dict[str, str]):
+        AssetCollector._collect_or_scene_scan(obj, 'mayaUsdProxyShape',
+            ('fp', 'f', 'filePath', 'fileName', 'filename'), result)
 
     @staticmethod
     def _collect_arnold_standin(obj: str, result: Dict[str, str]):
