@@ -315,6 +315,9 @@ AssetCreateDialog
 | `VRayScene` | V-Ray vrscene | `.fPath` | `.fn` `.fileName` |
 | `RedshiftProxyMesh` | Redshift | `.fn` | `.useFrameExtension` 帧序列 |
 | `mayaUsdProxyShape` | USD Import | `.fp` | `.filePath` `.fileName` |
+| `VRayVolumeGrid` | V-Ray VDB | `.ipth` | `.ipthr` `.filename` |
+| `aiVolume` | Arnold VDB | `.filename` | `.fileName` |
+| `RedshiftVolumeShape` | Redshift VDB | `.fn` | `.filename` `.fileName` |
 
 ---
 
