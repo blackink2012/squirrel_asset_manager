@@ -4697,8 +4697,13 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         return None
 
     def _on_ai_analysis(self, material):
-        """AI 分析缩略图（右键菜单单资产）"""
-        self._do_ai_analysis_for_material(material, show_dialog=True)
+        """AI 分析缩略图（右键菜单）— 选中资产后走统一配置流程"""
+        mid = material.get('id', '')
+        if mid:
+            self._thumbnail_grid._selected_materials.clear()
+            self._thumbnail_grid._selected_materials[mid] = material
+            self._thumbnail_grid._refresh_card_highlights()
+        self._on_ai_analysis_with_config()
 
     def _on_ai_analysis_with_config(self):
         """弹出配置对话框 → 批量分析"""
