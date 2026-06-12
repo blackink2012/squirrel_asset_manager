@@ -4841,7 +4841,13 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                     moved = mgr.move_material_to_category(material_id, category, sub_lib=sub_lib)
                     if moved:
                         print(f"[AI Batch] 资产 {mat.get('name', '')} 已移动到分类: {category}")
-                        continue   # move_material_to_category 已更新元数据
+                        updated_mat = mgr._materials.get(material_id)
+                        if not updated_mat:
+                            updated_mat = mgr._materials.get(mat.get('id', ''))
+                        if updated_mat:
+                            material_id = getattr(updated_mat, 'id', material_id)
+                            updates.pop('category', None)
+                        # 继续应用 name_cn/tags/notes（不 continue）
                     else:
                         print(f"[AI Batch] 移动失败: {mat.get('name', '')} -> {category}")
 
@@ -4928,14 +4934,17 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             return
 
         if move_to_category and 'category' in updates:
+            target_category = updates.pop('category')
             mat = mgr._materials.get(material_id)
             sub_lib = getattr(mat, 'sub_library', '') if mat else ''
-            moved = mgr.move_material_to_category(material_id, updates['category'], sub_lib=sub_lib)
+            moved = mgr.move_material_to_category(material_id, target_category, sub_lib=sub_lib)
             if moved:
-                self._refresh_material_grid()
-                QtWidgets.QMessageBox.information(self, "AI 分析",
-                    f"资产已移动到分类: {updates['category']}")
-                return
+                updated_mat = mgr._materials.get(material_id)
+                if not updated_mat and mat:
+                    updated_mat = mgr._materials.get(getattr(mat, 'id', ''))
+                if updated_mat:
+                    material_id = getattr(updated_mat, 'id', material_id)
+                # 继续应用 name_cn/tags/notes（不 return）
 
         success = mgr.update_material(material_id, updates)
         if success:
