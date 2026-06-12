@@ -1,6 +1,6 @@
 # Squirrel Asset Manager — 项目架构文档
 
-> 基于 CodeGraph 语义索引生成 | 54 文件 · 1,779 节点 · 4,630 调用边 · 7.37 MB SQLite (WAL)
+> 基于 CodeGraph 语义索引生成 | 55 文件 · 1,779 节点 · 4,630 调用边 · 7.37 MB SQLite (WAL)
 
 ---
 
@@ -88,7 +88,7 @@ MaterialLibraryWindow (QMainWindow)
 
 | 文件 | 核心类 | 符号 | 职责 |
 |------|--------|------|------|
-| `asset_create_dialog.py` | AssetCreateDialog | 57 | V3 双列非模态导出对话框 |
+| `asset_create_dialog.py` | AssetCreateDialog | 57 | V3 双列非模态导出对话框，含"收集关联文件"复选框 |
 | `export_preset_dialog.py` | ExportPresetDialog | 43 | 导出格式预设配置 |
 | `name_conflict_dialog.py` | NameConflictDialog | 9 | 同名冲突处理 |
 
@@ -184,6 +184,26 @@ Assets/
 └── help/             UI 截图
 ```
 
+**导出产物 .zasset 目录结构（勾选收集关联时）**：
+```
+MyAsset.zasset/
+├── meta.json
+├── node.ma
+├── node.zmetal
+├── textures/
+│   └── MatName/
+│       └── diffuse.png
+├── associated/          ← 收集关联（可选）
+│   ├── caches/
+│   │   └── walk_cycle.abc
+│   ├── proxies/
+│   │   ├── pPlatonic1_0001.ass
+│   │   └── pPlatonic1.vrmesh
+│   └── references/
+│       └── CH_BRN.ma
+└── thumb.sicon
+```
+
 ---
 
 ## 八、AI 分析子系统
@@ -230,7 +250,75 @@ ThumbnailGridWidget.aiAnalysisRequested
 
 ---
 
-## 九、CodeGraph 索引状态
+## 九、关联文件收集子系统
+
+### 9.1 功能概述
+
+导出模型资产时，可选收集场景中已挂载的缓存/代理/引用文件。
+
+**触发条件**：用户在 `AssetCreateDialog` 勾选「收集关联的缓存/代理/引用文件」（位于代理格式下方独立分区）。
+
+### 9.2 数据流
+
+```
+AssetCreateDialog
+  └── ExportConfig.collect_associated = True
+        → ExportOrchestrator.export_single()
+          → Stage 4c: _stage_collected_files()
+            → AssetCollector.collect_all(associated_objects)
+              ├── collect_cache_files()
+              │     ├── _collect_alembic     (AlembicNode .abc_File)
+              │     ├── _collect_gpu_cache   (gpuCache .cacheFileName)
+              │     └── _collect_ncache      (cacheFile .cachePath/.path)
+              ├── collect_proxy_files()
+              │     ├── _collect_arnold_standin  (aiStandIn .dso/.fn)
+              │     ├── _collect_vray_proxy      (VRayProxy/VRayMesh/VRayScene)
+              │     └── _collect_redshift_proxy  (RedshiftProxyMesh .fn)
+              └── collect_reference_files()
+                    └── referenceQuery(obj, referenceNode=True)
+            → copy_collected_files() → staging_dir/associated/
+                ├── caches/     (.abc .gpu .mc)
+                ├── proxies/    (.ass .vrmesh .vrscene .rs)
+                └── references/ (.ma .mb)
+```
+
+### 9.3 收集策略
+
+| 类型 | 匹配方式 | 帧序列处理 |
+|------|---------|-----------|
+| Alembic 缓存 | DAG 后代扫描 → DG 连接 → 全场景扫描 | ❌ |
+| GPU / nCache | DG 连接追踪 | ❌ |
+| Arnold / V-Ray / Redshift 代理 | DAG 后代扫描 → 全场景 ls(type) + DG 连接匹配 | ✅ `####` 模式 |
+| V-Ray vrscene | VRayScene 节点 `.fPath` 属性 | ❌ |
+| Maya 引用 | `referenceQuery(obj, referenceNode=True)` 仅收集选中对象所属引用 | ❌ |
+
+### 9.4 设计约束
+
+| 决策 | 原因 |
+|------|------|
+| 全场景扫描仅匹配 DG 连接的对象 | 避免收集场景中无关代理 |
+| 引用仅收集选中对象所属的 | 不收集全局引用（除非选中引用物体） |
+| 帧序列 `####` 路径 | glob 匹配所有帧 → 逐帧复制 |
+| `.ma/.mb` 导出加 `preserveReferences=True` | 引用保持为 reference 节点，不烘焙 |
+| 与"导出 abc"复选框独立 | 收集 = 拷贝现有文件 / 导出 = 重新烘焙 |
+
+### 9.5 Maya 节点对应表
+
+| 节点类型 | Maya 创建命令 | 路径属性 | 回退属性 |
+|---------|-------------|---------|---------|
+| `AlembicNode` | AbcImport | `.abc_File` | `.cacheName` `.cacheFileName` `.fileName` |
+| `cacheFile` | nCache | `.cachePath` | `.path` |
+| `gpuCache` | gpuCache | `.cacheFileName` | `.cacheFile` `.cacheName` |
+| `aiStandIn` | Arnold | `.dso` | `.filename` `.fileName` |
+| `VRayProxy` | V-Ray ≤4 | `.fileName` | `.filename` |
+| `VRayMesh` | V-Ray 5+ | `.fn` `.fn2` | `.fileName` |
+| `VRayScene` | V-Ray vrscene | `.fPath` | `.fn` `.fileName` |
+| `RedshiftProxyMesh` | Redshift | `.fn` | `.useFrameExtension` 帧序列 |
+| `mayaUsdProxyShape` | USD Import | `.fp` | `.filePath` `.fileName` |
+
+---
+
+## 十、CodeGraph 索引状态
 
 | 指标 | 数值 |
 |------|------|
