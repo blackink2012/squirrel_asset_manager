@@ -21,10 +21,10 @@ def _resolve_frame_pattern(path: str) -> str:
         return path
     dir_name = os.path.dirname(path)
     base = os.path.basename(path)
-    if '####' in base or '%' in base:
+    if '####' in base or '%' in base or '#' in base:
         import glob as _glob
-        pattern = path.replace('####', '*').replace('%04d', '*').replace('%4d', '*')
-        candidates = sorted(_glob.glob(pattern))
+        pattern = base.replace('####', '*').replace('%04d', '*').replace('%4d', '*').replace('#', '*')
+        candidates = sorted(_glob.glob(os.path.join(dir_name, pattern)))
         if candidates:
             return candidates[0]
     return path
@@ -86,8 +86,18 @@ class AssetCollector:
             AssetCollector._collect_alembic(obj, node_to_path)
             AssetCollector._collect_gpu_cache(obj, node_to_path)
             AssetCollector._collect_ncache(obj, node_to_path)
+            AssetCollector._collect_vdb_volume(obj, node_to_path)
 
         return node_to_path
+
+    @staticmethod
+    def _collect_vdb_volume(obj: str, result: Dict[str, str]):
+        AssetCollector._collect_or_scene_scan(obj, 'VRayVolumeGrid',
+            ('ipth', 'ipthr', 'f', 'fn', 'filename', 'fileName', 'filePath'), result)
+        AssetCollector._collect_or_scene_scan(obj, 'aiVolume',
+            ('filename', 'fileName', 'f', 'fn', 'filePath'), result)
+        AssetCollector._collect_or_scene_scan(obj, 'RedshiftVolumeShape',
+            ('fn', 'filename', 'fileName', 'f', 'filePath'), result)
 
     @staticmethod
     def _get_all_shapes(obj: str) -> List[str]:
@@ -460,7 +470,7 @@ class AssetCollector:
             cat_dir = os.path.join(dest_dir, category)
             os.makedirs(cat_dir, exist_ok=True)
             for node_name, src_path in collected.get(category, {}).items():
-                if '####' in src_path or '%0' in src_path:
+                if '####' in src_path or '%0' in src_path or '#' in src_path:
                     target_map[category][node_name] = AssetCollector._copy_frame_sequence(
                         src_path, cat_dir)
                 else:
@@ -488,7 +498,7 @@ class AssetCollector:
     @staticmethod
     def _copy_frame_sequence(src_pattern: str, dest_dir: str) -> str:
         import glob as _glob
-        pattern = src_pattern.replace('####', '*').replace('%04d', '*').replace('%4d', '*')
+        pattern = src_pattern.replace('####', '*').replace('%04d', '*').replace('%4d', '*').replace('#', '*')
         files = sorted(_glob.glob(pattern))
         if not files:
             _dbg(f"  跳过不存在的序列: {src_pattern} (pattern={pattern})")
