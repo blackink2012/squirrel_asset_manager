@@ -469,6 +469,21 @@ class AssetCreateDialog(QtWidgets.QDialog):
 
         right.addWidget(self._make_section("导出格式"))
 
+        # ▸ 收集关联文件（置顶）
+        right.addWidget(self._make_subsection("收集关联文件"))
+
+        self._cb_collect_associated = QtWidgets.QCheckBox(
+            "收集场景中已挂载的缓存/代理/引用文件\n"
+            "（abc/ass/vrscene/vrmesh/引用 .ma/.mb，免导出）")
+        self._cb_collect_associated.setStyleSheet(
+            self._checkbox_style() + "QCheckBox { color: #a0a0a0; }")
+        self._checkboxes["collect_associated"] = self._cb_collect_associated
+        row_ca = QtWidgets.QHBoxLayout()
+        row_ca.setContentsMargins(8, 2, 0, 2)
+        row_ca.addWidget(self._cb_collect_associated)
+        row_ca.addStretch()
+        right.addLayout(row_ca)
+
         # 贴图：可选复选框，默认勾选
         tex_row = QtWidgets.QHBoxLayout()
         tex_row.setContentsMargins(8, 2, 0, 2)
@@ -592,22 +607,6 @@ class AssetCreateDialog(QtWidgets.QDialog):
             right, "V-Ray .vrmesh", "vrmesh", self._export_vrmesh
         )
         self._checkboxes["vrmesh"] = self._cb_vrmesh
-
-        right.addWidget(self._make_sep())
-
-        right.addWidget(self._make_section("收集关联文件"))
-
-        self._cb_collect_associated = QtWidgets.QCheckBox(
-            "收集场景中已挂载的缓存/代理/引用文件\n"
-            "（abc/ass/vrscene/vrmesh/引用 .ma/.mb，免导出）")
-        self._cb_collect_associated.setStyleSheet(
-            self._checkbox_style() + "QCheckBox { color: #a0a0a0; }")
-        self._checkboxes["collect_associated"] = self._cb_collect_associated
-        row_ca = QtWidgets.QHBoxLayout()
-        row_ca.setContentsMargins(8, 2, 0, 2)
-        row_ca.addWidget(self._cb_collect_associated)
-        row_ca.addStretch()
-        right.addLayout(row_ca)
 
         right.addStretch()
 
