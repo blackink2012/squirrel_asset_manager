@@ -19,14 +19,15 @@ squirrel_asset_manager/
 
 ---
 
-## 二、core/ — 数据层（9 文件，370 符号）
+## 二、core/ — 数据层（10 文件，~400 符号）
 
 | 文件 | 核心类 | 符号 | 职责 |
 |------|--------|------|------|
 | `manager.py` | MaterialManager | 112 | 库管理器 — 加载/搜索/CRUD/收藏/分类/导入导出 |
 | `zasset_io.py` | ZassetIO | 62 | .zasset 文件夹读写 — meta/node/thumbnail/textures |
-| `export_orchestrator.py` | ExportOrchestrator | 86 | 6 阶段导出管线 — 元数据→贴图→材质→几何体→缩略图→代理 |
+| `export_orchestrator.py` | ExportOrchestrator | 86 | 7 阶段导出管线 — 元数据→贴图→材质→几何体→关联收集→缩略图→代理 |
 | `material.py` | Material | 50 | 材质 @dataclass — from_json/to_dict |
+| `asset_collector.py` | AssetCollector | 20 | **新增** — 收集关联缓存/代理/引用文件 |
 | `ai_analyzer.py` | AIAnalyzer | 20 | **新增** — Ollama 视觉模型分析 |
 | `category.py` | Category | 18 | 分类树节点 |
 | `zasset_builder.py` | ZassetBuilder | 12 | 构建 .zasset 文件夹 |
