@@ -177,6 +177,9 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         # 底部按钮
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.setSpacing(10)
+        self._move_cb = QtWidgets.QCheckBox('移动到分析出的分类')
+        self._move_cb.setToolTip('勾选后, 应用结果的资产将移动到 AI 分析出的分类目录下')
+        btn_row.addWidget(self._move_cb)
         btn_row.addStretch()
         cancel_btn = QtWidgets.QPushButton('取消')
         cancel_btn.clicked.connect(self.reject)
@@ -344,6 +347,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
             return
 
         selected_results = []
+        move_to_category = self._move_cb.isChecked()
         for i in checked_indices:
             entry = self._results[i]
             result = entry.get('result', {}).copy()
@@ -376,6 +380,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
             selected_results.append({
                 'material': entry.get('material', {}),
                 'result': result,
+                'move_to_category': move_to_category,
             })
 
         self.batchApplied.emit(selected_results)
@@ -607,12 +612,15 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         
         button_layout = QtWidgets.QHBoxLayout()
         button_layout.setSpacing(10)
+        self._move_cb = QtWidgets.QCheckBox('移动到分析出的分类')
+        self._move_cb.setToolTip('勾选后, 应用结果时将资产移动到 AI 分析出的分类目录下')
+        button_layout.addWidget(self._move_cb)
         button_layout.addStretch()
-        
+
         cancel_btn = QtWidgets.QPushButton('取消')
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
-        
+
         apply_btn = QtWidgets.QPushButton('应用到元数据')
         apply_btn.setObjectName('applyBtn')
         apply_btn.clicked.connect(self._on_apply)
@@ -666,6 +674,7 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         
         if updates:
             updates['material_id'] = self._material.get('id', '')
+            updates['move_to_category'] = self._move_cb.isChecked()
             self.analysisApplied.emit(updates)
         
         self.accept()
