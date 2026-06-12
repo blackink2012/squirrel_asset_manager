@@ -165,7 +165,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
             # 其他格式（dae/dxf/igs/stl/wrl）在 UI 中默认不勾选，由用户手动展开
 
         self.setWindowTitle("导出资产")
-        self.setMinimumSize(760, 760)
+        self.setMinimumSize(780, 760)
         self.setStyleSheet("background-color: #2a2a2a;")
         # 独立窗口（在 Maya 层级内，但不受插件窗口最小化影响）
         self.setWindowFlags(QtCore.Qt.Window
@@ -176,7 +176,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         self.reject = lambda: self.close()
 
         self._setup_ui()
-        self.resize(760, 760)
+        self.resize(780, 760)
         self._refresh_tags_display()
         self._refresh_plugin_indicators()
         
