@@ -469,11 +469,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
 
         right.addWidget(self._make_section("导出格式"))
 
-        # ▸ 核心（始终导出）
-        right.addWidget(self._make_subsection("核心（始终导出）"))
-        right.addWidget(self._make_locked_row("元数据 meta.json"))
-        right.addWidget(self._make_locked_row("缩略图 .sicon / .aicon"))
-        # 贴图：可选复选框，默认勾选，与锁定行对齐
+        # 贴图：可选复选框，默认勾选
         tex_row = QtWidgets.QHBoxLayout()
         tex_row.setContentsMargins(8, 2, 0, 2)
         cb_tex = QtWidgets.QCheckBox("\u2611 \u8d34\u56fe textures/")
@@ -663,26 +659,6 @@ class AssetCreateDialog(QtWidgets.QDialog):
             "QCheckBox::indicator:checked { background: #5294e2; border-color: #5294e2; }"
             "QCheckBox::indicator:disabled { background: #222; border-color: #333; }"
         )
-
-    def _make_locked_row(self, text):
-        row = QtWidgets.QHBoxLayout()
-        row.setContentsMargins(8, 2, 0, 2)
-        cb = QtWidgets.QCheckBox(f"☑ {text}")
-        cb.setChecked(True)
-        cb.setEnabled(False)
-        cb.setStyleSheet(
-            "QCheckBox { color: #707070; font-size: 12px; spacing: 8px; }"
-            "QCheckBox::indicator { width: 16px; height: 16px; border-radius: 3px; "
-            "background: #2a3a2a; border: 1px solid #3a5a3a; }"
-        )
-        row.addWidget(cb)
-        status = QtWidgets.QLabel("[已锁定]")
-        status.setStyleSheet("color: #666; font-size: 10px;")
-        row.addWidget(status)
-        row.addStretch()
-        w = QtWidgets.QWidget()
-        w.setLayout(row)
-        return w
 
     def _add_checkbox_row(self, layout, text, checked):
         """添加一个简单的 checkbox 行"""
