@@ -165,7 +165,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
             # 其他格式（dae/dxf/igs/stl/wrl）在 UI 中默认不勾选，由用户手动展开
 
         self.setWindowTitle("导出资产")
-        self.setMinimumSize(760, 720)
+        self.setMinimumSize(760, 760)
         self.setStyleSheet("background-color: #2a2a2a;")
         # 独立窗口（在 Maya 层级内，但不受插件窗口最小化影响）
         self.setWindowFlags(QtCore.Qt.Window
@@ -176,6 +176,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         self.reject = lambda: self.close()
 
         self._setup_ui()
+        self.resize(760, 760)
         self._refresh_tags_display()
         self._refresh_plugin_indicators()
         
@@ -473,8 +474,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         right.addWidget(self._make_subsection("收集关联文件"))
 
         self._cb_collect_associated = QtWidgets.QCheckBox(
-            "收集场景中已挂载的缓存/代理/引用文件\n"
-            "（abc/ass/vrscene/vrmesh/引用 .ma/.mb，免导出）")
+            "收集场景中已挂载的缓存/代理/引用文件")
         self._cb_collect_associated.setStyleSheet(
             self._checkbox_style() + "QCheckBox { color: #a0a0a0; }")
         self._checkboxes["collect_associated"] = self._cb_collect_associated
