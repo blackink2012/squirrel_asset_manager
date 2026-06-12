@@ -1721,6 +1721,17 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             if copy_sub: menu.addMenu(copy_sub)
         menu.addSeparator()
 
+        edit_action = menu.addAction('编辑')
+        thumb_menu = QtWidgets.QMenu('更新缩略图', menu)
+        thumb_menu.setStyleSheet(_get_sub_style(font_size))
+        cap_action = thumb_menu.addAction('📷 截取')
+        imp_thumb_action = thumb_menu.addAction('📂 导入')
+        menu.addMenu(thumb_menu)
+        
+        update_asset_action = menu.addAction('更新资产')
+        delete_action = menu.addAction('删除')
+        menu.addSeparator()
+
         # ── 预览节点（zmetal / ma 文件）──
         preview_node_actions = {}
         node_files = self._collect_node_files(json_path, mat.get('variant_types', []))
@@ -1732,17 +1743,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                 preview_node_actions[a] = file_path
             menu.addMenu(preview_sub)
 
-        edit_action = menu.addAction('编辑')
-        thumb_menu = QtWidgets.QMenu('更新缩略图', menu)
-        thumb_menu.setStyleSheet(_get_sub_style(font_size))
-        cap_action = thumb_menu.addAction('📷 截取')
-        imp_thumb_action = thumb_menu.addAction('📂 导入')
-        menu.addMenu(thumb_menu)
-        
         ai_action = menu.addAction('\U0001f9e0 AI 分析缩略图')
-        
-        update_asset_action = menu.addAction('更新资产')
-        delete_action = menu.addAction('删除')
 
         action = menu.exec(card.mapToGlobal(pos))
         if action is None:  # 菜单被取消，不做任何操作
