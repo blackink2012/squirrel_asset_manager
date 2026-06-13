@@ -948,7 +948,7 @@ def _get_dependency_target_dir(asset_name: str, asset_id: str = "") -> str:
 def _get_dependency_scenes_target_dir(asset_name: str, asset_id: str = "") -> str:
     suffix = f"_{asset_id[-4:]}" if len(asset_id) >= 4 else ""
     ws_root = _get_ws_root()
-    return os.path.join(ws_root, "scenes", "squirrel_asset", f"{asset_name}{suffix}")
+    return os.path.join(ws_root, "scenes", "references", "squirrel_asset", f"{asset_name}{suffix}")
 
 
 _NODE_TYPE_ATTRS = [
@@ -1044,7 +1044,7 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
                 basename_to_target[fname] = f"{zasset_abs}/associated/{category}/{fname}"
             elif policy == "copy_to_project":
                 if category == "references":
-                    target_dir = os.path.join(scenes_target_dir, category)
+                    target_dir = scenes_target_dir
                 else:
                     target_dir = os.path.join(dep_target_dir, category)
                 basename_to_target[fname] = _copy_with_unique_name(src, target_dir)
@@ -1083,7 +1083,7 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
                         if policy == "asset_directory":
                             new_path = f"{zasset_abs}/associated/{category}/{old_basename}"
                         elif policy == "copy_to_project":
-                            target_dir = os.path.join(scenes_target_dir if category == "references" else dep_target_dir, category)
+                            target_dir = scenes_target_dir if category == "references" else os.path.join(dep_target_dir, category)
                             new_path = os.path.join(target_dir, old_basename).replace("\\", "/")
                         break
 
