@@ -1108,6 +1108,38 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
             except Exception as e:
                 print(f"[DepRedirect] 设置 {node}.{found_attr} 失败: {e}")
 
+    ref_files = [fname for fname, category in basename_to_category.items() if category == "references"]
+    if ref_files:
+        import fnmatch
+        ref_nodes = cmds.ls(type="reference") or []
+        for rn in ref_nodes:
+            try:
+                old_path = cmds.referenceQuery(rn, filename=True)
+            except Exception:
+                continue
+            if not old_path:
+                continue
+            old_basename = os.path.basename(old_path.replace("\\", "/"))
+            new_path = basename_to_target.get(old_basename)
+
+            if not new_path and old_basename:
+                for bname in ref_files:
+                    if fnmatch.fnmatch(old_basename, _resolve_frame_pattern_to_glob(bname)):
+                        if policy == "asset_directory":
+                            new_path = f"{zasset_abs}/associated/references/{old_basename}"
+                        elif policy == "copy_to_project":
+                            new_path = os.path.join(references_target_dir, old_basename).replace("\\", "/")
+                        break
+
+            if not new_path:
+                continue
+
+            try:
+                cmds.file(new_path, loadReference=rn)
+                print(f"[DepRedirect] reference {rn}: {old_path} → {new_path}")
+            except Exception as e:
+                print(f"[DepRedirect] 替换引用 {rn} 失败: {e}")
+
 
 def _collect_associated_frame_sequences(zasset_path: str) -> dict:
     associated_dir = os.path.join(zasset_path, "associated")
