@@ -53,13 +53,17 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
   <a href="#left-panel" class="sub">缩略图来源</a>
   <a href="#left-panel" class="sub">截图延迟</a>
   <a href="#right-panel">右侧面板</a>
+  <a href="#right-panel" class="sub">收集关联文件</a>
   <a href="#right-panel" class="sub">资产名称与标签</a>
-  <a href="#right-panel" class="sub">材质选项</a>
+  <a href="#right-panel" class="sub">材质/节点格式</a>
   <a href="#right-panel" class="sub">几何体格式</a>
   <a href="#right-panel" class="sub">动画导出</a>
   <a href="#right-panel" class="sub">缓存格式</a>
   <a href="#right-panel" class="sub">代理格式</a>
   <a href="#flow">完整导出流程</a>
+  <a href="#collect">关联文件收集详情</a>
+  <a href="#collect" class="sub">支持的节点与格式</a>
+  <a href="#collect" class="sub">帧序列处理</a>
   <a href="#variants">LOD 与版本管理</a>
   <a href="#variant-concept" class="sub">概念</a>
   <a href="#variant-add-lod" class="sub">追加 LOD</a>
@@ -76,7 +80,7 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 
 <h2 id="overview">界面总览</h2>
 <img src="out_UI.png" alt="导出资产对话框">
-<p>导出对话框分<b>左右两列</b>：左控制流程，右配置内容。</p>
+<p>导出对话框（780×760）分<b>左右两列</b>：左控制流程，右配置内容。</p>
 
 <h2 id="left-panel">左侧面板 — 导出控制</h2>
 
@@ -90,7 +94,7 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 <tr><th>选项</th><th>说明</th></tr>
 <tr><td>全自动</td><td>多物体时每个独立导出。首次取景后自动复用，全程无需手动截图</td></tr>
 <tr><td>半自动</td><td>每个物体独立导出，每个弹出截图 UI 供手动调整视角</td></tr>
-<tr><td>单资产</td><td>无论选中多少物体，全部合并为一个资产</td></tr>
+<tr><td>单资产</td><td>无论选中多少物体，全部合并为一个资产。不会自动隐藏未选中物体，由用户手动隔离</td></tr>
 </table>
 </div>
 
@@ -110,22 +114,29 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 
 <h2 id="right-panel">右侧面板 — 导出内容</h2>
 
+<h3>收集关联文件</h3>
+<div class="ui-elem"><strong>收集场景中已挂载的缓存/代理/引用文件</strong> — 勾选后自动扫描选中物体关联的缓存（Alembic/gpuCache/nCache）、代理（Arnold/V-Ray/Redshift/USD）和 Maya 引用文件，复制到 <code>associated/</code> 目录。</div>
+<div class="note">勾选后，V-Ray .vrmesh/.vrscene、 Redshift .rs 和 USD .usd 代理文件无需重新导出，直接从磁盘拷贝，速度极快。</div>
+
+<div class="ui-elem"><strong>贴图 textures/</strong> — 默认勾选，将材质关联的贴图文件收集到 <code>textures/</code> 目录。取消勾选则不打包贴图，适用于纯几何体导出或贴图由外部管理的情况。</div>
+
+<div class="ui-elem"><strong>仅导出材质（跳过几何体/代理）</strong> — 勾选后只导出材质节点和贴图，不会导出几何体格式和代理格式。</div>
+
 <div class="ui-elem"><strong>资产名称</strong> — 输入框，默认选中物体名。资产以 <code>{名称}.zasset</code> 存入分类文件夹。</div>
 <div class="ui-elem"><strong>中文名称</strong> — 可选。UI 中显示友好中文名。</div>
 <div class="ui-elem"><strong>标签</strong> — 逗号分隔（如 <code>金属, 高光</code>）。用于搜索和筛选。</div>
 
 <div class="note">名称、中文名称、标签也会更新导入到该分类下已有同名资产时的新名称和标签。</div>
 
+<h3>材质 / 节点格式</h3>
 <div class="ui-elem"><strong>材质预设 .zmetal</strong> — 勾选后导出 Maya 材质节点数据。多材质可选"合并"或分别导出。</div>
 <div class="ui-elem"><strong>材质映射 .mcm</strong> — 记录物体顶点/面/边数，用于导入时自动匹配模型。仅在勾选 .zmetal 时可用。</div>
-<div class="ui-elem"><strong>仅导出材质</strong> — 只导出材质/贴图，不导出几何体。</div>
-<div class="ui-elem"><strong>贴图 textures/</strong> — 默认勾选，将材质关联的贴图文件收集到 <code>textures/</code> 目录。取消勾选则不打包贴图，适用于纯几何体导出或贴图由外部管理的情况。</div>
 
 <h3>几何体格式</h3>
 <table>
 <tr><th>格式</th><th>扩展名</th><th>说明</th></tr>
-<tr><td>Maya ASCII</td><td>.ma</td><td>Maya 原生，可读文本</td></tr>
-<tr><td>Maya Binary</td><td>.mb</td><td>Maya 原生，二进制</td></tr>
+<tr><td>Maya ASCII</td><td>.ma</td><td>Maya 原生，可读文本。引用对象保持引用关系不烘焙</td></tr>
+<tr><td>Maya Binary</td><td>.mb</td><td>Maya 原生，二进制。引用对象保持引用关系不烘焙</td></tr>
 <tr><td>FBX</td><td>.fbx</td><td>通用交换格式</td></tr>
 <tr><td>OBJ</td><td>.obj</td><td>经典多边形格式</td></tr>
 <tr><td>USD</td><td>.usd</td><td>Pixar 通用场景描述</td></tr>
@@ -135,7 +146,8 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 <p>决定 abc/usd/ass/rs/vrmesh 的帧范围：</p>
 <ul>
 <li><b>当前帧</b> — 静帧资产</li>
-<li><b>时间轴</b> — 完整动画。同时触发 MP4 动态缩略图生成</li>
+<li><b>时间轴</b> — 完整动画（播放范围）。同时触发 MP4 动态缩略图生成</li>
+<li><b>关键帧</b> — 物体的关键帧范围</li>
 </ul>
 <div class="warn">时间轴 + 渲染图：渲染在资产导出后统一执行。Maya 会暂时无响应——正常渲染，请等待。</div>
 
@@ -148,6 +160,7 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 <tr><td>Arnold</td><td>.ass</td><td>Arnold</td></tr>
 <tr><td>Redshift</td><td>.rs</td><td>Redshift</td></tr>
 <tr><td>V-Ray Scene</td><td>.vrscene</td><td>V-Ray</td></tr>
+<tr><td>V-Ray Mesh</td><td>.vrmesh</td><td>V-Ray</td></tr>
 </table>
 
 <h2 id="flow">完整导出流程</h2>
@@ -156,8 +169,9 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 <li>Maya 场景中<b>选中要导出的物体</b></li>
 <li>点击工具栏<b>导出</b>按钮</li>
 <li>选择<b>导出模式</b>和<b>缩略图来源</b></li>
+<li>勾选「收集关联文件」可自动打包场景中的缓存/代理/引用文件</li>
 <li>右侧配置导出内容（几何/缓存/代理格式）</li>
-<li>需动画导出选<b>"时间轴"</b></li>
+<li>需动画导出选<b>"时间轴"</b>或<b>"关键帧"</b></li>
 <li>输入资产名称和标签</li>
 <li>点击<b>"导出资产"</b></li>
 <li>按提示截图</li>
@@ -168,6 +182,53 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 <div class="note">
 <b>缩略图生成时机：</b>截屏工具在截图 UI 中立即生成；拍屏/渲染图在所有资产导出后统一生成，不中断几何体导出。
 </div>
+
+<div class="note">
+<b>单资产导出：</b>单资产模式下不会自动隐藏未选中物体，如需隔离视图请手动操作（按 Shift+I 独显），截图后再恢复。
+</div>
+
+<h2 id="collect">关联文件收集详情</h2>
+
+<p>勾选「收集关联文件」后，系统自动扫描选中物体的关联节点并收集文件到 <code>associated/</code> 目录。</p>
+
+<h3>支持的节点与格式</h3>
+<table>
+<tr><th>节点类型</th><th>格式</th><th>收集内容</th></tr>
+<tr><td>AlembicNode</td><td>.abc</td><td>Alembic 缓存文件</td></tr>
+<tr><td>gpuCache</td><td>.gpu</td><td>GPU 缓存文件</td></tr>
+<tr><td>cacheFile</td><td>.mc/.xml/.abc</td><td>nCache 文件</td></tr>
+<tr><td>VRayVolumeGrid</td><td>.vdb</td><td>V-Ray VDB 体积文件（支持 <code>#</code> 帧序列）</td></tr>
+<tr><td>aiVolume</td><td>.vdb</td><td>Arnold VDB 体积文件</td></tr>
+<tr><td>RedshiftVolumeShape</td><td>.vdb</td><td>Redshift VDB 体积文件</td></tr>
+<tr><td>aiStandIn</td><td>.ass</td><td>Arnold 代理文件</td></tr>
+<tr><td>VRayProxy</td><td>.vrmesh</td><td>V-Ray 旧版代理</td></tr>
+<tr><td>VRayMesh</td><td>.vrmesh</td><td>V-Ray 5+ 代理</td></tr>
+<tr><td>VRayScene</td><td>.vrscene</td><td>V-Ray 场景代理</td></tr>
+<tr><td>RedshiftProxyMesh</td><td>.rs</td><td>Redshift 代理（支持 <code>####</code> 帧序列）</td></tr>
+<tr><td>mayaUsdProxyShape</td><td>.usd/.usda/.usdc</td><td>USD 场景代理</td></tr>
+<tr><td>reference</td><td>.ma/.mb</td><td>Maya 引用文件</td></tr>
+</table>
+
+<h3>帧序列处理</h3>
+<p>以下格式自动识别帧序列并逐帧复制全部文件：</p>
+<ul>
+<li><b>RedshiftProxyMesh</b> — <code>####</code> 格式（如 <code>pPlatonic1_####.rs</code>）</li>
+<li><b>VRayVolumeGrid</b> — <code>#</code> 格式（如 <code>Aerial explosion_#.vdb</code>）</li>
+</ul>
+
+<h3>.zasset 输出结构</h3>
+<pre><code>MyAsset.zasset/
+├── meta.json
+├── node.ma
+├── node.zmetal
+├── textures/
+│   └── MatName/
+│       └── diffuse.png
+├── associated/          ← 收集关联（可选）
+│   ├── caches/
+│   ├── proxies/
+│   └── references/
+└── thumb.sicon</code></pre>
 
 <h2 id="variants">LOD 与版本管理</h2>
 
@@ -308,6 +369,8 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 <p><b>❌ 缺失格式：</b>确认导出时勾选了对应复选框</p>
 <p><b>❌ 「更新资产」没有弹出 LOD/版本对话框：</b>检查是否勾选了几何体格式（ma/fbx/obj 等），只有导出几何体时才会出现</p>
 <p><b>❌ 点击 LOD 后无反应：</b>确保在 Maya 视口中<b>选中了要导出的几何体物体</b>后再点确定</p>
+<p><b>❌ 引用文件被烘焙到 .ma：</b>正常。Maya 导出带 <code>preserveReferences</code> 标志保持引用关系，引用源文件在 <code>associated/references/</code> 中备份</p>
+<p><b>❌ 单资产模式物体消失：</b>单击"单资产"不回自动隐藏物体。如需隔离请手动操作视图</p>
 
 </div>
 </div>
