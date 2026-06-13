@@ -442,6 +442,10 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         self._review_cb.setChecked(True)
         layout.addWidget(self._review_cb)
 
+        self._translate_tags_cb = QtWidgets.QCheckBox('翻译原有 tag 到目标语言')
+        self._translate_tags_cb.setToolTip('勾选后，资产原有的 tag 将被翻译到所选的目标语言后再合并')
+        layout.addWidget(self._translate_tags_cb)
+
         layout.addSpacing(6)
 
         btn_layout = QtWidgets.QHBoxLayout()
@@ -464,6 +468,7 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
             'language': self._lang_combo.currentText(),
             'review_output': self._review_cb.isChecked(),
             'model': self._model_combo.currentText(),
+            'translate_existing_tags': self._translate_tags_cb.isChecked(),
         }
         self.configConfirmed.emit(config)
         self.accept()
@@ -473,6 +478,7 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
             'language': self._lang_combo.currentText(),
             'review_output': self._review_cb.isChecked(),
             'model': self._model_combo.currentText(),
+            'translate_existing_tags': self._translate_tags_cb.isChecked(),
         }
 
 

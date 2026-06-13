@@ -1,5 +1,5 @@
 {
     "_description": "动态资产分类下的分析 prompt",
     "_note": "修改此文件后即时生效，无需重启",
-    "prompt": "分析这张动态资产缩略图，识别内容特征。\n\n输出格式（JSON）：\n{\n    \"name_cn\": \"易读名称，例如：角色动画\",\n    \"tags\": [\"动画类型标签\", \"特征标签\"],\n    \"notes\": \"动态资产描述\",\n    \"sub_category\": \"建议的子分类，从以下选项中选：{sub_categories}\"\n}\n\n要求：\n- tags 数量控制在 3-5 个\n- sub_category 必须从上述选项中选出最接近的一个"
+    "prompt": "分析这张动态资产缩略图，识别内容特征。\n\n输出格式（JSON）：\n{\n    \"name_cn\": \"易读名称，例如：角色动画\",\n    \"tags\": [\"动画类型标签\", \"特征标签\"],\n    \"notes\": \"动态资产描述\",\n    \"sub_category\": \"建议的子分类，从以下选项中选：{sub_categories}\"\n}\n\n要求：\n- tags 数量控制在 5-8 个\n- sub_category 必须从上述选项中选出最接近的一个"
 }
