@@ -298,6 +298,26 @@ class SettingsDialog(QtWidgets.QDialog):
         self._tex_policy_source.setChecked(tex_policy == "source_directory")
         layout.addWidget(g6)
 
+        # ── 依赖文件导入策略 ──
+        g7 = self._group("依赖文件导入策略")
+        g7l = QtWidgets.QVBoxLayout(g7)
+        self._dep_policy_copy = QtWidgets.QRadioButton(
+            "拷贝到项目 — 将依赖文件拷贝到工程对应目录")
+        self._dep_policy_asset = QtWidgets.QRadioButton(
+            "当前资产目录 — 不拷贝，直接读取 .zasset 内的依赖文件")
+        self._dep_policy_source = QtWidgets.QRadioButton(
+            "源文件目录 — 不修改依赖文件路径，保持导出时的原始路径")
+        g7l.addWidget(self._dep_policy_copy)
+        g7l.addWidget(self._dep_policy_asset)
+        g7l.addWidget(self._dep_policy_source)
+        for rb in [self._dep_policy_copy, self._dep_policy_asset, self._dep_policy_source]:
+            rb.setStyleSheet("QRadioButton { color: #d0d0d0; font-size: 13px; }")
+        dep_policy = self._config.get("dependency_import_policy", "copy_to_project")
+        self._dep_policy_copy.setChecked(dep_policy == "copy_to_project")
+        self._dep_policy_asset.setChecked(dep_policy == "asset_directory")
+        self._dep_policy_source.setChecked(dep_policy == "source_directory")
+        layout.addWidget(g7)
+
         layout.addStretch()
         return w
 
@@ -1015,6 +1035,14 @@ class SettingsDialog(QtWidgets.QDialog):
             self._config["texture_import_policy"] = "source_directory"
         else:
             self._config["texture_import_policy"] = "copy_to_project"
+
+        # 依赖文件导入策略
+        if self._dep_policy_asset.isChecked():
+            self._config["dependency_import_policy"] = "asset_directory"
+        elif self._dep_policy_source.isChecked():
+            self._config["dependency_import_policy"] = "source_directory"
+        else:
+            self._config["dependency_import_policy"] = "copy_to_project"
 
         return self._config
 
