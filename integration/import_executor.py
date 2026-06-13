@@ -1044,9 +1044,9 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
                 basename_to_target[fname] = f"{zasset_abs}/associated/{category}/{fname}"
             elif policy == "copy_to_project":
                 if category == "references":
-                    target_dir = scenes_target_dir
+                    target_dir = os.path.join(scenes_target_dir, category)
                 else:
-                    target_dir = dep_target_dir
+                    target_dir = os.path.join(dep_target_dir, category)
                 basename_to_target[fname] = _copy_with_unique_name(src, target_dir)
 
     if not basename_to_target:
@@ -1083,7 +1083,7 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
                         if policy == "asset_directory":
                             new_path = f"{zasset_abs}/associated/{category}/{old_basename}"
                         elif policy == "copy_to_project":
-                            target_dir = scenes_target_dir if category == "references" else dep_target_dir
+                            target_dir = os.path.join(scenes_target_dir if category == "references" else dep_target_dir, category)
                             new_path = os.path.join(target_dir, old_basename).replace("\\", "/")
                         break
 
