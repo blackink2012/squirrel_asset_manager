@@ -1058,6 +1058,7 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
                     target_dir = references_target_dir
                 else:
                     target_dir = os.path.join(dep_target_dir, category)
+                os.makedirs(target_dir, exist_ok=True)
                 basename_to_target[fname] = _copy_with_unique_name(src, target_dir)
 
     if not basename_to_target:
