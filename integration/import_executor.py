@@ -172,6 +172,7 @@ def _import_ma_with_texture_rewrite(zasset_path: str, format_name: str) -> bool:
             os.unlink(tmp_ma)
             if tex_policy != "source_directory":
                 _replace_file_texture_paths(before_file_nodes, tex_path_map, texture_map)
+            _redirect_dependency_paths(zasset_path, asset_name, asset_id)
             return True
         else:
             from .import_extractor import ImportExtractor
@@ -184,6 +185,7 @@ def _import_ma_with_texture_rewrite(zasset_path: str, format_name: str) -> bool:
                           preserveReferences=True, mergeNamespacesOnClash=False, namespace=":")
             if tex_policy != "source_directory":
                 _replace_file_texture_paths(before_file_nodes, tex_path_map, texture_map)
+            _redirect_dependency_paths(zasset_path, asset_name, asset_id)
             return True
 
     except Exception as e:
@@ -588,9 +590,16 @@ def import_variant_geometry(zasset_path: str, version: str = None, lod: str = No
                   preserveReferences=True, mergeNamespacesOnClash=False, namespace=":")
         if tex_path_map or (tex_policy != "source_directory" and texture_map):
             _replace_file_texture_paths(before_file_nodes, tex_path_map, texture_map)
+        asset_name = meta.get("name", "") if meta else ""
+        asset_id = meta.get("id", "") if meta else ""
+        _redirect_dependency_paths(zasset_path, asset_name, asset_id)
     elif ext in ("fbx", "obj", "mb"):
         cmds.file(geom_full, i=True, ignoreVersion=True,
                   preserveReferences=True, mergeNamespacesOnClash=False, namespace=":")
+        if ext == "mb":
+            asset_name = meta.get("name", "") if meta else ""
+            asset_id = meta.get("id", "") if meta else ""
+            _redirect_dependency_paths(zasset_path, asset_name, asset_id)
     elif ext in ("abc", "usd", "usda", "usdc", "glb", "gltf"):
         # 缓存格式：复制到工程缓存目录后导入
         _import_variant_to_cache(zasset_path, geom_full, ext, meta)
@@ -909,3 +918,196 @@ def _select_resolution_dialog(resolutions, default_res):
             return sorted_res[i]
     
     return default_res
+
+
+# ═══════════════════════════════════════════════════════════════
+# 依赖文件导入重定向
+# ═══════════════════════════════════════════════════════════════
+
+def _get_dependency_import_policy() -> str:
+    try:
+        import os, json
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                   "Assets", "preset", "config.json")
+        if os.path.isfile(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            policy = config.get("dependency_import_policy", "copy_to_project")
+            return policy
+    except Exception:
+        pass
+    return "copy_to_project"
+
+
+def _get_dependency_target_dir(asset_name: str, asset_id: str = "") -> str:
+    suffix = f"_{asset_id[-4:]}" if len(asset_id) >= 4 else ""
+    ws_root = _get_ws_root()
+    return os.path.join(ws_root, "cache", "squirrel_asset", f"{asset_name}{suffix}")
+
+
+def _get_dependency_scenes_target_dir(asset_name: str, asset_id: str = "") -> str:
+    suffix = f"_{asset_id[-4:]}" if len(asset_id) >= 4 else ""
+    ws_root = _get_ws_root()
+    return os.path.join(ws_root, "scenes", "squirrel_asset", f"{asset_name}{suffix}")
+
+
+_NODE_TYPE_ATTRS = [
+    ("AlembicNode", ("abc_File", "cacheFileName")),
+    ("gpuCache", ("cacheFileName",)),
+    ("cacheFile", ("cachePath", "path")),
+    ("VRayVolumeGrid", ("ipth", "ipthr", "f", "fn", "filename", "fileName", "filePath")),
+    ("aiVolume", ("filename", "fileName", "f", "fn", "filePath")),
+    ("RedshiftVolumeShape", ("fn", "filename", "fileName", "f", "filePath")),
+    ("aiStandIn", ("dso", "fn")),
+    ("VRayProxy", ("fileName",)),
+    ("VRayMesh", ("fileName",)),
+    ("VRayScene", ("FilePath",)),
+    ("RedshiftProxyMesh", ("fn", "fileName")),
+    ("mayaUsdProxyShape", ("fp", "filePath")),
+]
+
+
+def _has_frame_pattern(path: str) -> bool:
+    return any(p in path for p in ("####", "%04d", "%4d", "%0"))
+
+
+def _resolve_frame_pattern_to_glob(path: str) -> str:
+    parts = path.rsplit(".", 1)
+    if len(parts) == 2:
+        name, ext = parts
+        for pat, glob_pat in [("####", "*"), ("%04d", "*"), ("%4d", "*"), ("%0", "*")]:
+            if pat in name:
+                return name.replace(pat, glob_pat) + "." + ext
+    return path
+
+
+def _copy_with_unique_name(src: str, dst_dir: str) -> str:
+    import shutil
+    basename = os.path.basename(src)
+    dst = os.path.join(dst_dir, basename).replace("\\", "/")
+    if not os.path.isfile(dst):
+        shutil.copy2(src, dst)
+        return dst
+    if os.path.getsize(dst) == os.path.getsize(src):
+        return dst
+    name_part, ext = os.path.splitext(basename)
+    counter = 1
+    while True:
+        new_name = f"{name_part}_{counter:03d}{ext}"
+        dst = os.path.join(dst_dir, new_name).replace("\\", "/")
+        if not os.path.isfile(dst):
+            shutil.copy2(src, dst)
+            return dst
+        if os.path.getsize(dst) == os.path.getsize(src):
+            return dst
+        counter += 1
+
+
+def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id: str = ""):
+    policy = _get_dependency_import_policy()
+    if policy == "source_directory":
+        return
+
+    try:
+        import maya.cmds as cmds
+    except ImportError:
+        return
+
+    associated_dir = os.path.join(zasset_path, "associated")
+    if not os.path.isdir(associated_dir):
+        print(f"[DepRedirect] 无 associated/ 目录，跳过")
+        return
+
+    zasset_abs = os.path.abspath(zasset_path).replace("\\", "/")
+    basename_to_target = {}
+    basename_to_category = {}
+    dep_target_dir = ""
+    scenes_target_dir = ""
+
+    if policy == "copy_to_project":
+        dep_target_dir = _get_dependency_target_dir(asset_name, asset_id)
+        scenes_target_dir = _get_dependency_scenes_target_dir(asset_name, asset_id)
+        os.makedirs(dep_target_dir, exist_ok=True)
+        os.makedirs(scenes_target_dir, exist_ok=True)
+
+    for category in ("caches", "proxies", "references"):
+        cat_dir = os.path.join(associated_dir, category)
+        if not os.path.isdir(cat_dir):
+            continue
+        for fname in os.listdir(cat_dir):
+            src = os.path.join(cat_dir, fname)
+            if not os.path.isfile(src):
+                continue
+            basename_to_category[fname] = category
+
+            if policy == "asset_directory":
+                basename_to_target[fname] = f"{zasset_abs}/associated/{category}/{fname}"
+            elif policy == "copy_to_project":
+                if category == "references":
+                    target_dir = scenes_target_dir
+                else:
+                    target_dir = dep_target_dir
+                basename_to_target[fname] = _copy_with_unique_name(src, target_dir)
+
+    if not basename_to_target:
+        print(f"[DepRedirect] 无依赖文件需要重定向")
+        return
+
+    print(f"[DepRedirect] 策略={policy}, 待重定向 {len(basename_to_target)} 个文件")
+
+    for node_type, attr_names in _NODE_TYPE_ATTRS:
+        nodes = cmds.ls(type=node_type) or []
+        for node in nodes:
+            old_path = ""
+            found_attr = ""
+            for attr in attr_names:
+                try:
+                    old_path = cmds.getAttr(f"{node}.{attr}")
+                    if old_path and isinstance(old_path, str) and old_path.strip():
+                        found_attr = attr
+                        break
+                except Exception:
+                    continue
+
+            if not old_path or not found_attr:
+                continue
+
+            old_basename = os.path.basename(old_path.replace("\\", "/"))
+            new_path = basename_to_target.get(old_basename)
+
+            if not new_path and _has_frame_pattern(old_basename):
+                import fnmatch
+                for bname, category in basename_to_category.items():
+                    glob_pat = _resolve_frame_pattern_to_glob(bname)
+                    if fnmatch.fnmatch(bname, _resolve_frame_pattern_to_glob(old_basename)):
+                        if policy == "asset_directory":
+                            new_path = f"{zasset_abs}/associated/{category}/{old_basename}"
+                        elif policy == "copy_to_project":
+                            target_dir = scenes_target_dir if category == "references" else dep_target_dir
+                            new_path = os.path.join(target_dir, old_basename).replace("\\", "/")
+                        break
+
+            if not new_path:
+                continue
+
+            try:
+                cmds.setAttr(f"{node}.{found_attr}", new_path, type="string")
+                print(f"[DepRedirect] {node}.{found_attr}: {old_path} → {new_path}")
+            except Exception as e:
+                print(f"[DepRedirect] 设置 {node}.{found_attr} 失败: {e}")
+
+
+def _collect_associated_frame_sequences(zasset_path: str) -> dict:
+    associated_dir = os.path.join(zasset_path, "associated")
+    if not os.path.isdir(associated_dir):
+        return {}
+    result = {}
+    for category in ("caches", "proxies", "references"):
+        cat_dir = os.path.join(associated_dir, category)
+        if not os.path.isdir(cat_dir):
+            continue
+        for fname in os.listdir(cat_dir):
+            src = os.path.join(cat_dir, fname)
+            if os.path.isfile(src) and _has_frame_pattern(fname):
+                result[fname] = src
+    return result
