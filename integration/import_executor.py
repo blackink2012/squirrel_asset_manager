@@ -978,6 +978,34 @@ _NODE_TYPE_ATTRS = [
 ]
 
 
+def _extract_path_string(value) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        for v in value:
+            if v and isinstance(v, str) and v.strip():
+                return v.strip()
+        return None
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _set_node_file_path(node: str, attr: str, new_path: str):
+    import maya.cmds as cmds
+    try:
+        if cmds.attributeQuery(attr, node=node, exists=True):
+            attr_type = cmds.attributeQuery(attr, node=node, attributeType=True)
+            if attr_type == "typed":
+                cmds.setAttr(f"{node}.{attr}", new_path, type="string")
+            else:
+                cmds.setAttr(f"{node}.{attr}", new_path, type="string")
+        else:
+            cmds.setAttr(f"{node}.{attr}", new_path, type="string")
+    except Exception:
+        cmds.setAttr(f"{node}.{attr}", new_path, type="string")
+
+
 def _has_frame_pattern(path: str) -> bool:
     return any(p in path for p in ("####", "##", "%04d", "%4d", "%0", "#"))
 
@@ -1074,8 +1102,10 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
             found_attr = ""
             for attr in attr_names:
                 try:
-                    old_path = cmds.getAttr(f"{node}.{attr}")
-                    if old_path and isinstance(old_path, str) and old_path.strip():
+                    raw = cmds.getAttr(f"{node}.{attr}")
+                    extracted = _extract_path_string(raw)
+                    if extracted:
+                        old_path = extracted
                         found_attr = attr
                         break
                 except Exception:
@@ -1103,7 +1133,7 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
                 continue
 
             try:
-                cmds.setAttr(f"{node}.{found_attr}", new_path, type="string")
+                _set_node_file_path(node, found_attr, new_path)
                 print(f"[DepRedirect] {node}.{found_attr}: {old_path} → {new_path}")
             except Exception as e:
                 print(f"[DepRedirect] 设置 {node}.{found_attr} 失败: {e}")
