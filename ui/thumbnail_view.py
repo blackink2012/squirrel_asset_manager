@@ -904,6 +904,20 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                                                       QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
                                                       QtCore.Qt.TransformationMode.SmoothTransformation)
                                     w.setPixmap(pix)
+                                else:
+                                    # 无缩略图：重新绘制文本到新的尺寸
+                                    mat = getattr(card, 'material_data', {})
+                                    pix = QtGui.QPixmap(thumb_sz, thumb_sz)
+                                    pix.fill(QtGui.QColor(mat.get("color", "#606060")))
+                                    painter = QtGui.QPainter(pix)
+                                    painter.setPen(QtGui.QColor(255, 255, 255, 60))
+                                    font = painter.font()
+                                    font.setPointSize(max(8, int(W * 0.08)))
+                                    painter.setFont(font)
+                                    painter.drawText(pix.rect(), QtCore.Qt.AlignmentFlag.AlignCenter,
+                                                     mat.get("name_cn", ""))
+                                    painter.end()
+                                    w.setPixmap(pix)
                         elif isinstance(w, QtWidgets.QWidget) and w.objectName() == "textArea":
                             w.setFixedHeight(text_h)
                             ta_layout = w.layout()
