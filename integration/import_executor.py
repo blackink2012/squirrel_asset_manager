@@ -945,10 +945,21 @@ def _get_dependency_target_dir(asset_name: str, asset_id: str = "") -> str:
     return os.path.join(ws_root, "cache", "squirrel_asset", f"{asset_name}{suffix}")
 
 
-def _get_dependency_scenes_target_dir(asset_name: str, asset_id: str = "") -> str:
+def _get_dependency_references_target_dir(asset_name: str, asset_id: str = "") -> str:
     suffix = f"_{asset_id[-4:]}" if len(asset_id) >= 4 else ""
-    ws_root = _get_ws_root()
-    return os.path.join(ws_root, "scenes", "references", "squirrel_asset", f"{asset_name}{suffix}")
+    try:
+        import maya.cmds as cmds
+        ws_root = cmds.workspace(q=True, rd=True) or ""
+        ref_rule = cmds.workspace(fileRuleEntry="references")
+        if ref_rule:
+            base = os.path.join(ws_root, ref_rule) if ref_rule else ws_root
+        else:
+            base = os.path.join(ws_root, "references")
+        base = os.path.normpath(base)
+    except Exception:
+        base = os.path.normpath(os.path.join(
+            os.path.expanduser("~/Documents/maya/projects/default"), "references"))
+    return os.path.join(base, "squirrel_asset", f"{asset_name}{suffix}")
 
 
 _NODE_TYPE_ATTRS = [
@@ -1022,13 +1033,13 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
     basename_to_target = {}
     basename_to_category = {}
     dep_target_dir = ""
-    scenes_target_dir = ""
+    references_target_dir = ""
 
     if policy == "copy_to_project":
         dep_target_dir = _get_dependency_target_dir(asset_name, asset_id)
-        scenes_target_dir = _get_dependency_scenes_target_dir(asset_name, asset_id)
+        references_target_dir = _get_dependency_references_target_dir(asset_name, asset_id)
         os.makedirs(dep_target_dir, exist_ok=True)
-        os.makedirs(scenes_target_dir, exist_ok=True)
+        os.makedirs(references_target_dir, exist_ok=True)
 
     for category in ("caches", "proxies", "references"):
         cat_dir = os.path.join(associated_dir, category)
@@ -1044,7 +1055,7 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
                 basename_to_target[fname] = f"{zasset_abs}/associated/{category}/{fname}"
             elif policy == "copy_to_project":
                 if category == "references":
-                    target_dir = scenes_target_dir
+                    target_dir = references_target_dir
                 else:
                     target_dir = os.path.join(dep_target_dir, category)
                 basename_to_target[fname] = _copy_with_unique_name(src, target_dir)
@@ -1083,7 +1094,7 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
                         if policy == "asset_directory":
                             new_path = f"{zasset_abs}/associated/{category}/{old_basename}"
                         elif policy == "copy_to_project":
-                            target_dir = scenes_target_dir if category == "references" else os.path.join(dep_target_dir, category)
+                            target_dir = references_target_dir if category == "references" else os.path.join(dep_target_dir, category)
                             new_path = os.path.join(target_dir, old_basename).replace("\\", "/")
                         break
 
