@@ -57,7 +57,7 @@ class AIAnalyzer:
         sub_cats_str = ", ".join(sub_cats)
         return prompt_template.replace("{sub_categories}", sub_cats_str)
 
-    def analyze_image(self, image_bytes: bytes, category_type: str, language: str = "中文") -> Optional[Dict[str, Any]]:
+    def analyze_image(self, image_bytes: bytes, category_type: str, language: str = "中文", existing_tags: List[str] = None) -> Optional[Dict[str, Any]]:
         prompt = self._build_full_prompt(category_type)
         if not prompt:
             return None
@@ -70,7 +70,17 @@ class AIAnalyzer:
         try:
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
             response = self._call_ollama(base64_image, prompt)
-            return self._parse_response(response)
+            result = self._parse_response(response)
+            if result is None:
+                return None
+
+            if existing_tags:
+                existing_set = set(existing_tags)
+                new_tags = result.get("tags", [])
+                merged_tags = list(existing_set.union(new_tags))
+                result["tags"] = merged_tags
+
+            return result
         except Exception as e:
             print(f"[AI Analyzer] Error: {e}")
             return None
@@ -121,6 +131,57 @@ class AIAnalyzer:
             return [model.get("name", "") for model in data.get("models", [])]
         except Exception:
             return [self.DEFAULT_MODEL]
+
+    def translate_tags(self, tags: List[str], target_language: str) -> List[str]:
+        if not tags:
+            return []
+
+        language_map = {
+            "中文": "中文（简体中文）",
+            "English": "英文（English）",
+        }
+        target_lang_display = language_map.get(target_language, target_language)
+
+        tags_str = ", ".join(tags)
+        if target_language == "English":
+            prompt = f"Please translate the following tags to English. Output only a JSON array of translated strings, nothing else.\n\nTags: {tags_str}"
+        else:
+            prompt = f"请将以下标签翻译为{target_lang_display}。只输出翻译后的JSON字符串数组，不要输出其他内容。\n\n标签: {tags_str}"
+
+        try:
+            url = f"{self._host}/api/generate"
+            payload = {
+                "model": self._model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.3,
+                    "max_tokens": 1024
+                }
+            }
+            response = requests.post(url, json=payload, timeout=60)
+            response.raise_for_status()
+            result_str = response.json().get("response", "")
+            return self._parse_translation_response(result_str)
+        except Exception as e:
+            print(f"[AI Analyzer] Translate error: {e}")
+            return tags
+
+    def _parse_translation_response(self, response: str) -> List[str]:
+        try:
+            start_idx = response.find("[")
+            end_idx = response.rfind("]") + 1
+            if start_idx == -1 or end_idx == 0:
+                return []
+
+            json_str = response[start_idx:end_idx]
+            result = json.loads(json_str)
+
+            if isinstance(result, list):
+                return [str(item) for item in result]
+            return []
+        except Exception:
+            return []
 
     def is_available(self) -> bool:
         try:

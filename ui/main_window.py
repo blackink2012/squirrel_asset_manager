@@ -4742,6 +4742,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         language = config.get('language', '中文')
         review = config.get('review_output', True)
         model = config.get('model', '')
+        translate_existing_tags = config.get('translate_existing_tags', False)
 
         selected = self._thumbnail_grid.get_selected_materials_list()
         if not selected:
@@ -4793,7 +4794,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 continue
 
             sub_library = mat.get('sub_library', 'materials')
-            result = analyzer.analyze_image(thumb_bytes, sub_library, language=language)
+            existing_tags = mat.get('tags', [])
+            if translate_existing_tags and existing_tags:
+                existing_tags = analyzer.translate_tags(existing_tags, language)
+            result = analyzer.analyze_image(thumb_bytes, sub_library, language=language, existing_tags=existing_tags if existing_tags else None)
             if not result:
                 print(f"[AI Batch] 分析失败: {mat.get('name', '')}")
                 continue
