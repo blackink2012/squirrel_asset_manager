@@ -979,14 +979,14 @@ _NODE_TYPE_ATTRS = [
 
 
 def _has_frame_pattern(path: str) -> bool:
-    return any(p in path for p in ("####", "%04d", "%4d", "%0"))
+    return any(p in path for p in ("####", "%04d", "%4d", "%0", "#"))
 
 
 def _resolve_frame_pattern_to_glob(path: str) -> str:
     parts = path.rsplit(".", 1)
     if len(parts) == 2:
         name, ext = parts
-        for pat, glob_pat in [("####", "*"), ("%04d", "*"), ("%4d", "*"), ("%0", "*")]:
+        for pat, glob_pat in [("####", "*"), ("%04d", "*"), ("%4d", "*"), ("%0", "*"), ("#", "*")]:
             if pat in name:
                 return name.replace(pat, glob_pat) + "." + ext
     return path
