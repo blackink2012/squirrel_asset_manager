@@ -827,7 +827,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
 
     def _relayout_cards(self):
-        """缩放时：调整所有卡片大小和位置，卡片永不销毁"""
+        """缩放时：调整所有卡片大小和位置，清理不再需要的卡片"""
         card_w = self._thumb_size
         card_h = self._calc_card_height()
         padding = self.PADDING
@@ -840,11 +840,13 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                 self._resize_card_simple(card)
             self._last_thumb_size = self._thumb_size
 
-        # 更新所有卡片位置（不隐藏任何卡片）
+        # 收集当前需要显示的 material_id
+        visible_mids = set()
         for i, mat in enumerate(self._filtered_materials):
             mid = mat.get("id", "")
             if not mid:
                 continue
+            visible_mids.add(mid)
 
             row = i // self._columns
             col = i % self._columns
@@ -855,12 +857,19 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                 card = self._card_pool[mid]
                 card.move(x, y)
             else:
-
                 card = self._create_card(mat)
                 self._card_pool[mid] = card
                 card.setParent(self._icon_container)
                 card.move(x, y)
                 card.show()
+
+        # 清理不再需要的卡片（防止筛选/删除后旧卡片堆叠）
+        for mid in list(self._card_pool.keys()):
+            if mid not in visible_mids:
+                card = self._card_pool.pop(mid)
+                card.hide()
+                card.setParent(None)
+                card.deleteLater()
 
         total_h = self._calc_total_height()
         container_w = max(self._scroll.viewport().width(), self._columns * card_w + padding * 2)
