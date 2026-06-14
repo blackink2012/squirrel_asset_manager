@@ -63,6 +63,10 @@ class LightData:
     # {"color": {"node_type": "checker", "connected": true}}
     connections: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
+    # ── 上游节点网络（ZMETAL 格式完整序列化）──
+    # {"node_name": {"node_type": "...", "attrs": {...}}}
+    node_network: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
     # ── 变换 ──
     transform: LightTransform = field(default_factory=LightTransform)
 
@@ -431,6 +435,25 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
     # ── 收集连接的文件贴图/IES/光域网 ──
     _scan_connected_file_nodes(shape_node, data)
 
+    # ── 序列化完整上游节点网络（ZMETAL 方式）──
+    try:
+        from squirrel_asset_manager.integration.zjg_exporter import _serialize_node
+        net = {}
+        # 递归序列化所有上游连接的节点及其属性
+        attrs = cmds.listAttr(shape_node, connectable=True) or []
+        for attr in attrs:
+            full_attr = f"{shape_node}.{attr}"
+            incoming = cmds.listConnections(full_attr, source=True, destination=False, plugs=True) or []
+            for src_plug in incoming:
+                if '.' in src_plug:
+                    src_node, src_attr = src_plug.split('.', 1)
+                    _serialize_node(src_node, net)
+        if net:
+            data.node_network = net
+            print(f"[LightIO] 序列化上游节点网络: {len(net)} 个节点")
+    except Exception as e:
+        print(f"[LightIO] 节点网络序列化失败: {e}")
+
     return data
 
 
@@ -486,6 +509,8 @@ def _lightdata_to_dict(ld: LightData) -> dict:
         d["connected_files"] = ld.connected_files
     if ld.connections:
         d["connections"] = ld.connections
+    if ld.node_network:
+        d["node_network"] = ld.node_network
     return d
 
 
@@ -547,6 +572,7 @@ def _dict_to_lightdata(d: dict) -> LightData:
         hdr_path=d.get("hdr_path", ""),
         connected_files=d.get("connected_files", {}),
         connections=d.get("connections", {}),
+        node_network=d.get("node_network", {}),
         transform=LightTransform(
             translate=t.get("translate", [0.0, 0.0, 0.0]),
             rotate=t.get("rotate", [0.0, 0.0, 0.0]),
@@ -659,6 +685,10 @@ def _create_light(ld: LightData, renderer: str) -> Optional[str]:
     if ld.connected_files:
         _restore_connected_files(shape_node, ld.connected_files, renderer)
 
+    # ── 重建上游节点网络（ZMETAL 方式）──
+    if ld.node_network:
+        _restore_node_network(shape_node, ld.node_network)
+
     return xform
 
 
@@ -685,6 +715,88 @@ def _set_hdr(shape_node: str, hdr_path: str, attr_name: str, renderer: str):
             print(f"[LightIO] HDR 已连接: {hdr_path} → {full_attr}")
     except Exception as e:
         print(f"[LightIO] HDR 连接失败: {e}")
+
+
+def _restore_node_network(shape_node: str, network: Dict[str, Dict]):
+    """从 ZMETAL 格式节点数据重建上游节点网络并连接到灯光。
+
+    Args:
+        shape_node: 目标灯光 shape 节点
+        network: {node_name: {node_type, attrs}} 字典
+    """
+    if not network:
+        return
+    name_map = {}
+    import re
+
+    # ── 第一步：创建所有节点 ──
+    for old_name, info in network.items():
+        ntype = info.get("node_type", "")
+        if not ntype:
+            continue
+        try:
+            new_node = cmds.createNode(ntype, skipSelect=True)
+            name_map[old_name] = new_node
+        except Exception as e:
+            print(f"[LightIO] 网络节点创建失败 [{old_name} ({ntype})]: {e}")
+            name_map[old_name] = None
+
+    # ── 第二步：设置属性值 ──
+    for old_name, info in network.items():
+        new_node = name_map.get(old_name)
+        if not new_node:
+            continue
+        attrs = info.get("attrs", {})
+        for attr_key, attr_data in attrs.items():
+            if attr_data.get("type") != "value":
+                continue
+            val = attr_data.get("value")
+            if val is None:
+                continue
+            full_attr = f"{new_node}.{attr_key}"
+            if not cmds.objExists(full_attr):
+                continue
+            try:
+                if isinstance(val, list):
+                    if len(val) == 3 and full_attr.endswith(('.c', '.ct', '.oc', '.outColor', '.sc')):
+                        cmds.setAttr(full_attr, *val, type="double3")
+                    elif len(val) == 2:
+                        cmds.setAttr(full_attr, val[0], val[1])
+                    else:
+                        cmds.setAttr(full_attr, *val)
+                elif isinstance(val, bool):
+                    cmds.setAttr(full_attr, val)
+                elif isinstance(val, float) or isinstance(val, int):
+                    cmds.setAttr(full_attr, val)
+                elif isinstance(val, str) and val:
+                    cmds.setAttr(full_attr, val, type="string")
+            except Exception:
+                pass
+
+    # ── 第三步：恢复连接 ──
+    for old_name, info in network.items():
+        new_node = name_map.get(old_name)
+        if not new_node:
+            continue
+        attrs = info.get("attrs", {})
+        for attr_key, attr_data in attrs.items():
+            if attr_data.get("type") != "connection":
+                continue
+            src_old = attr_data.get("source_node", "")
+            src_attr = attr_data.get("source_attr", "")
+            # 源节点可能在 network 中，也可能是灯光 shape
+            src_new = name_map.get(src_old, src_old)
+            if not src_new or not cmds.objExists(src_new):
+                continue
+            full_dest = f"{new_node}.{attr_key}"
+            full_src = f"{src_new}.{src_attr}"
+            if cmds.objExists(full_dest) and cmds.objExists(full_src):
+                try:
+                    cmds.connectAttr(full_src, full_dest, force=True)
+                except Exception:
+                    pass
+
+    print(f"[LightIO] 节点网络重建完成: {len(name_map)} 个节点")
 
 
 def _restore_connected_files(shape_node: str, files: Dict[str, str], renderer: str):
