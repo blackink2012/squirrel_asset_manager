@@ -1165,26 +1165,27 @@ def _restore_connected_files(shape_node: str, files: Dict[str, str], renderer: s
 def _resolve_texture_connect_attr(shape_node: str, generic_attr: str, renderer: str) -> str:
     """根据渲染器和灯光类型，将通用属性名解析为实际的贴图连接属性名。
 
-    V-Ray 不同灯光类型使用不同的贴图属性：
-      VRayLightRectShape → rectTex（并设置 useRectTex=1）
-      VRayLightDomeShape → domeTex（并设置 useDomeTex=1）
-      VRayLightSphereShape → lightColor
+    Arnold dome:   aiSkyDomeLight → color (sc)
+    V-Ray dome:    VRayLightDomeShape → domeTex (dt) + useDomeTex=1
+    Redshift dome: RedshiftDomeLight → tex0 (string, 非 file 节点)
+    V-Ray rect:    VRayLightRectShape → rectTex + useRectTex=1
+    V-Ray sphere:  VRayLightSphereShape → lightColor
     """
     if not _IN_MAYA:
         return generic_attr
 
     ntype = cmds.nodeType(shape_node)
 
-    # V-Ray 特定的贴图属性映射
-    _VRAY_TEX_ATTRS = {
-        "VRayLightRectShape":  ("rectTex",  "useRectTex"),
-        "VRayLightDomeShape":  ("domeTex",  "useDomeTex"),
-        "VRayLightSphereShape": ("lightColor", None),
+    # 渲染器+类型 → (贴图属性, 启用标志)
+    _TEX_ATTRS = {
+        "VRayLightRectShape":   ("rectTex",     "useRectTex"),
+        "VRayLightDomeShape":   ("domeTex",     "useDomeTex"),
+        "VRayLightSphereShape": ("lightColor",  None),
+        "RedshiftDomeLight":    ("tex0",        None),
     }
 
-    if renderer == "vray" and ntype in _VRAY_TEX_ATTRS:
-        tex_attr, enable_attr = _VRAY_TEX_ATTRS[ntype]
-        # 开启贴图使用标志
+    if ntype in _TEX_ATTRS:
+        tex_attr, enable_attr = _TEX_ATTRS[ntype]
         if enable_attr:
             try:
                 cmds.setAttr(f"{shape_node}.{enable_attr}", 1)
@@ -1192,6 +1193,7 @@ def _resolve_texture_connect_attr(shape_node: str, generic_attr: str, renderer: 
                 pass
         return tex_attr
 
+    # Arnold dome: color 属性正确，直接使用
     return generic_attr
 
 
