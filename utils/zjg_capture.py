@@ -30,7 +30,8 @@ class ToolBar(QtWidgets.QWidget):
         self.setWindowFlags(
             QtCore.Qt.FramelessWindowHint |
             QtCore.Qt.WindowStaysOnTopHint |
-            QtCore.Qt.Tool
+            QtCore.Qt.Tool |
+            QtCore.Qt.Window
         )
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground, False)
         self.setStyleSheet("""
