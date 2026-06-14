@@ -92,6 +92,10 @@ def import_asset(zasset_path: str, format_name: str) -> bool:
             ok, name_map = apply_zmetal_as_material(zasset_path)
             return name_map if ok else False
 
+        elif importer_type == "zoolight":
+            print(f"[ImportExecutor] zoolight 格式 — 创建灯光节点")
+            return _import_zoolight(zasset_path)
+
         elif format_name == "mcm":
             print(f"[ImportExecutor] mcm 格式 — 导入材质 + 按选择物体分配")
             return _import_mcm_with_selection(zasset_path)
@@ -482,6 +486,60 @@ def apply_zmetal_as_material(zasset_path: str):
         import traceback
         traceback.print_exc()
         return False
+
+
+def _import_zoolight(zasset_path: str) -> bool:
+    """从 .zasset 中提取 node.zoolight 并创建渲染器灯光节点。
+
+    自动检测当前渲染器，根据通用灯光参数创建对应灯光。
+    """
+    import json, tempfile
+    from core.zasset_io import ZassetIO
+
+    try:
+        all_names = ZassetIO.list_contents(zasset_path)
+        zoolight_name = _find_zoolight_in_zip(all_names)
+        if not zoolight_name:
+            print(f"[ImportExecutor] .zasset 不含 .zoolight 文件")
+            return False
+
+        zoolight_data = json.loads(ZassetIO.read_file(zasset_path, zoolight_name))
+
+        # 写入临时文件供 light_io 解析
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zoolight")
+        with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
+            json.dump(zoolight_data, f, indent=2, ensure_ascii=False)
+
+        from squirrel_asset_manager.core.light_io import import_lights_from_json
+        count, created = import_lights_from_json(tmp_path)
+        os.unlink(tmp_path)
+
+        if count > 0:
+            print(f"[ImportExecutor] 已创建 {count} 个灯光 (from {os.path.basename(zasset_path)})")
+            # 选中创建的灯光
+            try:
+                import maya.cmds as cmds
+                cmds.select(created, replace=True)
+            except Exception:
+                pass
+            return True
+        return False
+
+    except Exception as e:
+        print(f"[ImportExecutor] zoolight 灯光创建失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def _find_zoolight_in_zip(names: list) -> str:
+    """在 .zasset 文件列表中查找 .zoolight 文件"""
+    for n in names:
+        if n.endswith(".zoolight") and "node" not in os.path.dirname(n):
+            continue
+        if n.endswith(".zoolight"):
+            return n
+    return ""
 
 
 def _get_texture_target_dir(asset_name: str, asset_id: str = "") -> str:

@@ -21,6 +21,9 @@ TEXTURE_FORMATS = {
 # 材质格式（解析 JSON 创建 shading network）
 ZMETAL_FORMATS = {"zmetal"}
 
+# 灯光格式（渲染器无关灯光资产）
+ZOOLIGHT_FORMATS = {"zoolight"}
+
 # HDR 格式（创建 aiSkyDomeLight）
 HDR_FORMATS = {"hdr", "exr"}
 
@@ -32,6 +35,8 @@ def get_importer_type(format_name: str) -> str:
         "geometry" | "proxy" | "volume" | "texture" | "zmetal" | "hdri" | "unknown"
     """
     f = format_name.lower().lstrip(".")
+    if f in ZOOLIGHT_FORMATS:
+        return "zoolight"
     if f in ZMETAL_FORMATS:
         return "zmetal"
     if f in GEOMETRY_FORMATS:
