@@ -704,7 +704,30 @@ def create_material(material_name, textures, config, existing_shader=None):
             if existing_type in all_mappings:
                 material_type = existing_type
         else:
-            shader = cmds.shadingNode(material_type, asShader=True, name=material_name)
+            # 使用 createNode 创建（兼容 rsStandardMaterial 等 renderer 特定节点）
+            # shadingNode 有时不适用 renderer 专属材质
+            created = False
+            for create_method, args in (
+                (cmds.createNode, (material_type,)),
+                (cmds.shadingNode, (material_type,)),
+            ):
+                try:
+                    if create_method == cmds.shadingNode:
+                        shader = cmds.shadingNode(material_type, asShader=True, name=material_name)
+                    else:
+                        shader = cmds.createNode(material_type, name=material_name, skipSelect=True)
+                    created = True
+                    break
+                except Exception:
+                    continue
+
+            if not created:
+                print(f"[PBR] 无法创建节点类型: {material_type}")
+                return None
+
+            actual_type = cmds.nodeType(shader)
+            print(f"[PBR] 创建节点: {shader} (type={actual_type}, requested={material_type})")
+
             sg = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=material_name + 'SG')
             # rsStandardMaterial 等节点使用 .out 而非 .outColor
             for out_attr in ('outColor', 'out'):
