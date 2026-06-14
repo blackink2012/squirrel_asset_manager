@@ -317,10 +317,10 @@ class ExportOrchestrator:
 
             # Stage 3: 材质预设 .zmetal / .mcm（按配置）→ staging_dir
             if config.export_zmetal:
-                # 灯光资产使用 .zlight 格式（渲染器无关）
+                # 灯光资产使用 .zoolight 格式（渲染器无关）
                 if config.asset_type == "lights":
-                    self._stage_zlight(config, staging_dir, safe_name)
-                    exported_formats.append("zlight")
+                    self._stage_zoolight(config, staging_dir, safe_name)
+                    exported_formats.append("zoolight")
                 else:
                     self._stage_zmetal(config, staging_dir, safe_name)
                     exported_formats.append("zmetal")
@@ -1203,11 +1203,11 @@ class ExportOrchestrator:
 
         return files
 
-    def _stage_zlight(self, config: ExportConfig, asset_dir: str, safe_name: str) -> bool:
-        """导出 .zlight 灯光预设文件（渲染器无关格式）。
+    def _stage_zoolight(self, config: ExportConfig, asset_dir: str, safe_name: str) -> bool:
+        """导出 .zoolight 灯光预设文件（渲染器无关格式）。
 
         从 Maya 灯光 shape 节点提取通用物理参数，
-        写入 .zlight JSON 文件。
+        写入 .zoolight JSON 文件。
 
         Returns:
             bool 是否成功
@@ -1259,15 +1259,15 @@ class ExportOrchestrator:
                             shape_nodes.append(shp)
 
             if not shape_nodes:
-                print(f"[Export::zlight] 未找到灯光 shape 节点")
+                print(f"[Export::zoolight] 未找到灯光 shape 节点")
                 return False
 
-            print(f"[Export::zlight] 找到 {len(shape_nodes)} 个灯光 shape: {[cmds.nodeType(s) for s in shape_nodes]}")
-            filepath = os.path.join(asset_dir, f"{safe_name}.zlight")
+            print(f"[Export::zoolight] 找到 {len(shape_nodes)} 个灯光 shape: {[cmds.nodeType(s) for s in shape_nodes]}")
+            filepath = os.path.join(asset_dir, f"{safe_name}.zoolight")
             return export_lights_to_json(shape_nodes, filepath)
 
         except Exception as e:
-            print(f"[Export] zlight 导出异常: {e}")
+            print(f"[Export] zoolight 导出异常: {e}")
             import traceback
             traceback.print_exc()
             return False
