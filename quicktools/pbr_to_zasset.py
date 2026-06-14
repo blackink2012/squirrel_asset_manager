@@ -731,7 +731,7 @@ def create_material(material_name, textures, config, existing_shader=None):
             if actual_type == "unknown":
                 print(f"[PBR] 错误: 节点类型 unknown — {material_type} 的渲染器插件可能未加载（如 redshift4maya）")
                 print(f"[PBR] 节点已创建但属性不可用，跳过连接")
-                return shader  # 返回节点但不做连接
+                return shader, None
 
             sg = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=material_name + 'SG')
             # rsStandardMaterial 等节点使用 .out 而非 .outColor
