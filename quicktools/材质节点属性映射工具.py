@@ -9,6 +9,11 @@ import sys
 import json
 from functools import partial
 
+# 获取脚本所在目录
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# 预设目录：相对于脚本目录的 Assets/material_mapper_presets
+PRESET_DIR = os.path.join(SCRIPT_DIR, "..", "Assets", "material_mapper_presets")
+
 # 尝试导入 PySide6
 try:
     from PySide6 import QtWidgets, QtCore, QtGui
@@ -185,7 +190,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
             }
         """)
 
-        self.preset_dir = os.path.join(cmds.internalVar(userPrefDir=True), "material_mapper_presets")
+        self.preset_dir = PRESET_DIR
         if not os.path.exists(self.preset_dir):
             os.makedirs(self.preset_dir)
 
