@@ -1872,17 +1872,13 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
                 shading_type = ntype[:-5] if ntype.endswith('Shape') or ntype.endswith('shape') else ntype
                 try:
                     # shadingNode 自动创建 transform+shape 并完成所有注册
+                    # ⚠ 绝不重命名：V-Ray 等渲染器插件会在内部引用 shape 节点，
+                    #    重命名会导致内部引用断裂 → 未知节点 / 双 shape / 无法保存
                     light_xform = cmds.shadingNode(shading_type, asLight=True, skipSelect=True)
                     shapes = cmds.listRelatives(light_xform, shapes=True) or []
                     new_node = shapes[0] if shapes else light_xform
-                    # 重命名 shape 为 ZMETAL 中的节点名
-                    if not cmds.objExists(new_name):
-                        new_node = cmds.rename(new_node, new_name)
-                    # 重命名 transform
-                    xform_name = new_name.replace('Shape', '').replace('shape', '')
-                    if not cmds.objExists(xform_name):
-                        cmds.rename(light_xform, xform_name)
-                    print(f"[Import] 灯光节点(完整): {new_node} (type={ntype})")
+                    # name_map 自动映射旧名 → 新节点名，后续属性/连接还原无需重命名
+                    print(f"[Import] 灯光节点: {new_node} (type={ntype}, shading={shading_type}) → {light_xform}")
                 except Exception as e:
                     print(f"[Import] shadingNode({shading_type}) 失败: {e}，回退到 createNode")
                     # 回退：手动创建 transform + shape
