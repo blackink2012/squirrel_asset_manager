@@ -230,8 +230,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
     assignTextureToMaterialRequested = QtCore.Signal(dict)  # (texture_material) 贴图→指定给选中材质
     dragDroppedOnViewport = QtCore.Signal(list, int, int)  # ([material_ids], global_x, global_y)
     previewNodeRequested = QtCore.Signal(str)  # (node_file_path) 预览节点文件
-    createLightRequested = QtCore.Signal(str)   # (light_type) 通过 zlight 通用格式创建灯光
-    importZlightAsRenderer = QtCore.Signal(str, str)  # (zasset_path, renderer) 以指定渲染器导入 zlight
+    importZlightAsRenderer = QtCore.Signal(str, str)  # (zasset_path, renderer) 以指定渲染器导入灯光
     VIEW_ICON = 0
     VIEW_LIST = 1
 
@@ -1289,55 +1288,12 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         card.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.PreventContextMenu)
 
-    _CREATE_LIGHT_MENUS = [
-        ("区域光 (Area)", "area"),
-        ("点光源 (Point)", "point"),
-        ("聚光灯 (Spot)", "spot"),
-        ("平行光 (Directional)", "directional"),
-        ("穹顶光 (Dome/IBL)", "dome"),
-        ("圆形光 (Disk)", "disk"),
-    ]
-
-    def _is_light_category(self):
-        """判断当前是否在灯光分类中"""
-        if self._filtered_materials:
-            first_mat = self._filtered_materials[0]
-            if first_mat.get("sub_library") == "lights":
-                return True
-        if self._current_cat_id and self._current_cat_id != "all":
-            if hasattr(self, '_manager') and self._manager:
-                try:
-                    tree = self._manager.get_category_tree()
-                    for node in tree:
-                        if node.get("id") == self._current_cat_id:
-                            return node.get("type", "") == "lights"
-                        for child in node.get("children", []):
-                            if child.get("id") == self._current_cat_id:
-                                return child.get("type", "") == "lights"
-                except Exception:
-                    pass
-        return False
-
-    def _add_create_light_submenu(self, menu, parent_menu):
-        """在菜单中添加「创建灯光」子菜单（通过 zlight 通用格式）"""
-        create_light_sub = parent_menu.addMenu("💡 创建灯光")
-        for label, light_type in self._CREATE_LIGHT_MENUS:
-            action = create_light_sub.addAction(label)
-            action.setData(light_type)
-            action.triggered.connect(
-                lambda *a, lt=light_type: self.createLightRequested.emit(lt))
-
     def _on_empty_area_menu(self, pos):
-        """空白区域右键 → 创建资产 / 粘贴 / 导入 / 创建灯光"""
+        """空白区域右键 → 创建资产 / 粘贴 / 导入"""
         child = self._icon_container.childAt(pos)
         if child and hasattr(child, 'material_data'):
             return
         menu = QtWidgets.QMenu(self)
-
-        # ── 灯光分类专属：创建灯光 ──
-        if self._is_light_category():
-            self._add_create_light_submenu(menu, menu)
-
         create_action = menu.addAction("创建资产")
         paste_action = menu.addAction("📋 粘贴")
         menu.addSeparator()
@@ -1525,10 +1481,6 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         menu = QtWidgets.QMenu(self)
         menu.setStyleSheet(_get_sub_style(font_size))
 
-        # ── 灯光分类专属：创建灯光（右键卡片时也显示）──
-        if sub_lib == "lights":
-            self._add_create_light_submenu(menu, menu)
-
         # ── 导入始终在最上 ──
         json_path = mat.get('json_path', '')
         import_actions = {}
@@ -1542,7 +1494,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
             # zlight 格式 → 渲染器子菜单（按渲染器创建灯光）
             if has_zlight:
-                zlight_sub = QtWidgets.QMenu('\U0001f4e5 导入 zlight 灯光（选择渲染器）', menu)
+                zlight_sub = QtWidgets.QMenu('\U0001f4e5 导入灯光（选择渲染器）', menu)
                 zlight_sub.setStyleSheet(_get_sub_style(font_size))
                 for r_name, r_label in [("arnold", "Arnold"), ("vray", "V-Ray"),
                                          ("redshift", "Redshift"), ("maya", "Maya 原生")]:
