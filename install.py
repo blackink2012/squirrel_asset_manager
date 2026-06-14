@@ -60,8 +60,8 @@ if script_dir not in sys.path:
     sys.path.append(script_dir)
 
 try:
-    from squirrel_asset_manager.main import main
-    main()
+    from squirrel_asset_manager.ui.main_window import MaterialLibraryWindow
+    MaterialLibraryWindow.show_window()
 except Exception as e:
     cmds.warning(f"松鼠资产管理器启动失败: {str(e)}")
 '''
