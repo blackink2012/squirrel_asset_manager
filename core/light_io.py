@@ -1036,10 +1036,11 @@ def _restore_node_network(shape_node: str, network: Dict[str, Dict],
         except Exception:
             pass
 
-        # 构建 dest 候选节点列表 [shape, transform]
         dest_nodes = [shape_node]
         if xform_node != shape_node:
             dest_nodes.append(xform_node)
+
+        ntype = cmds.nodeType(shape_node)
 
         for dest_attr, conn_info in connections.items():
             old_src = conn_info.get("source_node", "")
@@ -1056,6 +1057,19 @@ def _restore_node_network(shape_node: str, network: Dict[str, Dict],
             if not cmds.objExists(full_src):
                 print(f"[LightIO] 源 plug 不存在: {full_src}")
                 continue
+
+            # ── RedshiftDomeLight 特例：tex0 是 string 属性，提取贴图路径直接 setAttr ──
+            if ntype == "RedshiftDomeLight":
+                try:
+                    fpath = cmds.getAttr(f"{src_new}.fileTextureName")
+                    if fpath:
+                        full_dest = f"{shape_node}.tex0"
+                        if cmds.objExists(full_dest):
+                            cmds.setAttr(full_dest, fpath, type="string")
+                            print(f"[LightIO] 连回灯光 Redshift: {full_dest} = {fpath}")
+                            continue
+                except Exception:
+                    pass
 
             connected = False
             for dest_node in dest_nodes:
@@ -1167,9 +1181,11 @@ def _resolve_texture_connect_attr(shape_node: str, generic_attr: str, renderer: 
 
     Arnold dome:   aiSkyDomeLight → color (sc)
     V-Ray dome:    VRayLightDomeShape → domeTex (dt) + useDomeTex=1
-    Redshift dome: RedshiftDomeLight → tex0 (string, 非 file 节点)
     V-Ray rect:    VRayLightRectShape → rectTex + useRectTex=1
     V-Ray sphere:  VRayLightSphereShape → lightColor
+
+    RedshiftDomeLight 不在列表中：tex0 是 string 属性，不能接收 file.outColor
+    连接，由 _set_hdr / 特殊处理路径直接 setAttr。
     """
     if not _IN_MAYA:
         return generic_attr
@@ -1181,7 +1197,6 @@ def _resolve_texture_connect_attr(shape_node: str, generic_attr: str, renderer: 
         "VRayLightRectShape":   ("rectTex",     "useRectTex"),
         "VRayLightDomeShape":   ("domeTex",     "useDomeTex"),
         "VRayLightSphereShape": ("lightColor",  None),
-        "RedshiftDomeLight":    ("tex0",        None),
     }
 
     if ntype in _TEX_ATTRS:
@@ -1193,7 +1208,7 @@ def _resolve_texture_connect_attr(shape_node: str, generic_attr: str, renderer: 
                 pass
         return tex_attr
 
-    # Arnold dome: color 属性正确，直接使用
+    # Arnold dome / Redshift dome: color / tex0 直接使用
     return generic_attr
 
 
