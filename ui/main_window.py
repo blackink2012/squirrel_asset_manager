@@ -6102,6 +6102,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         import json, tempfile, os
         from squirrel_asset_manager.core.zasset_io import ZassetIO
         from squirrel_asset_manager.core.light_io import import_lights_from_json
+        from squirrel_asset_manager.integration.import_executor import _copy_zlight_dependencies
 
         try:
             all_names = ZassetIO.list_contents(zasset_path)
@@ -6119,7 +6120,15 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 print(f"[ImportZlight] .zasset 不含 .zlight 文件")
                 return
 
+            # ── 读取元数据获取 asset_id ──
+            meta_data = ZassetIO.read_meta(zasset_path) or {}
+            asset_id = meta_data.get("id", "")
+            asset_name = meta_data.get("name") or os.path.splitext(os.path.basename(zasset_path))[0]
+
             zlight_data = json.loads(ZassetIO.read_file(zasset_path, zlight_name))
+            # 复制依赖文件到项目目录
+            zlight_data = _copy_zlight_dependencies(zlight_data, asset_name, asset_id)
+
             tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zlight")
             with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
                 json.dump(zlight_data, f, indent=2, ensure_ascii=False)

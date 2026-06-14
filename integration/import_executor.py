@@ -492,6 +492,7 @@ def _import_zlight(zasset_path: str) -> bool:
     """从 .zasset 中提取 node.zlight 并创建渲染器灯光节点。
 
     自动检测当前渲染器，根据通用灯光参数创建对应灯光。
+    依赖文件（HDR/IES/贴图）复制到项目 sourceimages 目录。
     """
     import json, tempfile
     from core.zasset_io import ZassetIO
@@ -505,6 +506,14 @@ def _import_zlight(zasset_path: str) -> bool:
 
         zlight_data = json.loads(ZassetIO.read_file(zasset_path, zlight_name))
 
+        # ── 读取元数据获取 asset_id ──
+        meta_data = ZassetIO.read_meta(zasset_path) or {}
+        asset_id = meta_data.get("id", "")
+        asset_name = meta_data.get("name") or os.path.splitext(os.path.basename(zasset_path))[0]
+
+        # ── 复制依赖文件到项目目录 ──
+        zlight_data = _copy_zlight_dependencies(zlight_data, asset_name, asset_id)
+
         # 写入临时文件供 light_io 解析
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zlight")
         with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
@@ -516,7 +525,6 @@ def _import_zlight(zasset_path: str) -> bool:
 
         if count > 0:
             print(f"[ImportExecutor] 已创建 {count} 个灯光 (from {os.path.basename(zasset_path)})")
-            # 选中创建的灯光
             try:
                 import maya.cmds as cmds
                 cmds.select(created, replace=True)
@@ -530,6 +538,44 @@ def _import_zlight(zasset_path: str) -> bool:
         import traceback
         traceback.print_exc()
         return False
+
+
+def _copy_zlight_dependencies(zlight_data: dict, asset_name: str, asset_id: str) -> dict:
+    """复制 zlight 数据中的依赖文件（HDR/IES/贴图）到项目目录，更新路径。
+
+    Returns:
+        更新了路径的 zlight_data
+    """
+    target_dir = _get_texture_target_dir(asset_name, asset_id)
+    os.makedirs(target_dir, exist_ok=True)
+
+    def _copy_to_project(file_path):
+        """复制单个文件到项目目录，返回新路径"""
+        if not file_path or not os.path.isfile(file_path):
+            return file_path
+        fname = os.path.basename(file_path)
+        target = os.path.join(target_dir, fname).replace("\\", "/")
+        if os.path.isfile(target) and os.path.getsize(target) == os.path.getsize(file_path):
+            return target
+        try:
+            import shutil
+            shutil.copy2(file_path, target)
+            print(f"[ImportExecutor] 依赖文件: {os.path.basename(file_path)} → {target}")
+        except Exception as e:
+            print(f"[ImportExecutor] 复制依赖失败 [{file_path}]: {e}")
+            return file_path
+        return target
+
+    for light in zlight_data.get("lights", []):
+        # hdr_path
+        if light.get("hdr_path"):
+            light["hdr_path"] = _copy_to_project(light["hdr_path"])
+        # connected_files
+        cf = light.get("connected_files", {})
+        for attr_key, file_path in list(cf.items()):
+            cf[attr_key] = _copy_to_project(file_path)
+
+    return zlight_data
 
 
 def _find_zlight_in_zip(names: list) -> str:
