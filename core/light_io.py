@@ -1,7 +1,7 @@
 """
-.zoolight — 渲染器无关的灯光资产格式
+.zlight — 渲染器无关的灯光资产格式
 
-类似 PBR 贴图可创建不同渲染器材质，.zoolight 描述灯光的物理属性，
+类似 PBR 贴图可创建不同渲染器材质，.zlight 描述灯光的物理属性，
 导入时根据当前渲染器自动创建对应的灯光节点。
 
 支持类型: area / point / spot / directional / dome / disk / cylinder
@@ -201,7 +201,7 @@ _RENDERER_ATTR_MAP: Dict[str, Dict[str, Any]] = {
 
 
 # ═══════════════════════════════════════════════════════════════
-# 导出 — Maya → .zoolight JSON
+# 导出 — Maya → .zlight JSON
 # ═══════════════════════════════════════════════════════════════
 
 def export_light_from_maya(shape_node: str) -> Optional[LightData]:
@@ -325,7 +325,7 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
 
 
 def export_lights_to_json(shape_nodes: List[str], filepath: str) -> bool:
-    """导出多个灯光 shape 节点到 .zoolight JSON 文件。
+    """导出多个灯光 shape 节点到 .zlight JSON 文件。
 
     Returns:
         bool 是否成功
@@ -376,14 +376,14 @@ def _lightdata_to_dict(ld: LightData) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════
-# 导入 — .zoolight JSON → Maya 灯光节点
+# 导入 — .zlight JSON → Maya 灯光节点
 # ═══════════════════════════════════════════════════════════════
 
 def import_lights_from_json(filepath: str) -> Tuple[int, List[str]]:
-    """从 .zoolight JSON 创建当前渲染器灯光节点。
+    """从 .zlight JSON 创建当前渲染器灯光节点。
 
     Args:
-        filepath: .zoolight 文件路径
+        filepath: .zlight 文件路径
 
     Returns:
         (创建数量, 创建的灯光 transform 名称列表)
