@@ -860,26 +860,76 @@ def apply_light_params_to_shape(shape_node: str, ld: LightData, renderer: str = 
 
 
 def _set_hdr(shape_node: str, hdr_path: str, attr_name: str, renderer: str):
-    """为 dome 灯光连接 HDR 贴图 file 节点"""
+    """为 dome 灯光连接 HDR 贴图（参考 HDR 分类的连接方式）
+
+    Arnold:  file + place2dTexture → file.outColor → shape.color
+    V-Ray:   file + place2dTexture + VRayPlaceEnvTex → file.oc → shape.domeTex
+    Redshift: setAttr shape.tex0 path (string, 不放 file 节点)
+    """
     if not os.path.isfile(hdr_path):
         print(f"[LightIO] HDR 文件不存在: {hdr_path}")
         return
 
+    ntype = cmds.nodeType(shape_node)
+
     try:
+        # Redshift: 直接设置 tex0 字符串属性
+        if renderer == "redshift" or ntype == "RedshiftDomeLight":
+            full = f"{shape_node}.tex0"
+            if cmds.objExists(full):
+                cmds.setAttr(full, hdr_path, type="string")
+                print(f"[LightIO] HDR Redshift: {full} = {hdr_path}")
+            return
+
         file_node = cmds.shadingNode("file", asTexture=True)
         cmds.setAttr(f"{file_node}.fileTextureName", hdr_path, type="string")
         cmds.setAttr(f"{file_node}.ignoreColorSpaceFileRules", True)
-
-        # 尝试设置色彩空间为 Raw
         try:
             cmds.setAttr(f"{file_node}.colorSpace", "Raw", type="string")
         except Exception:
             pass
 
-        full_attr = f"{shape_node}.{attr_name}"
-        if cmds.objExists(full_attr):
-            cmds.connectAttr(f"{file_node}.outColor", full_attr, force=True)
-            print(f"[LightIO] HDR 已连接: {hdr_path} → {full_attr}")
+        p2d = cmds.shadingNode("place2dTexture", asUtility=True)
+        cmds.connectAttr(f"{p2d}.outUV", f"{file_node}.uv")
+        cmds.connectAttr(f"{p2d}.outUvFilterSize", f"{file_node}.uvFilterSize")
+
+        # V-Ray dome: 需要 VRayPlaceEnvTex + useDomeTex=1
+        if renderer == "vray" or ntype == "VRayLightDomeShape":
+            try:
+                cmds.setAttr(f"{shape_node}.useDomeTex", lock=False)
+            except Exception:
+                pass
+            cmds.setAttr(f"{shape_node}.useDomeTex", 1)
+            env = cmds.shadingNode("VRayPlaceEnvTex", asUtility=True)
+            parent = cmds.listRelatives(shape_node, parent=True, fullPath=True) or []
+            if parent:
+                cmds.connectAttr(f"{parent[0]}.wm", f"{env}.tm")
+            cmds.connectAttr(f"{p2d}.uv", f"{env}.ouv")
+            cmds.connectAttr(f"{env}.ouv", f"{file_node}.uv")
+            # 使用 .oc (outColor) → .dt (domeTex)
+            full_attr = f"{shape_node}.dt"
+            if cmds.objExists(full_attr):
+                cmds.connectAttr(f"{file_node}.oc", full_attr, force=True)
+                print(f"[LightIO] HDR V-Ray: file.oc → {full_attr} (useDomeTex=1)")
+                return
+            # 回退到完整属性名
+            full_attr = f"{shape_node}.{attr_name}"
+            if cmds.objExists(full_attr):
+                cmds.connectAttr(f"{file_node}.outColor", full_attr, force=True)
+                print(f"[LightIO] HDR V-Ray(回退): file.outColor → {full_attr}")
+            return
+
+        # Arnold / Maya 原生: file.outColor → shape.color
+        # 尝试多个目标属性名
+        for dest in (attr_name, "sc", "color"):
+            full_attr = f"{shape_node}.{dest}"
+            if cmds.objExists(full_attr):
+                cmds.connectAttr(f"{file_node}.outColor", full_attr, force=True)
+                print(f"[LightIO] HDR {renderer}: file.outColor → {full_attr}")
+                return
+
+        print(f"[LightIO] HDR 无法连接: {shape_node}")
+
     except Exception as e:
         print(f"[LightIO] HDR 连接失败: {e}")
 
