@@ -6127,7 +6127,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
             zlight_data = json.loads(ZassetIO.read_file(zasset_path, zlight_name))
             # 复制依赖文件到项目目录
-            zlight_data = _copy_zlight_dependencies(zlight_data, asset_name, asset_id)
+            zlight_data = _copy_zlight_dependencies(zlight_data, asset_name, asset_id, zasset_path)
 
             tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zlight")
             with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
