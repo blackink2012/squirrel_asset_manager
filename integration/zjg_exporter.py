@@ -1869,6 +1869,7 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
                 xform_name = new_name.replace('Shape', '').replace('shape', '')
                 xform = cmds.createNode('transform', name=xform_name, skipSelect=True)
                 new_node = cmds.createNode(ntype, name=new_name, parent=xform)
+                print(f"[Import] 灯光节点: {new_node} (type={ntype}) → transform父级: {xform}")
             else:
                 new_node = cmds.createNode(ntype, name=new_name, skipSelect=True)
             # 按节点类型注册到 Hypershade 对应分类列表

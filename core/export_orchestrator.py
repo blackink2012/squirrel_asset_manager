@@ -1160,6 +1160,13 @@ class ExportOrchestrator:
                 if not cmds.objExists(config.material_node):
                     return files
 
+                # 诊断：打印待导出的节点类型
+                try:
+                    mn_type = cmds.nodeType(config.material_node)
+                    print(f"[Export::zmetal] 待导出节点: {config.material_node} (type={mn_type})")
+                except Exception:
+                    pass
+
                 cmds.select(config.material_node, replace=True)
                 radar_export_materials(
                     target_dir=asset_dir,
