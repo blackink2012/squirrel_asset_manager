@@ -512,7 +512,7 @@ def _import_zlight(zasset_path: str) -> bool:
         asset_name = meta_data.get("name") or os.path.splitext(os.path.basename(zasset_path))[0]
 
         # ── 复制依赖文件到项目目录 ──
-        zlight_data = _copy_zlight_dependencies(zlight_data, asset_name, asset_id)
+        zlight_data = _copy_zlight_dependencies(zlight_data, asset_name, asset_id, zasset_path)
 
         # 写入临时文件供 light_io 解析
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zlight")
@@ -540,13 +540,23 @@ def _import_zlight(zasset_path: str) -> bool:
         return False
 
 
-def _copy_zlight_dependencies(zlight_data: dict, asset_name: str, asset_id: str) -> dict:
+def _copy_zlight_dependencies(zlight_data: dict, asset_name: str, asset_id: str,
+                               zasset_path: str = "") -> dict:
     """复制 zlight 数据中的依赖文件（HDR/IES/贴图）到项目目录，更新路径。
 
     Returns:
         更新了路径的 zlight_data
     """
-    target_dir = _get_texture_target_dir(asset_name, asset_id)
+    # 遵循设置中的贴图导入策略
+    tex_policy = _get_texture_import_policy()
+    if tex_policy == "source_directory":
+        return zlight_data  # 不复制，保持原始路径
+
+    if tex_policy == "asset_directory":
+        # 使用 zasset 同级目录
+        target_dir = os.path.join(os.path.dirname(zasset_path), "textures", f"{asset_name}{'_' + asset_id[-4:] if len(asset_id) >= 4 else ''}")
+    else:
+        target_dir = _get_texture_target_dir(asset_name, asset_id)
     os.makedirs(target_dir, exist_ok=True)
 
     def _copy_to_project(file_path):
