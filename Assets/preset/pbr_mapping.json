@@ -682,7 +682,7 @@
     "RedshiftOpenPBRMaterial": {
       "label": "Redshift OpenPBR Material",
       "baseColor": { "node_attribute": "base_color", "connection_type": "color" },
-      "normal": { "node_attribute": "bump_input", "connection_type": "vector", "requires_conversion": true, "conversion_node": "bump2d" },
+      "normal": { "node_attribute": "geometry_normal", "connection_type": "vector", "requires_conversion": true, "conversion_node": "bump2d" },
       "roughness": { "node_attribute": "specular_roughness", "connection_type": "scalar" },
       "metallic": { "node_attribute": "base_metalness", "connection_type": "scalar" },
       "specular": { "node_attribute": "specular_weight", "connection_type": "scalar" },
