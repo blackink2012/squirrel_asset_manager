@@ -92,9 +92,9 @@ def import_asset(zasset_path: str, format_name: str) -> bool:
             ok, name_map = apply_zmetal_as_material(zasset_path)
             return name_map if ok else False
 
-        elif importer_type == "zoolight":
-            print(f"[ImportExecutor] zoolight 格式 — 创建灯光节点")
-            return _import_zoolight(zasset_path)
+        elif importer_type == "zlight":
+            print(f"[ImportExecutor] zlight 格式 — 创建灯光节点")
+            return _import_zlight(zasset_path)
 
         elif format_name == "mcm":
             print(f"[ImportExecutor] mcm 格式 — 导入材质 + 按选择物体分配")
@@ -488,8 +488,8 @@ def apply_zmetal_as_material(zasset_path: str):
         return False
 
 
-def _import_zoolight(zasset_path: str) -> bool:
-    """从 .zasset 中提取 node.zoolight 并创建渲染器灯光节点。
+def _import_zlight(zasset_path: str) -> bool:
+    """从 .zasset 中提取 node.zlight 并创建渲染器灯光节点。
 
     自动检测当前渲染器，根据通用灯光参数创建对应灯光。
     """
@@ -498,17 +498,17 @@ def _import_zoolight(zasset_path: str) -> bool:
 
     try:
         all_names = ZassetIO.list_contents(zasset_path)
-        zoolight_name = _find_zoolight_in_zip(all_names)
-        if not zoolight_name:
-            print(f"[ImportExecutor] .zasset 不含 .zoolight 文件")
+        zlight_name = _find_zlight_in_zip(all_names)
+        if not zlight_name:
+            print(f"[ImportExecutor] .zasset 不含 .zlight 文件")
             return False
 
-        zoolight_data = json.loads(ZassetIO.read_file(zasset_path, zoolight_name))
+        zlight_data = json.loads(ZassetIO.read_file(zasset_path, zlight_name))
 
         # 写入临时文件供 light_io 解析
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zoolight")
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zlight")
         with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
-            json.dump(zoolight_data, f, indent=2, ensure_ascii=False)
+            json.dump(zlight_data, f, indent=2, ensure_ascii=False)
 
         from squirrel_asset_manager.core.light_io import import_lights_from_json
         count, created = import_lights_from_json(tmp_path)
@@ -526,18 +526,18 @@ def _import_zoolight(zasset_path: str) -> bool:
         return False
 
     except Exception as e:
-        print(f"[ImportExecutor] zoolight 灯光创建失败: {e}")
+        print(f"[ImportExecutor] zlight 灯光创建失败: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
-def _find_zoolight_in_zip(names: list) -> str:
-    """在 .zasset 文件列表中查找 .zoolight 文件"""
+def _find_zlight_in_zip(names: list) -> str:
+    """在 .zasset 文件列表中查找 .zlight 文件"""
     for n in names:
-        if n.endswith(".zoolight") and "node" not in os.path.dirname(n):
+        if n.endswith(".zlight") and "node" not in os.path.dirname(n):
             continue
-        if n.endswith(".zoolight"):
+        if n.endswith(".zlight"):
             return n
     return ""
 
