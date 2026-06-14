@@ -30,7 +30,7 @@ class ToolBar(QtWidgets.QWidget):
         self.setWindowFlags(
             QtCore.Qt.FramelessWindowHint |
             QtCore.Qt.WindowStaysOnTopHint |
-            QtCore.Qt.Tool
+            QtCore.Qt.Window
         )
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground, False)
         self.setStyleSheet("""
@@ -909,14 +909,6 @@ def show_capture_tool():
         pass
     _capture_tool_instance = CaptureTool()
     _capture_tool_instance.show()
-
-    # 通过 Win32 API 强制修改任务栏窗口标题（绕过 Qt 父进程限制）
-    try:
-        import ctypes
-        hwnd = int(_capture_tool_instance.winId())
-        ctypes.windll.user32.SetWindowTextW(hwnd, "截图工具")
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":
