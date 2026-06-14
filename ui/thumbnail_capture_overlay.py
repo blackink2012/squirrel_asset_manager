@@ -79,20 +79,50 @@ class ThumbnailCaptureOverlay(_OriginalCaptureTool):
           1. 按 objectName 精确匹配（新建 overlay 有唯一标识符）
           2. 按 Qt 元对象类名匹配（解决插件重载后 Python 类对象改变的问题，
              同时兼容旧版 overlay 未设 objectName 的情况）
+        
+        注意：只返回可见且状态正常的实例，避免复用已关闭的窗口。
         """
         # 阶段1：objectName 精确匹配
         for w in QtWidgets.QApplication.topLevelWidgets():
             if w.objectName() == cls.OBJECT_NAME:
-                return w
+                if cls._is_window_valid(w):
+                    return w
 
         # 阶段2：Qt 元对象类名匹配 —— 底层 C++ 元对象名不受 Python
         #        模块重载影响（删除 sys.modules 再 reimport 也不会变）
         class_name = cls.__name__
         for w in QtWidgets.QApplication.topLevelWidgets():
             if w.metaObject().className() == class_name:
-                return w
+                if cls._is_window_valid(w):
+                    return w
 
         return None
+
+    @classmethod
+    def _is_window_valid(cls, window):
+        """
+        检查窗口是否有效且可用。
+        
+        Args:
+            window: QWidget 实例
+            
+        Returns:
+            bool: 窗口有效返回 True，否则 False
+        """
+        if not window:
+            return False
+        # 检查窗口是否可见
+        if not window.isVisible():
+            return False
+        # 检查工具栏是否存在且可见（CaptureTool 的关键组件）
+        if hasattr(window, 'toolbar') and window.toolbar:
+            try:
+                # 检查工具栏是否已销毁
+                window.toolbar.winId()
+                return True
+            except RuntimeError:
+                return False
+        return True
 
     # ── 覆盖: 录屏 ────────────────────────────────────
 

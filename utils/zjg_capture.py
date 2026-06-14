@@ -791,6 +791,10 @@ class CaptureTool(QtWidgets.QWidget):
     def closeEvent(self, event):
         self.pos_update_timer.stop()
         self.toolbar.close()
+        # 更新全局实例引用
+        global _capture_tool_instance
+        if _capture_tool_instance is self:
+            _capture_tool_instance = None
         super(CaptureTool, self).closeEvent(event)
 
     # 按钮槽函数
