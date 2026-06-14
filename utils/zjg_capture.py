@@ -907,16 +907,16 @@ def show_capture_tool():
             _capture_tool_instance.deleteLater()
     except:
         pass
-
-    # 临时设置应用显示名，使任务栏显示「截图工具」
-    app = QtWidgets.QApplication.instance()
-    old_display = app.applicationDisplayName()
-    app.setApplicationDisplayName("截图工具")
-
     _capture_tool_instance = CaptureTool()
     _capture_tool_instance.show()
 
-    app.setApplicationDisplayName(old_display)
+    # 通过 Win32 API 强制修改任务栏窗口标题（绕过 Qt 父进程限制）
+    try:
+        import ctypes
+        hwnd = int(_capture_tool_instance.winId())
+        ctypes.windll.user32.SetWindowTextW(hwnd, "截图工具")
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
