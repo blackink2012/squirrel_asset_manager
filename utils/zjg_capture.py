@@ -782,7 +782,9 @@ class CaptureTool(QtWidgets.QWidget):
             x = screen_rect.left() + 5
         if x + toolbar_width > screen_rect.right():
             x = screen_rect.right() - toolbar_width - 5
-        self.toolbar.move(x, y)
+        # 将全局坐标转换为 CaptureTool 相对坐标
+        parent_pos = self.mapToGlobal(QtCore.QPoint(0, 0))
+        self.toolbar.move(x - parent_pos.x(), y - parent_pos.y())
         self.toolbar.raise_()
 
     def closeEvent(self, event):
