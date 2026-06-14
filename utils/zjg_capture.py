@@ -29,8 +29,7 @@ class ToolBar(QtWidgets.QWidget):
         self.setWindowTitle("截图工具")
         self.setWindowFlags(
             QtCore.Qt.FramelessWindowHint |
-            QtCore.Qt.WindowStaysOnTopHint |
-            QtCore.Qt.Window
+            QtCore.Qt.WindowStaysOnTopHint
         )
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground, False)
         self.setStyleSheet("""
