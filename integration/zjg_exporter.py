@@ -1882,11 +1882,19 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
                 elif cmds.getClassification(ntype, satisfies="light"):
                     # defaultLightList1 需注册 transform 节点而非 shape 节点
                     reg_node = light_xform if light_xform else new_node
-                    cmds.connectAttr(f"{reg_node}.message", "defaultLightList1.l", nextAvailable=True)
+                    try:
+                        cmds.connectAttr(f"{reg_node}.message", "defaultLightList1.l", nextAvailable=True)
+                    except Exception as e:
+                        print(f"[Import] defaultLightList1 连接失败: {e}，尝试 defaultLightSet")
+                    # 同时加入 defaultLightSet（Hypershade 灯光分类也会显示）
+                    try:
+                        cmds.sets(reg_node, add='defaultLightSet')
+                    except Exception:
+                        pass
                 else:
                     cmds.connectAttr(f"{new_node}.message", "defaultRenderUtilityList1.u", nextAvailable=True)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[Import] 节点注册到分类列表失败 [{new_name}]: {e}")
             name_map[old_name] = new_node
         except Exception as e:
             cmds.warning(f"创建节点失败 [{old_name}]: {e}")
