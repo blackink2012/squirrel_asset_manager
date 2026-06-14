@@ -955,6 +955,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._thumbnail_grid.dragDroppedOnViewport.connect(self._on_drag_dropped)
         self._thumbnail_grid.previewNodeRequested.connect(self._on_preview_node)
         self._thumbnail_grid.importZlightAsRenderer.connect(self._on_import_zlight_as_renderer)
+        self._thumbnail_grid.applyLightToSelectionRequested.connect(self._on_apply_light_to_selection)
 
         self._search_bar.searchChanged.connect(self._on_search)
         self._search_bar.tagFilterChanged.connect(self._on_search_tag_changed)
@@ -6147,6 +6148,80 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             import traceback
             traceback.print_exc()
             print(f"[ImportZlight] 导入失败: {e}")
+
+    def _on_apply_light_to_selection(self, zasset_path: str):
+        """将 zlight 参数应用到 Maya 场景中选中的灯光节点"""
+        import json, os
+        from squirrel_asset_manager.core.zasset_io import ZassetIO
+        from squirrel_asset_manager.core.light_io import (_dict_to_lightdata,
+                                                          apply_light_params_to_shape,
+                                                          _detect_renderer)
+        from squirrel_asset_manager.integration.import_executor import _copy_zlight_dependencies
+
+        try:
+            import maya.cmds as cmds
+
+            # ── 获取选中灯光 shape ──
+            selection = cmds.ls(selection=True, long=True) or []
+            light_shapes = []
+            for obj in selection:
+                ntype = cmds.nodeType(obj)
+                if cmds.getClassification(ntype, satisfies="light"):
+                    light_shapes.append(obj)
+                # 检查 transform 下的 shape
+                shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
+                for s in shapes:
+                    if cmds.getClassification(cmds.nodeType(s), satisfies="light"):
+                        light_shapes.append(s)
+
+            if not light_shapes:
+                print("[ApplyLight] 未选中任何灯光节点")
+                return
+
+            # ── 读取 zlight 数据 ──
+            all_names = ZassetIO.list_contents(zasset_path)
+            zlight_name = None
+            for n in all_names:
+                if n.endswith(".zlight") and os.path.dirname(n) == "":
+                    zlight_name = n
+                    break
+            if not zlight_name:
+                for n in all_names:
+                    if n.endswith(".zlight"):
+                        zlight_name = n
+                        break
+            if not zlight_name:
+                print(f"[ApplyLight] .zasset 不含 .zlight 文件")
+                return
+
+            zlight_data = json.loads(ZassetIO.read_file(zasset_path, zlight_name))
+
+            # ── 复制依赖文件 ──
+            meta_data = ZassetIO.read_meta(zasset_path) or {}
+            asset_id = meta_data.get("id", "")
+            asset_name = meta_data.get("name") or os.path.splitext(os.path.basename(zasset_path))[0]
+            zlight_data = _copy_zlight_dependencies(zlight_data, asset_name, asset_id, zasset_path)
+
+            # ── 解析灯光数据 ──
+            lights = zlight_data.get("lights", [])
+            if not lights:
+                print("[ApplyLight] zlight 无灯光数据")
+                return
+
+            renderer = _detect_renderer()
+            applied = 0
+            for light_dict in lights:
+                ld = _dict_to_lightdata(light_dict)
+                for shape in light_shapes:
+                    if apply_light_params_to_shape(shape, ld, renderer):
+                        applied += 1
+
+            print(f"[ApplyLight] 已应用 {applied} 处灯光参数 (from {os.path.basename(zasset_path)})")
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[ApplyLight] 应用失败: {e}")
 
     def _on_settings(self):
         """打开设置窗口（非模态单例）"""
