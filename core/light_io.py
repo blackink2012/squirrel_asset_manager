@@ -1008,16 +1008,20 @@ def _restore_node_network(shape_node: str, network: Dict[str, Dict],
                 continue
 
             connected = False
+            # 解析渲染器特定的贴图属性名
+            resolved_attr = _resolve_texture_connect_attr(dest_node, dest_attr, _detect_renderer())
             for dest_node in dest_nodes:
-                full_dest = f"{dest_node}.{dest_attr}"
-                # 直接尝试连接，不检查 objExists（属性可能被别名化）
-                try:
-                    cmds.connectAttr(full_src, full_dest, force=True)
-                    print(f"[LightIO] 连回灯光: {full_src} → {full_dest}")
-                    connected = True
+                for candidate_attr in (resolved_attr, dest_attr):
+                    full_dest = f"{dest_node}.{candidate_attr}"
+                    try:
+                        cmds.connectAttr(full_src, full_dest, force=True)
+                        print(f"[LightIO] 连回灯光: {full_src} → {full_dest}")
+                        connected = True
+                        break
+                    except Exception:
+                        pass
+                if connected:
                     break
-                except Exception:
-                    pass
 
             if not connected:
                 print(f"[LightIO] 无法连回灯光: {full_src} → {shape_node}.{dest_attr}")
@@ -1076,32 +1080,69 @@ def _restore_connected_files(shape_node: str, files: Dict[str, str], renderer: s
             print(f"[LightIO] 文件不存在，跳过: {file_path}")
             continue
 
-        # 解析属性名（iesProfile:xxx → 找 IES 属性）
         target_attr = attr_key
-        is_ies = False
         if attr_key.startswith("iesProfile:"):
             target_attr = attr_key.split(":", 1)[1]
-            is_ies = True
+
+        # ── 按渲染器+灯光类型解析正确的贴图连接属性名 ──
+        resolved = _resolve_texture_connect_attr(shape_node, target_attr, renderer)
 
         try:
             file_node = cmds.shadingNode("file", asTexture=True)
             cmds.setAttr(f"{file_node}.fileTextureName", file_path, type="string")
             cmds.setAttr(f"{file_node}.ignoreColorSpaceFileRules", True)
-            # 贴图设为 Raw，IES 也设为 Raw
             try:
                 cmds.setAttr(f"{file_node}.colorSpace", "Raw", type="string")
             except Exception:
                 pass
 
-            full_attr = f"{shape_node}.{target_attr}"
+            full_attr = f"{shape_node}.{resolved}"
             if cmds.objExists(full_attr):
                 cmds.connectAttr(f"{file_node}.outColor", full_attr, force=True)
-                kind = "IES" if is_ies else "贴图"
-                print(f"[LightIO] {kind}已连接: {file_path} → {full_attr}")
+                print(f"[LightIO] 贴图已连接: {file_path} → {full_attr}")
             else:
-                print(f"[LightIO] 属性不存在: {full_attr}")
+                # 回退：尝试原始属性名
+                fallback = f"{shape_node}.{target_attr}"
+                if cmds.objExists(fallback):
+                    cmds.connectAttr(f"{file_node}.outColor", fallback, force=True)
+                    print(f"[LightIO] 贴图已连接(回退): {file_path} → {fallback}")
+                else:
+                    print(f"[LightIO] 属性不存在: {full_attr} / {fallback}")
         except Exception as e:
             print(f"[LightIO] 文件连接失败 [{target_attr}]: {e}")
+
+
+def _resolve_texture_connect_attr(shape_node: str, generic_attr: str, renderer: str) -> str:
+    """根据渲染器和灯光类型，将通用属性名解析为实际的贴图连接属性名。
+
+    V-Ray 不同灯光类型使用不同的贴图属性：
+      VRayLightRectShape → rectTex（并设置 useRectTex=1）
+      VRayLightDomeShape → domeTex（并设置 useDomeTex=1）
+      VRayLightSphereShape → lightColor
+    """
+    if not _IN_MAYA:
+        return generic_attr
+
+    ntype = cmds.nodeType(shape_node)
+
+    # V-Ray 特定的贴图属性映射
+    _VRAY_TEX_ATTRS = {
+        "VRayLightRectShape":  ("rectTex",  "useRectTex"),
+        "VRayLightDomeShape":  ("domeTex",  "useDomeTex"),
+        "VRayLightSphereShape": ("lightColor", None),
+    }
+
+    if renderer == "vray" and ntype in _VRAY_TEX_ATTRS:
+        tex_attr, enable_attr = _VRAY_TEX_ATTRS[ntype]
+        # 开启贴图使用标志
+        if enable_attr:
+            try:
+                cmds.setAttr(f"{shape_node}.{enable_attr}", 1)
+            except Exception:
+                pass
+        return tex_attr
+
+    return generic_attr
 
 
 # ═══════════════════════════════════════════════════════════════
