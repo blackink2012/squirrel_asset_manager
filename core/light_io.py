@@ -358,12 +358,11 @@ def _lightdata_to_dict(ld: LightData) -> dict:
     """LightData → JSON 字典（清理空值/默认值）"""
     d = asdict(ld)
     d["transform"] = {
-        "translate": [round(v, 6) for v in ld.transform.translate],
-        "rotate":    [round(v, 6) for v in ld.transform.rotate],
-        "scale":     [round(v, 6) for v in ld.transform.scale],
+        "translate": [round(float(v), 6) for v in ld.transform.translate],
+        "rotate":    [round(float(v), 6) for v in ld.transform.rotate],
+        "scale":     [round(float(v), 6) for v in ld.transform.scale],
     }
-    # 移除零值/none 避免 JSON 臃肿
-    d["color"] = [round(v, 6) for v in ld.color]
+    d["color"] = [round(float(v), 6) for v in ld.color]
     return d
 
 
