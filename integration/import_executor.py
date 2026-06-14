@@ -1007,16 +1007,18 @@ def _set_node_file_path(node: str, attr: str, new_path: str):
 
 
 def _has_frame_pattern(path: str) -> bool:
-    return any(p in path for p in ("####", "##", "%04d", "%4d", "%0", "#"))
+    import re
+    return bool(re.search(r"#+|%04d|%4d|%0", path))
 
 
 def _resolve_frame_pattern_to_glob(path: str) -> str:
+    import re
     parts = path.rsplit(".", 1)
     if len(parts) == 2:
         name, ext = parts
-        for pat, glob_pat in [("####", "*"), ("##", "*"), ("%04d", "*"), ("%4d", "*"), ("%0", "*"), ("#", "*")]:
-            if pat in name:
-                return name.replace(pat, glob_pat) + "." + ext
+        name = re.sub(r"#+", "*", name)
+        name = re.sub(r"%04d|%4d|%0", "*", name)
+        return name + "." + ext
     return path
 
 
