@@ -321,6 +321,33 @@ def _extract_file_path(node: str, ntype: str) -> str:
     return ""
 
 
+def _scan_shape_file_attrs(shape_node: str, data: LightData):
+    """扫描灯光 shape 自身属性中的文件路径（如 ai_filename, iesFile 等）。
+
+    IES 光域网等文件路径通常直接存储在灯光属性值中，不走连接。
+    """
+    if not _IN_MAYA:
+        return
+    # 常见的 IES/文件路径属性名
+    file_attr_patterns = ("filename", "iesFile", "profile", "ai_filename", "aiFilename")
+    try:
+        for attr in cmds.listAttr(shape_node) or []:
+            if not any(attr.endswith(p) for p in file_attr_patterns):
+                continue
+            try:
+                val = cmds.getAttr(f"{shape_node}.{attr}")
+                if isinstance(val, str) and os.path.isfile(val):
+                    data.connections[attr] = {
+                        "node_type": "string_attr", "connected": False,
+                        "source_node": "", "source_attr": ""}
+                    data.connected_files[attr] = val
+                    print(f"[LightIO] 发现属性文件: {attr} = {val}")
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[LightIO] 属性文件扫描失败: {e}")
+
+
 # ═══════════════════════════════════════════════════════════════
 # 导出 — Maya → .zlight JSON
 # ═══════════════════════════════════════════════════════════════
@@ -436,6 +463,9 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
 
     # ── 收集连接的文件贴图/IES/光域网 ──
     _scan_connected_file_nodes(shape_node, data)
+
+    # ── 收集灯光自身属性中的文件路径（IES/光域网等非连接值）──
+    _scan_shape_file_attrs(shape_node, data)
 
     # ── 序列化完整上游节点网络（ZMETAL 方式）──
     try:
@@ -684,6 +714,8 @@ def _create_light(ld: LightData, renderer: str) -> Optional[str]:
     # 仅在没有完整 node_network 时才用 connected_files 简单恢复
     if ld.connected_files and not ld.node_network:
         _restore_connected_files(shape_node, ld.connected_files, renderer)
+        # 恢复灯光自身属性中的文件路径（IES 等非连接值）
+        _restore_shape_file_attrs(shape_node, ld.connections, ld.connected_files)
 
     # ── 重建上游节点网络（ZMETAL 方式）──
     if ld.node_network:
@@ -856,6 +888,27 @@ def _restore_node_network(shape_node: str, network: Dict[str, Dict],
                 print(f"[LightIO] 无法连回灯光: {full_src} → {shape_node}.{dest_attr}")
 
     print(f"[LightIO] 节点网络重建完成: {len(name_map)} 个节点")
+
+
+def _restore_shape_file_attrs(shape_node: str, connections: Dict, connected_files: Dict):
+    """恢复灯光自身属性中的文件路径（IES/光域网等直接值，非连接）。
+
+    对于 node_type == "string_attr" 的连接记录，将文件路径直接 setAttr 到
+    对应属性上（如 ai_filename）。
+    """
+    if not connections or not connected_files:
+        return
+    for attr_key, conn_info in connections.items():
+        if conn_info.get("node_type") != "string_attr":
+            continue
+        file_path = connected_files.get(attr_key)
+        if not file_path or not os.path.isfile(file_path):
+            continue
+        try:
+            cmds.setAttr(f"{shape_node}.{attr_key}", file_path, type="string")
+            print(f"[LightIO] 设置属性文件: {attr_key} = {file_path}")
+        except Exception as e:
+            print(f"[LightIO] 设置属性文件失败 [{attr_key}]: {e}")
 
 
 def _restore_connected_files(shape_node: str, files: Dict[str, str], renderer: str):
