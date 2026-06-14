@@ -954,7 +954,6 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._thumbnail_grid.updateAssetRequested.connect(self._on_update_asset)
         self._thumbnail_grid.dragDroppedOnViewport.connect(self._on_drag_dropped)
         self._thumbnail_grid.previewNodeRequested.connect(self._on_preview_node)
-        self._thumbnail_grid.createLightRequested.connect(self._on_create_light_from_grid)
         self._thumbnail_grid.importZlightAsRenderer.connect(self._on_import_zlight_as_renderer)
 
         self._search_bar.searchChanged.connect(self._on_search)
@@ -6097,23 +6096,6 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             import traceback
             print(f"[NodePreview] 启动失败: {e}")
             traceback.print_exc()
-
-    def _on_create_light_from_grid(self, light_type: str):
-        """从右键菜单通过 zlight 通用格式创建灯光（自动适配当前渲染器）"""
-        try:
-            from squirrel_asset_manager.core.light_io import LightData, _detect_renderer, _create_light
-
-            renderer = _detect_renderer()
-            ld = LightData(light_type=light_type)
-            xform = _create_light(ld, renderer)
-            if xform:
-                print(f"[CreateLight] 已创建: {xform} (type={light_type}, renderer={renderer})")
-            else:
-                print(f"[CreateLight] 创建失败: type={light_type}, renderer={renderer}")
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            print(f"[CreateLight] 异常: {e}")
 
     def _on_import_zlight_as_renderer(self, zasset_path: str, renderer: str):
         """以指定渲染器导入 zlight 灯光资产"""
