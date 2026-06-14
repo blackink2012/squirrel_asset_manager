@@ -570,6 +570,9 @@ def _copy_zlight_dependencies(zlight_data: dict, asset_name: str, asset_id: str)
         # hdr_path
         if light.get("hdr_path"):
             light["hdr_path"] = _copy_to_project(light["hdr_path"])
+        # ies_file
+        if light.get("ies_file"):
+            light["ies_file"] = _copy_to_project(light["ies_file"])
         # connected_files
         cf = light.get("connected_files", {})
         for attr_key, file_path in list(cf.items()):
