@@ -706,7 +706,14 @@ def create_material(material_name, textures, config, existing_shader=None):
         else:
             shader = cmds.shadingNode(material_type, asShader=True, name=material_name)
             sg = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=material_name + 'SG')
-            cmds.connectAttr(shader + '.outColor', sg + '.surfaceShader')
+            # rsStandardMaterial 等节点使用 .out 而非 .outColor
+            for out_attr in ('outColor', 'out'):
+                if cmds.objExists(shader + '.' + out_attr):
+                    cmds.connectAttr(shader + '.' + out_attr, sg + '.surfaceShader')
+                    break
+            else:
+                # 都不存在则尝试不连接（SG 可手动指定）
+                print(f"[PBR] 警告: {material_type} 无 outColor/out 输出属性")
 
         # 属性映射表
         all_mappings = config.get('material_property_mappings', {})
