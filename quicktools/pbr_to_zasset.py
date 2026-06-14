@@ -733,6 +733,12 @@ def create_material(material_name, textures, config, existing_shader=None):
                 print(f"[PBR] 节点已创建但属性不可用，跳过连接")
                 return shader, None
 
+            # 注册到 shader 列表（材质编辑器可见）
+            try:
+                cmds.connectAttr(shader + '.message', 'defaultShaderList1.s', nextAvailable=True)
+            except Exception:
+                pass
+
             sg = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=material_name + 'SG')
             # rsStandardMaterial 等节点使用 .out 而非 .outColor
             for out_attr in ('outColor', 'out'):
