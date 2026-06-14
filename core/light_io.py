@@ -1029,21 +1029,38 @@ def _restore_shape_file_attrs(shape_node: str, connections: Dict, connected_file
     """恢复灯光自身属性中的文件路径（IES/光域网等直接值，非连接）。
 
     对于 node_type == "string_attr" 的连接记录，将文件路径直接 setAttr 到
-    对应属性上（如 ai_filename）。
+    对应属性上。自动适配不同渲染器的 IES 属性名（aiFilename/iesFile/profile）。
     """
     if not connections or not connected_files:
         return
+    # 获取当前渲染器的 IES 属性名
+    renderer = _detect_renderer()
+    amap = _RENDERER_ATTR_MAP.get(renderer, {})
+    ies_attr = amap.get("ies_file", "")
+
     for attr_key, conn_info in connections.items():
         if conn_info.get("node_type") != "string_attr":
             continue
         file_path = connected_files.get(attr_key)
         if not file_path or not os.path.isfile(file_path):
             continue
-        try:
-            cmds.setAttr(f"{shape_node}.{attr_key}", file_path, type="string")
-            print(f"[LightIO] 设置属性文件: {attr_key} = {file_path}")
-        except Exception as e:
-            print(f"[LightIO] 设置属性文件失败 [{attr_key}]: {e}")
+        # 尝试多个候选属性名（原始名 + 当前渲染器的 IES 属性名）
+        candidates = [attr_key]
+        if ies_attr and ies_attr != attr_key:
+            candidates.append(ies_attr)
+        ok = False
+        for cand in candidates:
+            full = f"{shape_node}.{cand}"
+            if cmds.objExists(full):
+                try:
+                    cmds.setAttr(full, file_path, type="string")
+                    print(f"[LightIO] 设置属性文件: {cand} = {file_path}")
+                    ok = True
+                    break
+                except Exception as e:
+                    print(f"[LightIO] 设置属性文件失败 [{cand}]: {e}")
+        if not ok:
+            print(f"[LightIO] 未找到 IES 属性: {candidates} on {shape_node}")
 
 
 def _restore_connected_files(shape_node: str, files: Dict[str, str], renderer: str):
