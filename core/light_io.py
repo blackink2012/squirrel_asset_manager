@@ -209,6 +209,9 @@ _RENDERER_ATTR_MAP: Dict[str, Dict[str, Any]] = {
 def _scan_connected_file_nodes(shape_node: str, data: LightData):
     """扫描灯光 shape 上所有入连接，记录文件路径和节点信息。
 
+    使用 listConnections(connections=True, plugs=True) 直接获取所有
+    入连接的 (src_plug, dest_plug) 对，避免 listAttr 过滤器遗漏属性。
+
     Args:
         shape_node: Maya 灯光 shape 完整路径
         data: 要填充的 LightData
@@ -216,27 +219,60 @@ def _scan_connected_file_nodes(shape_node: str, data: LightData):
     if not _IN_MAYA:
         return
     try:
-        all_attrs = cmds.listAttr(shape_node, connectable=True) or []
-        for attr in all_attrs:
-            full_attr = f"{shape_node}.{attr}"
-            connections = cmds.listConnections(full_attr, source=True, destination=False, plugs=False) or []
-            for src_node in connections:
-                if not cmds.objExists(src_node):
-                    continue
-                ntype = cmds.nodeType(src_node)
+        # 直接获取所有入连接的 plug 对（含属性名）
+        conn_pairs = cmds.listConnections(shape_node, source=True, destination=False,
+                                           connections=True, plugs=True) or []
+        # 输出: [src_plug, dest_plug, src_plug, dest_plug, ...]
+        for i in range(0, len(conn_pairs), 2):
+            src_plug = conn_pairs[i]      # 如 "file1.outColor"
+            dest_plug = conn_pairs[i + 1]  # 如 "aiAreaLightShape1.sc"
 
-                # 记录所有连接
-                data.connections[attr] = {"node_type": ntype, "connected": True}
+            # 从 dest_plug 提取纯属性名
+            _, dest_attr = dest_plug.rsplit('.', 1)
+            # 从 src_plug 提取源节点名
+            src_node = src_plug.split('.', 1)[0]
 
-                # ── 尝试提取文件路径 ──
-                file_path = _extract_file_path(src_node, ntype)
-                if file_path and os.path.isfile(file_path):
-                    data.connected_files[attr] = file_path
-                    print(f"[LightIO] 发现连入文件: {attr} ← {ntype} → {file_path}")
-                else:
-                    print(f"[LightIO] 发现连接: {attr} ← {ntype}（非文件节点）")
+            if not cmds.objExists(src_node):
+                continue
+            ntype = cmds.nodeType(src_node)
+
+            # 记录所有连接
+            data.connections[dest_attr] = {"node_type": ntype, "connected": True}
+
+            # ── 尝试提取文件路径 ──
+            file_path = _extract_file_path(src_node, ntype)
+            if file_path and os.path.isfile(file_path):
+                data.connected_files[dest_attr] = file_path
+                print(f"[LightIO] 发现连入文件: {dest_attr} ← {ntype} → {file_path}")
+            else:
+                print(f"[LightIO] 发现连接: {dest_attr} ← {ntype}（非文件节点）")
     except Exception as e:
         print(f"[LightIO] 扫描连接失败: {e}")
+
+
+def get_connected_texture_files(shape_node: str) -> List[str]:
+    """获取灯光 shape 连接的所有贴图文件路径（用于导出时收集贴图到 zasset）。
+
+    返回文件路径列表。
+    """
+    paths = set()
+    if not _IN_MAYA:
+        return []
+    try:
+        conn_pairs = cmds.listConnections(shape_node, source=True, destination=False,
+                                           connections=True, plugs=True) or []
+        for i in range(0, len(conn_pairs), 2):
+            src_plug = conn_pairs[i]
+            src_node = src_plug.split('.', 1)[0]
+            if not cmds.objExists(src_node):
+                continue
+            ntype = cmds.nodeType(src_node)
+            file_path = _extract_file_path(src_node, ntype)
+            if file_path and os.path.isfile(file_path):
+                paths.add(file_path)
+    except Exception:
+        pass
+    return list(paths)
 
 
 def _extract_file_path(node: str, ntype: str) -> str:

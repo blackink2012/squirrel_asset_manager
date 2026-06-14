@@ -1263,6 +1263,10 @@ class ExportOrchestrator:
                 return False
 
             print(f"[Export::zlight] 找到 {len(shape_nodes)} 个灯光 shape: {[cmds.nodeType(s) for s in shape_nodes]}")
+
+            # 收集灯光连接的贴图文件到资产目录
+            _collect_zlight_textures(shape_nodes, asset_dir, safe_name)
+
             filepath = os.path.join(asset_dir, f"{safe_name}.zlight")
             return export_lights_to_json(shape_nodes, filepath)
 
@@ -1271,6 +1275,32 @@ class ExportOrchestrator:
             import traceback
             traceback.print_exc()
             return False
+
+
+def _collect_zlight_textures(shape_nodes, asset_dir, safe_name):
+    """收集灯光连接的贴图文件到 {asset_dir}/textures/{safe_name}/"""
+    import shutil
+    from squirrel_asset_manager.core.light_io import get_connected_texture_files
+
+    all_paths = set()
+    for shp in shape_nodes:
+        paths = get_connected_texture_files(shp)
+        all_paths.update(paths)
+
+    if not all_paths:
+        return
+
+    tex_dir = os.path.join(asset_dir, "textures", safe_name)
+    os.makedirs(tex_dir, exist_ok=True)
+    for fp in sorted(all_paths):
+        try:
+            dst = os.path.join(tex_dir, os.path.basename(fp)).replace("\\", "/")
+            if not os.path.isfile(dst):
+                shutil.copy2(fp, dst)
+            print(f"[Export::zlight] 贴图: {os.path.basename(fp)}")
+        except Exception as e:
+            print(f"[Export::zlight] 贴图复制失败 [{fp}]: {e}")
+
 
     def _stage_mcm(self, config: ExportConfig, asset_dir: str, safe_name: str) -> str:
         """导出 .mcm 材质→模型映射文件。
