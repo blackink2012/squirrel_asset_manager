@@ -247,8 +247,10 @@ def _scan_connected_file_nodes(shape_node: str, data: LightData):
                     continue
                 ntype = cmds.nodeType(src_node)
 
-                # 记录所有连接
-                data.connections[dest_attr] = {"node_type": ntype, "connected": True}
+                # 记录所有连接（包含源节点和源属性用于导入时重建）
+                data.connections[dest_attr] = {
+                    "node_type": ntype, "connected": True,
+                    "source_node": src_node, "source_attr": src_attr}
 
                 # ── 尝试提取文件路径 ──
                 file_path = _extract_file_path(src_node, ntype)
@@ -679,12 +681,13 @@ def _create_light(ld: LightData, renderer: str) -> Optional[str]:
         _set_hdr(shape_node, ld.hdr_path, amap["hdr_path"], renderer)
 
     # ── 恢复连接的贴图/IES 文件 ──
-    if ld.connected_files:
+    # 仅在没有完整 node_network 时才用 connected_files 简单恢复
+    if ld.connected_files and not ld.node_network:
         _restore_connected_files(shape_node, ld.connected_files, renderer)
 
     # ── 重建上游节点网络（ZMETAL 方式）──
     if ld.node_network:
-        _restore_node_network(shape_node, ld.node_network)
+        _restore_node_network(shape_node, ld.node_network, ld.connections)
 
     return xform
 
@@ -714,12 +717,14 @@ def _set_hdr(shape_node: str, hdr_path: str, attr_name: str, renderer: str):
         print(f"[LightIO] HDR 连接失败: {e}")
 
 
-def _restore_node_network(shape_node: str, network: Dict[str, Dict]):
+def _restore_node_network(shape_node: str, network: Dict[str, Dict],
+                          connections: Dict[str, Dict] = None):
     """从 ZMETAL 格式节点数据重建上游节点网络并连接到灯光。
 
     Args:
         shape_node: 目标灯光 shape 节点
         network: {node_name: {node_type, attrs}} 字典
+        connections: 灯光属性连接信息 {dest_attr: {source_node, source_attr, node_type}}
     """
     if not network:
         return
@@ -792,6 +797,24 @@ def _restore_node_network(shape_node: str, network: Dict[str, Dict]):
                     cmds.connectAttr(full_src, full_dest, force=True)
                 except Exception:
                     pass
+
+    # ── 第四步：将上游节点连回灯光 shape ──
+    if connections:
+        for dest_attr, conn_info in connections.items():
+            old_src = conn_info.get("source_node", "")
+            src_attr = conn_info.get("source_attr", "")
+            # 通过 name_map 映射到新创建的节点
+            src_new = name_map.get(old_src, old_src)
+            if not src_new or not cmds.objExists(src_new):
+                continue
+            full_src = f"{src_new}.{src_attr}"
+            full_dest = f"{shape_node}.{dest_attr}"
+            if cmds.objExists(full_src) and cmds.objExists(full_dest):
+                try:
+                    cmds.connectAttr(full_src, full_dest, force=True)
+                    print(f"[LightIO] 连回灯光: {full_src} → {full_dest}")
+                except Exception as e:
+                    print(f"[LightIO] 连回灯光失败 [{dest_attr}]: {e}")
 
     print(f"[LightIO] 节点网络重建完成: {len(name_map)} 个节点")
 
