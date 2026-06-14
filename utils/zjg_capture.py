@@ -905,12 +905,14 @@ def _get_pictures_folder():
 def show_capture_tool():
     """在 Maya 中显示截屏工具窗口"""
     global _capture_tool_instance
+    # 彻底销毁旧实例
     try:
-        if _capture_tool_instance and _capture_tool_instance.isVisible():
+        if _capture_tool_instance is not None:
             _capture_tool_instance.close()
             _capture_tool_instance.deleteLater()
-    except:
-        pass
+            _capture_tool_instance = None
+    except Exception:
+        _capture_tool_instance = None
     _capture_tool_instance = CaptureTool()
     _capture_tool_instance.show()
 
