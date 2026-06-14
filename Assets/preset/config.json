@@ -96,22 +96,6 @@
         ],
         "lights": [
             [
-                "directional",
-                "方向光"
-            ],
-            [
-                "point",
-                "点光源"
-            ],
-            [
-                "spot",
-                "聚光灯"
-            ],
-            [
-                "area",
-                "区域光"
-            ],
-            [
                 "studio",
                 "影棚灯光"
             ],
@@ -600,6 +584,10 @@
         {
             "name": "VRayMtl",
             "node_type": "VRayMtl"
+        },
+        {
+            "name": "rsStandardMaterial",
+            "node_type": "rsStandardMaterial"
         },
         {
             "name": "standardSurface",
