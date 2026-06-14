@@ -773,7 +773,7 @@ class CaptureTool(QtWidgets.QWidget):
         """将工具栏放置在选区矩形下方中央"""
         if not self.toolbar or self._toolbar_is_dragging:
             return
-        # 使用相对坐标计算工具栏位置
+        # 计算工具栏在 CaptureTool 内的相对位置
         center = self.selection_rect.center()
         toolbar_width = self.toolbar.width()
         x = center.x() - toolbar_width // 2
@@ -786,7 +786,9 @@ class CaptureTool(QtWidgets.QWidget):
             x = 5
         if x + toolbar_width > screen_rect.width():
             x = screen_rect.width() - toolbar_width - 5
-        self.toolbar.move(x, y)
+        # 将相对坐标转换为全局坐标（工具栏是独立窗口）
+        global_pos = self.mapToGlobal(QtCore.QPoint(x, y))
+        self.toolbar.move(global_pos.x(), global_pos.y())
         self.toolbar.raise_()
 
     def closeEvent(self, event):
