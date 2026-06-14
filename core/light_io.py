@@ -250,8 +250,8 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
             return False, None
         try:
             val = cmds.getAttr(full)
-            # 处理 list-of-list
-            if isinstance(val, list) and len(val) >= 3 and isinstance(val[0], list):
+            # 处理嵌套容器：((r,g,b),) → (r,g,b) 或 [[r,g,b]] → [r,g,b]
+            while isinstance(val, (list, tuple)) and len(val) == 1:
                 val = val[0]
             return True, val
         except Exception:
@@ -282,7 +282,8 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
         return False
 
     # ── 逐一提取每个通用参数 ──
-    _try_set_data("color", lambda v: setattr(data, "color", list(v)[:3] if isinstance(v, list) else [float(v)]*3))
+    _try_set_data("color", lambda v: setattr(data, "color",
+        [float(x) for x in v[:3]] if isinstance(v, (list, tuple)) and len(v) >= 3 else [float(v)]*3))
     _try_set_data("intensity", lambda v: setattr(data, "intensity", float(v)))
     _try_set_data("exposure", lambda v: setattr(data, "exposure", float(v)))
     _try_set_data("temperature", lambda v: setattr(data, "temperature", float(v) if float(v) > 0 else 6500.0))
@@ -362,7 +363,8 @@ def _lightdata_to_dict(ld: LightData) -> dict:
         "rotate":    [round(float(v), 6) for v in ld.transform.rotate],
         "scale":     [round(float(v), 6) for v in ld.transform.scale],
     }
-    d["color"] = [round(float(v), 6) for v in ld.color]
+    if isinstance(ld.color, (list, tuple)):
+        d["color"] = [round(float(v), 6) for v in ld.color]
     return d
 
 
