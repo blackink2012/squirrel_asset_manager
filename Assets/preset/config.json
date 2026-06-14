@@ -590,6 +590,10 @@
             "node_type": "RedshiftStandardMaterial"
         },
         {
+            "name": "RedshiftOpenPBR",
+            "node_type": "RedshiftOpenPBRMaterial"
+        },
+        {
             "name": "standardSurface",
             "node_type": "standardSurface"
         },
