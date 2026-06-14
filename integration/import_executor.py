@@ -533,10 +533,13 @@ def _import_zlight(zasset_path: str) -> bool:
 
 
 def _find_zlight_in_zip(names: list) -> str:
-    """在 .zasset 文件列表中查找 .zlight 文件"""
+    """在 .zasset 文件列表中查找 .zlight 文件（优先根目录）"""
+    # 优先根目录下的 .zlight
     for n in names:
-        if n.endswith(".zlight") and "node" not in os.path.dirname(n):
-            continue
+        if n.endswith(".zlight") and os.path.dirname(n) == "":
+            return n
+    # 回退：子目录中的
+    for n in names:
         if n.endswith(".zlight"):
             return n
     return ""
