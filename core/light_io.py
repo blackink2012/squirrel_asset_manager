@@ -286,6 +286,19 @@ def get_connected_texture_files(shape_node: str) -> List[str]:
                 paths.add(file_path)
     except Exception:
         pass
+    # 也扫描灯光自身属性中的文件路径（IES ai_filename 等）
+    try:
+        for attr in cmds.listAttr(shape_node) or []:
+            if not any(attr.endswith(p) for p in ("filename", "iesFile", "profile", "ai_filename", "aiFilename")):
+                continue
+            try:
+                val = cmds.getAttr(f"{shape_node}.{attr}")
+                if isinstance(val, str) and os.path.isfile(val):
+                    paths.add(val)
+            except Exception:
+                pass
+    except Exception:
+        pass
     return list(paths)
 
 
