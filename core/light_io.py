@@ -439,15 +439,12 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
     try:
         from squirrel_asset_manager.integration.zjg_exporter import _serialize_node
         net = {}
-        # 递归序列化所有上游连接的节点及其属性
-        attrs = cmds.listAttr(shape_node, connectable=True) or []
-        for attr in attrs:
-            full_attr = f"{shape_node}.{attr}"
-            incoming = cmds.listConnections(full_attr, source=True, destination=False, plugs=True) or []
-            for src_plug in incoming:
-                if '.' in src_plug:
-                    src_node, src_attr = src_plug.split('.', 1)
-                    _serialize_node(src_node, net)
+        # 直接用 plugs=True 获取所有源 plug（不依赖 listAttr 过滤器）
+        src_plugs = cmds.listConnections(shape_node, source=True, destination=False, plugs=True) or []
+        for src_plug in src_plugs:
+            if '.' in src_plug:
+                src_node, src_attr = src_plug.split('.', 1)
+                _serialize_node(src_node, net)
         if net:
             data.node_network = net
             print(f"[LightIO] 序列化上游节点网络: {len(net)} 个节点")
