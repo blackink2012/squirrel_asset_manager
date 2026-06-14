@@ -1,4 +1,4 @@
-"""导入执行器 — 统一入口"""
+"""导入执行�?�?统一入口"""
 
 import os
 from typing import List, Optional
@@ -33,10 +33,10 @@ FORMAT_INTERNAL_PATH = {
 
 
 def get_available_formats(zasset_path: str) -> List[str]:
-    """读取 .zasset 的 formats 字段，返回可导入的格式列表
+    """读取 .zasset �?formats 字段，返回可导入的格式列�?
 
-    排除贴图格式（png/jpg/exr/hdr等，由右键「导入贴图」菜单单独处理）、
-    以及 sicon/aicon 等非导入格式。
+    排除贴图格式（png/jpg/exr/hdr等，由右键「导入贴图」菜单单独处理）�?
+    以及 sicon/aicon 等非导入格式�?
     """
     from core.zasset_io import ZassetIO
     from .format_router import TEXTURE_FORMATS, HDR_FORMATS
@@ -49,7 +49,7 @@ def get_available_formats(zasset_path: str) -> List[str]:
         if not meta:
             return []
         raw = meta.get("formats") or meta.get("exported_formats", []) or []
-        # 排除非导入格式 + 贴图格式（由「导入贴图」菜单单独处理）
+        # 排除非导入格�?+ 贴图格式（由「导入贴图」菜单单独处理）
         # HDR 格式 (exr/hdr) 不排除，走通用导入
         skip = {"sicon", "aicon"} | (TEXTURE_FORMATS - HDR_FORMATS)
         return [f for f in raw if f not in skip]
@@ -58,17 +58,17 @@ def get_available_formats(zasset_path: str) -> List[str]:
 
 
 def import_asset(zasset_path: str, format_name: str) -> bool:
-    """统一导入入口 — 根据格式路由到对应的导入器
+    """统一导入入口 �?根据格式路由到对应的导入�?
 
     Args:
         zasset_path: .zasset 文件路径
-        format_name: 格式名（小写，如 "fbx", "exr", "zmetal"...）
+        format_name: 格式名（小写，如 "fbx", "exr", "zmetal"...�?
 
     Returns:
         成功返回 True
     """
     if not os.path.isdir(zasset_path):
-        print(f"[ImportExecutor] .zasset 不存在: {zasset_path}")
+        print(f"[ImportExecutor] .zasset 不存�? {zasset_path}")
         return False
 
     importer_type = get_importer_type(format_name)
@@ -76,7 +76,7 @@ def import_asset(zasset_path: str, format_name: str) -> bool:
 
     try:
         if importer_type in ("geometry", "proxy", "volume"):
-            # ma/mb 需要额外处理贴图路径替换
+            # ma/mb 需要额外处理贴图路径替�?
             if format_name in ("ma", "mb"):
                 return _import_ma_with_texture_rewrite(zasset_path, format_name)
             return import_file(zasset_path, format_name)
@@ -88,16 +88,16 @@ def import_asset(zasset_path: str, format_name: str) -> bool:
             return import_hdri(zasset_path, format_name)
 
         elif importer_type == "zmetal":
-            print(f"[ImportExecutor] zmetal 格式 — 创建节点网络")
+            print(f"[ImportExecutor] zmetal 格式 �?创建节点网络")
             ok, name_map = apply_zmetal_as_material(zasset_path)
             return name_map if ok else False
 
-        elif importer_type == "zoolight":
-            print(f"[ImportExecutor] zoolight 格式 — 创建灯光节点")
-            return _import_zoolight(zasset_path)
+        elif importer_type == "zlight":
+            print(f"[ImportExecutor] zlight 格式 �?创建灯光节点")
+            return _import_zlight(zasset_path)
 
         elif format_name == "mcm":
-            print(f"[ImportExecutor] mcm 格式 — 导入材质 + 按选择物体分配")
+            print(f"[ImportExecutor] mcm 格式 �?导入材质 + 按选择物体分配")
             return _import_mcm_with_selection(zasset_path)
 
         else:
@@ -200,7 +200,7 @@ def _import_ma_with_texture_rewrite(zasset_path: str, format_name: str) -> bool:
 
 
 def _import_mcm_with_selection(zasset_path: str) -> bool:
-    """右键导入 mcm：导入 zmetal + 用选择物体按点数匹配分配材质"""
+    """右键导入 mcm：导�?zmetal + 用选择物体按点数匹配分配材�?""
     import maya.cmds as cmds
     import json
     from core.zasset_io import ZassetIO
@@ -225,7 +225,7 @@ def _import_mcm_with_selection(zasset_path: str) -> bool:
         print(f"[MCMImport] 读取 MCM 失败: {e}")
         return False
 
-    # 3. 计算选中物体的三维数据（使用导入前保存的选择）
+    # 3. 计算选中物体的三维数据（使用导入前保存的选择�?
     def _get_mesh_info(obj):
         shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
         for shp in shapes:
@@ -243,14 +243,14 @@ def _import_mcm_with_selection(zasset_path: str) -> bool:
         if info:
             sel_info[obj] = info
         else:
-            print(f"[MCMImport] 选择物体 {obj} 未找到 mesh 数据")
+            print(f"[MCMImport] 选择物体 {obj} 未找�?mesh 数据")
     if not sel_info:
         cmds.warning(f"[MCMImport] 选中物体均无 mesh 数据")
         return False
 
-    # 5. 建立 MCM 旧物体名 → 选择物体名 的全局映射
+    # 5. 建立 MCM 旧物体名 �?选择物体�?的全局映射
     def _get_match_key(val):
-        """将 match_info 值转为可哈希的元组"""
+        """�?match_info 值转为可哈希的元�?""
         if isinstance(val, dict) and "vert" in val:
             return (val["vert"], val.get("face"), val.get("edge"))
         if isinstance(val, (int, float)):
@@ -261,7 +261,7 @@ def _import_mcm_with_selection(zasset_path: str) -> bool:
                 return (first, None, None)
         return None
 
-    # 按三维数据分组的 MCM 物体（按 Transform 去重：Shape 和 Orig 算同一个）
+    # 按三维数据分组的 MCM 物体（按 Transform 去重：Shape �?Orig 算同一个）
     mcm_grouped = []  # [(transform, mcm_obj, match_val)]
     seen_transforms = set()
     for mat_info in mcm_data.values():
@@ -277,7 +277,7 @@ def _import_mcm_with_selection(zasset_path: str) -> bool:
             seen_transforms.add(dedup_key)
             mcm_grouped.append((transform, mcm_obj, mcm_val))
 
-    # 为每个 MCM 物体在 sel_info 中找匹配（优先三维、回退仅顶点）
+    # 为每�?MCM 物体�?sel_info 中找匹配（优先三维、回退仅顶点）
     name_map_rev = {}
     unmatched_mcm = []
     for transform, mcm_obj, mcm_val in mcm_grouped:
@@ -306,13 +306,13 @@ def _import_mcm_with_selection(zasset_path: str) -> bool:
             unmatched_mcm.append(transform)
 
     for t in unmatched_mcm:
-        print(f"[MCMImport] 选择物中无匹配 {t}，跳过")
+        print(f"[MCMImport] 选择物中无匹�?{t}，跳�?)
     print(f"[MCMImport] MCM 匹配: {len(name_map_rev)}/{len(mcm_grouped)}")
 
-    # 6. 用全局映射分配材质：遍历 matched 对，每对赋予对应材质
+    # 6. 用全局映射分配材质：遍�?matched 对，每对赋予对应材质
     from ..integration.zjg_exporter import _assign_material_to_objects, _assign_face_materials
 
-    # 对每个 MCM 物体，找到它所属的所有材质
+    # 对每�?MCM 物体，找到它所属的所有材�?
     obj_to_mats = {}  # {mcm_obj_name: [(material_actual_name, face_assignments)]}
     for mat_name, mat_info in mcm_data.items():
         actual_name = name_map.get(mat_name, mat_name)
@@ -332,16 +332,16 @@ def _import_mcm_with_selection(zasset_path: str) -> bool:
                     mats_for_obj = obj_to_mats[key]
                     break
         if not mats_for_obj:
-            print(f"[MCMImport] {mcm_obj} → {sel_obj}: 未找到对应材质，跳过")
+            print(f"[MCMImport] {mcm_obj} �?{sel_obj}: 未找到对应材质，跳过")
             continue
-        # 查这个 MCM 物体有没有面级指定
+        # 查这�?MCM 物体有没有面级指�?
         has_face = any(fa for _, fa in mats_for_obj)
         if has_face:
-            # 将面级指定中的 mesh_name 和材质名都替换
+            # 将面级指定中�?mesh_name 和材质名都替�?
             merged_faces = {}
             for actual_name, fa in mats_for_obj:
                 for mesh_name, mat_faces in fa.items():
-                    # 将 MCM 中的原始材质名替换为 Maya 实际节点名
+                    # �?MCM 中的原始材质名替换为 Maya 实际节点�?
                     renamed = {}
                     for orig_mat, faces in mat_faces.items():
                         renamed[name_map.get(orig_mat, orig_mat)] = faces
@@ -350,26 +350,26 @@ def _import_mcm_with_selection(zasset_path: str) -> bool:
                 _assign_face_materials(merged_faces)
                 assigned_count += 1
         else:
-            # 无面级：将材质赋予 sel_obj
+            # 无面级：将材质赋�?sel_obj
             for actual_name, _ in mats_for_obj:
                 _assign_material_to_objects(actual_name, [sel_obj])
                 assigned_count += 1
 
-    print(f"[MCMImport] 已分配 {assigned_count} 个材质 → {len(name_map_rev)} 个匹配物体")
+    print(f"[MCMImport] 已分�?{assigned_count} 个材�?�?{len(name_map_rev)} 个匹配物�?)
     return True
 
 
 def apply_zmetal_as_material(zasset_path: str):
-    """从 .zasset 中提取 node.zmetal 并在 Maya 中创建材质网络。
+    """�?.zasset 中提�?node.zmetal 并在 Maya 中创建材质网络�?
 
-    自动处理：
-      - 提取 textures/ 到工程 sourceimages/squirrel_asset/{资产名}/
-      - 替换 file node 的 fileTextureName 指向新路径
+    自动处理�?
+      - 提取 textures/ 到工�?sourceimages/squirrel_asset/{资产名}/
+      - 替换 file node �?fileTextureName 指向新路�?
       - 委托 zjg_exporter._radar_import_single_file 创建节点
       - 多精度贴图支持：导入时弹出精度选择
 
     Returns:
-        (success, name_map) — success 为 True/False，name_map 为旧名→新名映射
+        (success, name_map) �?success �?True/False，name_map 为旧名→新名映射
     """
     import json
     import shutil
@@ -377,7 +377,7 @@ def apply_zmetal_as_material(zasset_path: str):
     from core.zasset_io import ZassetIO
 
     if not os.path.isdir(zasset_path):
-        print(f"[ImportExecutor] .zasset 不存在: {zasset_path}")
+        print(f"[ImportExecutor] .zasset 不存�? {zasset_path}")
         return False, {}
 
     try:
@@ -393,12 +393,12 @@ def apply_zmetal_as_material(zasset_path: str):
 
         zmetal_name = _find_zmetal_in_zip(all_names)
         if not zmetal_name:
-            print(f"[ImportExecutor] .zasset 不含 .zmetal 文件 (该资产可能由快捷工具导出，不含节点网络数据)")
+            print(f"[ImportExecutor] .zasset 不含 .zmetal 文件 (该资产可能由快捷工具导出，不含节点网络数�?")
             return False, {}
         zmetal_data = json.loads(ZassetIO.read_file(zasset_path, zmetal_name))
         nodes_data = zmetal_data.get("nodes", {})
 
-        # ── 多精度贴图检测 ──
+        # ── 多精度贴图检�?──
         resolutions = meta_data.get("resolutions", []) if meta_data else []
         selected_resolution = None
         if len(resolutions) > 1:
@@ -418,14 +418,14 @@ def apply_zmetal_as_material(zasset_path: str):
             # 源文件目录：不拷贝、不修改路径
             pass
         elif tex_policy == "asset_directory":
-            # 当前资产目录：直接指向 .zasset 内的贴图
+            # 当前资产目录：直接指�?.zasset 内的贴图
             zasset_abs = os.path.abspath(zasset_path).replace("\\", "/")
             for name in tex_files:
                 rel = name[len("textures/"):]
                 tex_path_map[name] = f"{zasset_abs}/textures/{rel}"
         else:
             # copy_to_project：拷贝贴图到工程
-            # 如果有多精度，只提取选中精度的贴图
+            # 如果有多精度，只提取选中精度的贴�?
             filtered = tex_files
             if selected_resolution:
                 filtered = [n for n in filtered if n.startswith(f"textures/{selected_resolution}/")]
@@ -450,7 +450,7 @@ def apply_zmetal_as_material(zasset_path: str):
                     with open(target_path, 'wb') as f:
                         f.write(ZassetIO.read_file(zasset_path, name))
                     tex_path_map[name] = target_path
-                    print(f"[TextureCopy] {name} → {target_path}")
+                    print(f"[TextureCopy] {name} �?{target_path}")
 
         abc_inner = [n for n in all_names if n.endswith(".abc") and not n.startswith("textures/")]
         if abc_inner:
@@ -460,7 +460,7 @@ def apply_zmetal_as_material(zasset_path: str):
             abc_target = os.path.join(abc_target_dir, f"{asset_name}.abc")
             with open(abc_target, 'wb') as f:
                 f.write(ZassetIO.read_file(zasset_path, abc_inner_path))
-            print(f"[ImportExecutor] abc 已提取: {abc_target}")
+            print(f"[ImportExecutor] abc 已提�? {abc_target}")
 
         # ── 替换 JSON 中的 fileTextureName ──
         if tex_policy != "source_directory":
@@ -477,7 +477,7 @@ def apply_zmetal_as_material(zasset_path: str):
         os.unlink(tmp_path)  # 清理临时文件
 
         if count > 0:
-            print(f"[ImportExecutor] 已创建 {count} 个节点 (from {os.path.basename(zasset_path)})")
+            print(f"[ImportExecutor] 已创�?{count} 个节�?(from {os.path.basename(zasset_path)})")
             return True, name_map
         return False, {}
 
@@ -488,35 +488,35 @@ def apply_zmetal_as_material(zasset_path: str):
         return False
 
 
-def _import_zoolight(zasset_path: str) -> bool:
-    """从 .zasset 中提取 node.zoolight 并创建渲染器灯光节点。
+def _import_zlight(zasset_path: str) -> bool:
+    """�?.zasset 中提�?node.zlight 并创建渲染器灯光节点�?
 
-    自动检测当前渲染器，根据通用灯光参数创建对应灯光。
+    自动检测当前渲染器，根据通用灯光参数创建对应灯光�?
     """
     import json, tempfile
     from core.zasset_io import ZassetIO
 
     try:
         all_names = ZassetIO.list_contents(zasset_path)
-        zoolight_name = _find_zoolight_in_zip(all_names)
-        if not zoolight_name:
-            print(f"[ImportExecutor] .zasset 不含 .zoolight 文件")
+        zlight_name = _find_zlight_in_zip(all_names)
+        if not zlight_name:
+            print(f"[ImportExecutor] .zasset 不含 .zlight 文件")
             return False
 
-        zoolight_data = json.loads(ZassetIO.read_file(zasset_path, zoolight_name))
+        zlight_data = json.loads(ZassetIO.read_file(zasset_path, zlight_name))
 
-        # 写入临时文件供 light_io 解析
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zoolight")
+        # 写入临时文件�?light_io 解析
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zlight")
         with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
-            json.dump(zoolight_data, f, indent=2, ensure_ascii=False)
+            json.dump(zlight_data, f, indent=2, ensure_ascii=False)
 
         from squirrel_asset_manager.core.light_io import import_lights_from_json
         count, created = import_lights_from_json(tmp_path)
         os.unlink(tmp_path)
 
         if count > 0:
-            print(f"[ImportExecutor] 已创建 {count} 个灯光 (from {os.path.basename(zasset_path)})")
-            # 选中创建的灯光
+            print(f"[ImportExecutor] 已创�?{count} 个灯�?(from {os.path.basename(zasset_path)})")
+            # 选中创建的灯�?
             try:
                 import maya.cmds as cmds
                 cmds.select(created, replace=True)
@@ -526,24 +526,24 @@ def _import_zoolight(zasset_path: str) -> bool:
         return False
 
     except Exception as e:
-        print(f"[ImportExecutor] zoolight 灯光创建失败: {e}")
+        print(f"[ImportExecutor] zlight 灯光创建失败: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
-def _find_zoolight_in_zip(names: list) -> str:
-    """在 .zasset 文件列表中查找 .zoolight 文件"""
+def _find_zlight_in_zip(names: list) -> str:
+    """�?.zasset 文件列表中查�?.zlight 文件"""
     for n in names:
-        if n.endswith(".zoolight") and "node" not in os.path.dirname(n):
+        if n.endswith(".zlight") and "node" not in os.path.dirname(n):
             continue
-        if n.endswith(".zoolight"):
+        if n.endswith(".zlight"):
             return n
     return ""
 
 
 def _get_texture_target_dir(asset_name: str, asset_id: str = "") -> str:
-    """计算贴图目标目录：{sourceimages}/squirrel_asset/{资产名}_{ID后4位}/"""
+    """计算贴图目标目录：{sourceimages}/squirrel_asset/{资产名}_{ID�?位}/"""
     suffix = f"_{asset_id[-4:]}" if len(asset_id) >= 4 else ""
     try:
         import maya.cmds as cmds
@@ -561,24 +561,24 @@ def _get_texture_target_dir(asset_name: str, asset_id: str = "") -> str:
 
 
 def _get_abc_cache_dir(asset_name: str, asset_id: str = "") -> str:
-    """计算 abc 缓存目录：{工程}/cache/alembic/squirrel_asset/{资产名}_{ID后4位}/"""
+    """计算 abc 缓存目录：{工程}/cache/alembic/squirrel_asset/{资产名}_{ID�?位}/"""
     suffix = f"_{asset_id[-4:]}" if len(asset_id) >= 4 else ""
     ws_root = _get_ws_root()
     return os.path.join(ws_root, "cache", "alembic", "squirrel_asset", f"{asset_name}{suffix}")
 
 
 def _get_proxy_cache_dir(asset_name: str, asset_id: str = "") -> str:
-    """计算代理缓存目录：{工程}/cache/squirrel_asset/{资产名}_{ID后4位}/"""
+    """计算代理缓存目录：{工程}/cache/squirrel_asset/{资产名}_{ID�?位}/"""
     suffix = f"_{asset_id[-4:]}" if len(asset_id) >= 4 else ""
     ws_root = _get_ws_root()
     return os.path.join(ws_root, "cache", "squirrel_asset", f"{asset_name}{suffix}")
 
 
 def import_variant_geometry(zasset_path: str, version: str = None, lod: str = None) -> bool:
-    """导入指定变体的几何体到 Maya 场景。
+    """导入指定变体的几何体�?Maya 场景�?
 
     Args:
-        zasset_path: .zasset 文件夹路径
+        zasset_path: .zasset 文件夹路�?
         version: 版本 id（如 "v1"），为空使用默认版本
         lod: LOD id（如 "lod0"），为空使用默认 LOD
 
@@ -591,14 +591,14 @@ def import_variant_geometry(zasset_path: str, version: str = None, lod: str = No
     try:
         import maya.cmds as cmds
     except ImportError:
-        print("[VariantImport] 未在 Maya 环境中运行")
+        print("[VariantImport] 未在 Maya 环境中运�?)
         return False
 
     if not os.path.isdir(zasset_path):
-        print(f"[VariantImport] .zasset 不存在: {zasset_path}")
+        print(f"[VariantImport] .zasset 不存�? {zasset_path}")
         return False
 
-    # 解析几何体路径
+    # 解析几何体路�?
     geom_rel = ZassetIO.resolve_geometry(zasset_path, version=version, lod=lod)
     if not geom_rel:
         print(f"[VariantImport] 未找到变体几何体: version={version}, lod={lod}")
@@ -610,9 +610,9 @@ def import_variant_geometry(zasset_path: str, version: str = None, lod: str = No
         return False
 
     ext = os.path.splitext(geom_rel)[1].lower().lstrip(".")
-    print(f"[VariantImport] 导入变体几何体: {geom_rel} ({ext})")
+    print(f"[VariantImport] 导入变体几何�? {geom_rel} ({ext})")
 
-    # 读取贴图映射（用于 .ma 文件的贴图路径替换）
+    # 读取贴图映射（用�?.ma 文件的贴图路径替换）
     meta = ZassetIO.read_meta(zasset_path)
     texture_map = meta.get("texture_map", {}) if isinstance(meta, dict) else {}
     tex_path_map = {}
@@ -642,7 +642,7 @@ def import_variant_geometry(zasset_path: str, version: str = None, lod: str = No
             tex_path_map[name] = f"{zasset_abs}/textures/{rel}"
 
     if ext == "ma":
-        # .ma 文件：需要贴图路径替换
+        # .ma 文件：需要贴图路径替�?
         before_file_nodes = set(cmds.ls(type="file") or [])
         cmds.file(geom_full, i=True, ignoreVersion=True,
                   preserveReferences=True, mergeNamespacesOnClash=False, namespace=":")
@@ -659,7 +659,7 @@ def import_variant_geometry(zasset_path: str, version: str = None, lod: str = No
             asset_id = meta.get("id", "") if meta else ""
             _redirect_dependency_paths(zasset_path, asset_name, asset_id)
     elif ext in ("abc", "usd", "usda", "usdc", "glb", "gltf"):
-        # 缓存格式：复制到工程缓存目录后导入
+        # 缓存格式：复制到工程缓存目录后导�?
         _import_variant_to_cache(zasset_path, geom_full, ext, meta)
     else:
         cmds.file(geom_full, i=True, ignoreVersion=True,
@@ -670,13 +670,13 @@ def import_variant_geometry(zasset_path: str, version: str = None, lod: str = No
 
 
 def import_variant_material(zasset_path: str, version: str = None) -> bool:
-    """导入变体版本的材质到 Maya 场景。
+    """导入变体版本的材质到 Maya 场景�?
 
-    优先使用 variants/{version}/node.zmetal，不存在则回退到根 node.zmetal。
+    优先使用 variants/{version}/node.zmetal，不存在则回退到根 node.zmetal�?
 
     Args:
-        zasset_path: .zasset 文件夹路径
-        version: 版本 id（如 "v2"），为空使用根材质
+        zasset_path: .zasset 文件夹路�?
+        version: 版本 id（如 "v2"），为空使用根材�?
 
     Returns:
         成功返回 True
@@ -686,7 +686,7 @@ def import_variant_material(zasset_path: str, version: str = None) -> bool:
     try:
         import maya.cmds as cmds
     except ImportError:
-        print("[VariantMaterial] 未在 Maya 环境中运行")
+        print("[VariantMaterial] 未在 Maya 环境中运�?)
         return False
 
     if not os.path.isdir(zasset_path):
@@ -695,7 +695,7 @@ def import_variant_material(zasset_path: str, version: str = None) -> bool:
     # 解析材质路径
     mat_rel = ZassetIO.resolve_material(zasset_path, version=version)
     if not mat_rel:
-        print(f"[VariantMaterial] 未找到材质: version={version}")
+        print(f"[VariantMaterial] 未找到材�? version={version}")
         return False
 
     mat_full = os.path.join(zasset_path, mat_rel)
@@ -757,7 +757,7 @@ def import_variant_material(zasset_path: str, version: str = None) -> bool:
         os.unlink(tmp_path)
 
         if count > 0:
-            print(f"[VariantMaterial] 已创建 {count} 个节点 (from {mat_rel})")
+            print(f"[VariantMaterial] 已创�?{count} 个节�?(from {mat_rel})")
             return True
         return False
 
@@ -787,7 +787,7 @@ def _import_variant_to_cache(zasset_path: str, geom_full: str, fmt: str, meta: d
 
     cache_path = os.path.join(cache_dir, os.path.basename(geom_full))
     shutil.copy2(geom_full, cache_path)
-    print(f"[VariantImport] 缓存到: {cache_path}")
+    print(f"[VariantImport] 缓存�? {cache_path}")
 
     before = set(cmds.ls(assemblies=True, long=True))
     cmds.file(cache_path, i=True, ignoreVersion=True,
@@ -800,7 +800,7 @@ def _import_variant_to_cache(zasset_path: str, geom_full: str, fmt: str, meta: d
 
 
 def _get_ws_root() -> str:
-    """获取 Maya 工程根目录"""
+    """获取 Maya 工程根目�?""
     try:
         import maya.cmds as cmds
         ws_root = cmds.workspace(q=True, rd=True) or ""
@@ -812,19 +812,19 @@ def _get_ws_root() -> str:
 
 def _replace_file_texture_paths(before_file_nodes: set, tex_path_map: dict,
                                 texture_map: dict = None):
-    """导入后用 texture_map 精确匹配贴图路径。
+    """导入后用 texture_map 精确匹配贴图路径�?
 
-    用 meta.json 的 texture_map（原始绝对路径→内部路径）链式查找：
-    原始路径 → 内部路径 → 磁盘路径。无需材质名、无需 try-error。
+    �?meta.json �?texture_map（原始绝对路径→内部路径）链式查找：
+    原始路径 �?内部路径 �?磁盘路径。无需材质名、无需 try-error�?
     
-    回退策略：当 texture_map 无匹配时，用文件名（basename）匹配。
+    回退策略：当 texture_map 无匹配时，用文件名（basename）匹配�?
     """
     if not tex_path_map:
         return
     import maya.cmds as cmds
     import os
 
-    # 构建原始路径→磁盘路径映射（texture_map + tex_path_map 链式查找）
+    # 构建原始路径→磁盘路径映射（texture_map + tex_path_map 链式查找�?
     orig_to_disk = {}
     if texture_map:
         for orig_path, zip_rel in texture_map.items():
@@ -832,7 +832,7 @@ def _replace_file_texture_paths(before_file_nodes: set, tex_path_map: dict,
             if zip_rel in tex_path_map:
                 orig_to_disk[norm_orig] = tex_path_map[zip_rel]
     
-    # 构建 filename → 磁盘路径映射（回退用）
+    # 构建 filename �?磁盘路径映射（回退用）
     name_to_disk = {}
     for zip_rel, disk_path in tex_path_map.items():
         basename = os.path.basename(zip_rel.replace("\\", "/"))
@@ -855,13 +855,13 @@ def _replace_file_texture_paths(before_file_nodes: set, tex_path_map: dict,
             
             if disk_path:
                 cmds.setAttr(fn + ".fileTextureName", disk_path, type="string")
-                print(f"[FileTextureReplace] {fn}: {old} → {disk_path}")
+                print(f"[FileTextureReplace] {fn}: {old} �?{disk_path}")
         except Exception:
             pass
 
 
 def _get_texture_import_policy() -> str:
-    """读取贴图导入策略设置。
+    """读取贴图导入策略设置�?
 
     Returns:
         "copy_to_project" | "asset_directory" | "source_directory"
@@ -881,23 +881,23 @@ def _get_texture_import_policy() -> str:
 
 
 def _rewrite_texture_paths_in_json(nodes_data: dict, tex_path_map: dict):
-    """扫描 JSON 中所有 file 节点，将 fileTextureName 从内部路径替换为磁盘路径
+    """扫描 JSON 中所�?file 节点，将 fileTextureName 从内部路径替换为磁盘路径
 
-    zmetal JSON 中的 fileTextureName 已改为 textures/{材质名}/{文件名}，
-    直接用全路径匹配。
+    zmetal JSON 中的 fileTextureName 已改�?textures/{材质名}/{文件名}�?
+    直接用全路径匹配�?
 
-    回退策略：无精确匹配时，提取文件名（basename）匹配。
+    回退策略：无精确匹配时，提取文件名（basename）匹配�?
     """
     import os
 
-    # 构建 basename → 磁盘路径映射（回退用）
+    # 构建 basename �?磁盘路径映射（回退用）
     name_to_disk = {}
     for zip_rel, disk_path in tex_path_map.items():
         basename = os.path.basename(zip_rel.replace("\\", "/"))
         if basename not in name_to_disk:
             name_to_disk[basename] = disk_path
 
-    # 构建全路径 → 磁盘路径的映射
+    # 构建全路�?�?磁盘路径的映�?
     for node_name, info in nodes_data.items():
         if info.get("node_type") != "file":
             continue
@@ -909,19 +909,19 @@ def _rewrite_texture_paths_in_json(nodes_data: dict, tex_path_map: dict):
         # 精确匹配 zmetal JSON 中已存为 textures/{材质名}/{文件名}
         if old_val in tex_path_map:
             ftn["value"] = tex_path_map[old_val]
-            print(f"[TextureReplace] {node_name}: {old_val} → {tex_path_map[old_val]}")
+            print(f"[TextureReplace] {node_name}: {old_val} �?{tex_path_map[old_val]}")
         else:
             # 回退：正则提取文件名匹配
             old_basename = os.path.basename(old_val.replace("\\", "/"))
             if old_basename in name_to_disk:
                 ftn["value"] = name_to_disk[old_basename]
-                print(f"[TextureReplace] {node_name}: {old_val} → {name_to_disk[old_basename]} (basename fallback)")
+                print(f"[TextureReplace] {node_name}: {old_val} �?{name_to_disk[old_basename]} (basename fallback)")
 
 
 def _find_zmetal_in_zip(all_names: list) -> Optional[str]:
-    """在 .zasset 文件列表中查找 .zmetal 文件
+    """�?.zasset 文件列表中查�?.zmetal 文件
 
-    优先返回 node.zmetal，其次任意 .zmetal 文件。
+    优先返回 node.zmetal，其次任�?.zmetal 文件�?
     """
     if "node.zmetal" in all_names:
         return "node.zmetal"
@@ -932,7 +932,7 @@ def _find_zmetal_in_zip(all_names: list) -> Optional[str]:
 
 
 def _select_resolution_dialog(resolutions, default_res):
-    """弹出 Maya 对话框让用户选择导入精度，返回选中精度或 None（取消）"""
+    """弹出 Maya 对话框让用户选择导入精度，返回选中精度�?None（取消）"""
     import maya.cmds as cmds
     
     if not resolutions:
@@ -978,9 +978,9 @@ def _select_resolution_dialog(resolutions, default_res):
     return default_res
 
 
-# ═══════════════════════════════════════════════════════════════
-# 依赖文件导入重定向
-# ═══════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════�?
+# 依赖文件导入重定�?
+# ══════════════════════════════════════════════════════════════�?
 
 def _get_dependency_import_policy() -> str:
     try:
@@ -1114,7 +1114,7 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
 
     associated_dir = os.path.join(zasset_path, "associated")
     if not os.path.isdir(associated_dir):
-        print(f"[DepRedirect] 无 associated/ 目录，跳过")
+        print(f"[DepRedirect] �?associated/ 目录，跳�?)
         return
 
     zasset_abs = os.path.abspath(zasset_path).replace("\\", "/")
@@ -1153,7 +1153,7 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
         print(f"[DepRedirect] 无依赖文件需要重定向")
         return
 
-    print(f"[DepRedirect] 策略={policy}, 待重定向 {len(basename_to_target)} 个文件")
+    print(f"[DepRedirect] 策略={policy}, 待重定向 {len(basename_to_target)} 个文�?)
 
     for node_type, attr_names in _NODE_TYPE_ATTRS:
         nodes = cmds.ls(type=node_type) or []
@@ -1194,7 +1194,7 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
 
             try:
                 _set_node_file_path(node, found_attr, new_path)
-                print(f"[DepRedirect] {node}.{found_attr}: {old_path} → {new_path}")
+                print(f"[DepRedirect] {node}.{found_attr}: {old_path} �?{new_path}")
             except Exception as e:
                 print(f"[DepRedirect] 设置 {node}.{found_attr} 失败: {e}")
 
@@ -1226,7 +1226,7 @@ def _redirect_dependency_paths(zasset_path: str, asset_name: str = "", asset_id:
 
             try:
                 cmds.file(new_path, loadReference=rn)
-                print(f"[DepRedirect] reference {rn}: {old_path} → {new_path}")
+                print(f"[DepRedirect] reference {rn}: {old_path} �?{new_path}")
             except Exception as e:
                 print(f"[DepRedirect] 替换引用 {rn} 失败: {e}")
 
