@@ -1482,12 +1482,15 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         menu = QtWidgets.QMenu(self)
         menu.setStyleSheet(_get_sub_style(font_size))
 
-        # ── 导入始终在最上 ──
+        # ── 导入始终在最上（贴图分类除外：贴图通过子菜单导入）──
         json_path = mat.get('json_path', '')
         import_actions = {}
         import_action = None
         zlight_renderer = None  # (action, renderer_name) for zlight
-        if json_path and json_path.endswith('.zasset'):
+        if sub_lib == 'textures':
+            # 贴图：不显示通用导入，由下方「导入贴图」子菜单处理
+            pass
+        elif json_path and json_path.endswith('.zasset'):
             from ..integration.import_executor import get_available_formats
             formats = get_available_formats(json_path)
             has_zlight = "zlight" in formats
