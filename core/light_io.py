@@ -55,6 +55,10 @@ class LightData:
 
     hdr_path: str = ""               # dome 的 HDR 贴图路径
 
+    # ── 连接的贴图/IES/光域网 ──
+    # {"color": "C:/tex/hdr.hdr", "iesProfile": "C:/ies/light.ies", ...}
+    connected_files: Dict[str, str] = field(default_factory=dict)
+
     # ── 变换 ──
     transform: LightTransform = field(default_factory=LightTransform)
 
@@ -198,6 +202,58 @@ _RENDERER_ATTR_MAP: Dict[str, Dict[str, Any]] = {
 }
 
 
+def _scan_connected_file_nodes(shape_node: str, data: LightData):
+    """扫描灯光 shape 上所有连接到 file 节点或 IES 节点的属性，记录文件路径。
+
+    Args:
+        shape_node: Maya 灯光 shape 完整路径
+        data: 要填充的 LightData
+    """
+    if not _IN_MAYA:
+        return
+    try:
+        # 列出所有从 shape 出去的连接
+        all_attrs = cmds.listAttr(shape_node, connectable=True) or []
+        for attr in all_attrs:
+            full_attr = f"{shape_node}.{attr}"
+            connections = cmds.listConnections(full_attr, source=True, destination=False, plugs=False) or []
+            for src_node in connections:
+                if not cmds.objExists(src_node):
+                    continue
+                ntype = cmds.nodeType(src_node)
+                # file 节点 → 贴图/HDR
+                if ntype == "file":
+                    try:
+                        fpath = cmds.getAttr(f"{src_node}.fileTextureName")
+                        if fpath and os.path.isfile(fpath):
+                            data.connected_files[attr] = fpath
+                            print(f"[LightIO] 发现连入贴图: {attr} ← {fpath}")
+                    except Exception:
+                        pass
+                # VRayIES / RedshiftIES → IES 光域网
+                elif ntype in ("VRayLightIESShape", "RedshiftIESLight"):
+                    try:
+                        ipath = cmds.getAttr(f"{src_node}.iesFile")
+                        if ipath and os.path.isfile(ipath):
+                            data.connected_files[f"iesProfile:{attr}"] = ipath
+                            print(f"[LightIO] 发现 IES: {attr} ← {ipath}")
+                    except Exception:
+                        pass
+                # IES 文件路径直接存在属性上（Arnold photometric）
+                elif "IES" in ntype.upper() or "PHOTOMETRIC" in ntype.upper():
+                    for ies_attr in ("iesFile", "profile", "aiFilename"):
+                        try:
+                            ipath = cmds.getAttr(f"{src_node}.{ies_attr}")
+                            if ipath and isinstance(ipath, str) and os.path.isfile(ipath):
+                                data.connected_files[f"iesProfile:{attr}"] = ipath
+                                print(f"[LightIO] 发现 IES: {attr} ← {ipath}")
+                                break
+                        except Exception:
+                            pass
+    except Exception as e:
+        print(f"[LightIO] 扫描连接文件失败: {e}")
+
+
 # ═══════════════════════════════════════════════════════════════
 # 导出 — Maya → .zlight JSON
 # ═══════════════════════════════════════════════════════════════
@@ -300,7 +356,6 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
 
     # ── 额外属性：记录尺寸/形状信息（area light 的宽高）──
     if light_type == "area":
-        # 尝试读 Arnold 的 width/height 或其他尺寸参数
         for attr in ("width", "sizeX", "u_size"):
             exists, val = _read_attr_val(attr)
             if exists and val is not None:
@@ -311,6 +366,9 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
             if exists and val is not None:
                 data.transform.scale[1] = float(val)
                 break
+
+    # ── 收集连接的文件贴图/IES/光域网 ──
+    _scan_connected_file_nodes(shape_node, data)
 
     return data
 
@@ -363,6 +421,8 @@ def _lightdata_to_dict(ld: LightData) -> dict:
     }
     if isinstance(ld.color, (list, tuple)):
         d["color"] = [round(float(v), 6) for v in ld.color]
+    if ld.connected_files:
+        d["connected_files"] = ld.connected_files
     return d
 
 
@@ -422,6 +482,7 @@ def _dict_to_lightdata(d: dict) -> LightData:
         dropoff=d.get("dropoff", 0.0),
         angular_diameter=d.get("angular_diameter", 0.53),
         hdr_path=d.get("hdr_path", ""),
+        connected_files=d.get("connected_files", {}),
         transform=LightTransform(
             translate=t.get("translate", [0.0, 0.0, 0.0]),
             rotate=t.get("rotate", [0.0, 0.0, 0.0]),
@@ -530,6 +591,10 @@ def _create_light(ld: LightData, renderer: str) -> Optional[str]:
     if ld.light_type == "dome" and ld.hdr_path and amap.get("hdr_path"):
         _set_hdr(shape_node, ld.hdr_path, amap["hdr_path"], renderer)
 
+    # ── 恢复连接的贴图/IES 文件 ──
+    if ld.connected_files:
+        _restore_connected_files(shape_node, ld.connected_files, renderer)
+
     return xform
 
 
@@ -556,6 +621,46 @@ def _set_hdr(shape_node: str, hdr_path: str, attr_name: str, renderer: str):
             print(f"[LightIO] HDR 已连接: {hdr_path} → {full_attr}")
     except Exception as e:
         print(f"[LightIO] HDR 连接失败: {e}")
+
+
+def _restore_connected_files(shape_node: str, files: Dict[str, str], renderer: str):
+    """恢复灯光上连接的贴图和 IES 文件。
+
+    Args:
+        shape_node: 灯光 shape 节点
+        files: {attr_name: file_path} 字典
+    """
+    for attr_key, file_path in files.items():
+        if not os.path.isfile(file_path):
+            print(f"[LightIO] 文件不存在，跳过: {file_path}")
+            continue
+
+        # 解析属性名（iesProfile:xxx → 找 IES 属性）
+        target_attr = attr_key
+        is_ies = False
+        if attr_key.startswith("iesProfile:"):
+            target_attr = attr_key.split(":", 1)[1]
+            is_ies = True
+
+        try:
+            file_node = cmds.shadingNode("file", asTexture=True)
+            cmds.setAttr(f"{file_node}.fileTextureName", file_path, type="string")
+            cmds.setAttr(f"{file_node}.ignoreColorSpaceFileRules", True)
+            # 贴图设为 Raw，IES 也设为 Raw
+            try:
+                cmds.setAttr(f"{file_node}.colorSpace", "Raw", type="string")
+            except Exception:
+                pass
+
+            full_attr = f"{shape_node}.{target_attr}"
+            if cmds.objExists(full_attr):
+                cmds.connectAttr(f"{file_node}.outColor", full_attr, force=True)
+                kind = "IES" if is_ies else "贴图"
+                print(f"[LightIO] {kind}已连接: {file_path} → {full_attr}")
+            else:
+                print(f"[LightIO] 属性不存在: {full_attr}")
+        except Exception as e:
+            print(f"[LightIO] 文件连接失败 [{target_attr}]: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════
