@@ -323,6 +323,7 @@ class ToolBar(QtWidgets.QWidget):
 class CaptureTool(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(CaptureTool, self).__init__(parent)
+        self.setWindowTitle("截图工具")
 
         # 状态变量
         self.selection_rect = QtCore.QRect(0, 0, 512, 512)  # 默认 512x512
@@ -345,8 +346,8 @@ class CaptureTool(QtWidgets.QWidget):
         self.record_temp_dir = ""
         self.is_recording = False
 
-        # 独立工具栏
-        self.toolbar = ToolBar()
+        # 独立工具栏（作为子控件浮动在 CaptureTool 上方）
+        self.toolbar = ToolBar(self)
 
         # 先初始化UI（创建定时器），再连接信号
         self._init_ui()
@@ -379,7 +380,8 @@ class CaptureTool(QtWidgets.QWidget):
     def _init_ui(self):
         self.setWindowFlags(
             QtCore.Qt.FramelessWindowHint |
-            QtCore.Qt.WindowStaysOnTopHint
+            QtCore.Qt.WindowStaysOnTopHint |
+            QtCore.Qt.Window
         )
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.setMouseTracking(True)
