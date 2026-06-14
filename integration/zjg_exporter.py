@@ -1868,24 +1868,32 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
             # 灯光 shape 节点：使用 shadingNode(asLight=True) 自动创建完整灯光
             # Maya 会自动注册到 defaultLightList1 / defaultLightSet
             if cmds.getClassification(ntype, satisfies="light"):
-                # 推断 shading node 类型名：shape 类型去掉 "Shape" 后缀
-                shading_type = ntype[:-5] if ntype.endswith('Shape') or ntype.endswith('shape') else ntype
-                try:
-                    # shadingNode 自动创建 transform+shape 并完成所有注册
-                    # ⚠ 绝不重命名：V-Ray 等渲染器插件会在内部引用 shape 节点，
-                    #    重命名会导致内部引用断裂 → 未知节点 / 双 shape / 无法保存
-                    light_xform = cmds.shadingNode(shading_type, asLight=True, skipSelect=True)
+                # 尝试多种 shading node 类型名（不同渲染器注册方式不同）
+                # V-Ray:   shadingNode("VRayLightRectShape", asLight=True)
+                # Arnold:  shadingNode("aiAreaLight", asLight=True)
+                cand_types = [ntype]  # 首先尝试原始 shape 类型
+                if ntype.endswith('Shape') or ntype.endswith('shape'):
+                    cand_types.append(ntype[:-5])  # 去掉 "Shape" 后缀
+                light_xform = None
+                for st in cand_types:
+                    try:
+                        light_xform = cmds.shadingNode(st, asLight=True, skipSelect=True)
+                        print(f"[Import] shadingNode({st}) 成功")
+                        break
+                    except Exception:
+                        continue
+
+                if light_xform:
+                    # shadingNode 成功 → 绝不重命名（渲染器内部引用）
                     shapes = cmds.listRelatives(light_xform, shapes=True) or []
                     new_node = shapes[0] if shapes else light_xform
-                    # name_map 自动映射旧名 → 新节点名，后续属性/连接还原无需重命名
-                    print(f"[Import] 灯光节点: {new_node} (type={ntype}, shading={shading_type}) → {light_xform}")
-                except Exception as e:
-                    print(f"[Import] shadingNode({shading_type}) 失败: {e}，回退到 createNode")
-                    # 回退：手动创建 transform + shape
+                    print(f"[Import] 灯光节点: {new_node} (type={ntype}) → {light_xform}")
+                else:
+                    # shadingNode 全部失败 → 回退到 createNode + 手动注册
+                    print(f"[Import] shadingNode 失败 (candidates={cand_types})，回退到 createNode")
                     xform_name = new_name.replace('Shape', '').replace('shape', '')
                     light_xform = cmds.createNode('transform', name=xform_name, skipSelect=True)
                     new_node = cmds.createNode(ntype, name=new_name, parent=light_xform)
-                    # 回退模式下仍需手动注册
                     try:
                         cmds.connectAttr(f"{light_xform}.message", "defaultLightList1.l", nextAvailable=True)
                     except Exception:
