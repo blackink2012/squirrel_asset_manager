@@ -242,84 +242,76 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
             pass
 
     # ── 通用属性提取 ──
-    # 使用当前渲染器的属性名尝试读取，回退到常见属性名
-    renderer = _detect_renderer()
-    rmap = _RENDERER_ATTR_MAP.get(renderer, _RENDERER_ATTR_MAP["maya"])
-
-    def _read(attr_name):
-        """尝试从 shape_node 读取 attr_name，不存在返回 None"""
-        full = f"{shape_node}.{attr_name}"
-        if cmds.objExists(full):
-            try:
-                return cmds.getAttr(full)
-            except Exception:
-                pass
-        return None
-
-    def _read_color(attr_name):
-        """读取 RGB 颜色，处理 srgb/linear 差异"""
+    # 对每个通用参数，遍历所有渲染器的属性名，取第一个存在的
+    def _read_attr_val(attr_name):
+        """从 shape_node 读取 attr_name，返回 (exists, value)"""
         full = f"{shape_node}.{attr_name}"
         if not cmds.objExists(full):
-            return None
+            return False, None
         try:
             val = cmds.getAttr(full)
+            # 处理 list-of-list
             if isinstance(val, list) and len(val) >= 3 and isinstance(val[0], list):
                 val = val[0]
-            return list(val)[:3] if isinstance(val, list) else [val, val, val]
+            return True, val
         except Exception:
-            return None
+            return False, None
 
-    # 尝试多种属性名读取通用参数
-    for r_name in ("arnold", "vray", "redshift", "maya"):
-        amap = _RENDERER_ATTR_MAP.get(r_name, {})
-        for ukey, attr_spec in amap.items():
-            if attr_spec is None:
+    # 获取所有渲染器对该属性的候选属性名
+    def _get_attr_candidates(ukey):
+        """返回 [(r_attr, is_tuple, tuple_data), ...]"""
+        candidates = []
+        for rn in ("arnold", "vray", "redshift", "maya"):
+            amap = _RENDERER_ATTR_MAP.get(rn, {})
+            spec = amap.get(ukey)
+            if spec is None:
                 continue
-            if isinstance(attr_spec, tuple):
-                r_attr, _ = attr_spec
+            if isinstance(spec, tuple):
+                candidates.append((spec[0], True, spec))
             else:
-                r_attr = attr_spec
+                candidates.append((spec, False, None))
+        return candidates
 
-            full = f"{shape_node}.{r_attr}"
-            if not cmds.objExists(full):
-                continue
+    # 辅助：尝试所有候选并设置值
+    def _try_set_data(ukey, setter):
+        for r_attr, is_tuple, _ in _get_attr_candidates(ukey):
+            exists, val = _read_attr_val(r_attr)
+            if exists and val is not None:
+                setter(val)
+                return True
+        return False
 
-            try:
-                val = cmds.getAttr(full)
-            except Exception:
-                continue
+    # ── 逐一提取每个通用参数 ──
+    _try_set_data("color", lambda v: setattr(data, "color", list(v)[:3] if isinstance(v, list) else [float(v)]*3))
+    _try_set_data("intensity", lambda v: setattr(data, "intensity", float(v)))
+    _try_set_data("exposure", lambda v: setattr(data, "exposure", float(v)))
+    _try_set_data("temperature", lambda v: setattr(data, "temperature", float(v) if float(v) > 0 else 6500.0))
+    _try_set_data("normalize", lambda v: setattr(data, "normalize", bool(v)))
+    _try_set_data("visible", lambda v: setattr(data, "visible", bool(v)))
 
-            # 取第一组（处理 list-of-list）
-            if isinstance(val, list) and len(val) >= 3 and isinstance(val[0], list):
-                val = val[0]
+    # 类型特有属性
+    if light_type == "spot":
+        _try_set_data("cone_angle", lambda v: setattr(data, "cone_angle", float(v)))
+        _try_set_data("penumbra_angle", lambda v: setattr(data, "penumbra_angle", float(v)))
+        _try_set_data("dropoff", lambda v: setattr(data, "dropoff", float(v)))
+    if light_type == "directional":
+        _try_set_data("angular_diameter", lambda v: setattr(data, "angular_diameter", float(v)))
+    if light_type == "dome":
+        _try_set_data("hdr_path", lambda v: setattr(data, "hdr_path", str(v) if isinstance(v, str) and v.strip() else ""))
 
-            if ukey == "color":
-                if isinstance(val, list) and len(val) >= 3:
-                    data.color = list(val)[:3]
-            elif ukey == "intensity" and val is not None:
-                data.intensity = float(val)
-            elif ukey == "exposure" and val is not None:
-                data.exposure = float(val)
-            elif ukey == "temperature" and val is not None and float(val) > 0:
-                data.temperature = float(val)
-            elif ukey == "normalize" and val is not None:
-                data.normalize = bool(val)
-            elif ukey == "visible" and val is not None:
-                data.visible = bool(val)
-            elif ukey == "cone_angle" and light_type == "spot" and val is not None:
-                data.cone_angle = float(val)
-            elif ukey == "penumbra_angle" and light_type == "spot" and val is not None:
-                data.penumbra_angle = float(val)
-            elif ukey == "dropoff" and light_type == "spot" and val is not None:
-                data.dropoff = float(val)
-            elif ukey == "angular_diameter" and light_type == "directional" and val is not None:
-                data.angular_diameter = float(val)
-            elif ukey == "hdr_path" and light_type == "dome" and val is not None:
-                if isinstance(val, str) and val.strip():
-                    data.hdr_path = val
-
-            # 已找到值就不再尝试其他渲染器的同名属性
-            break
+    # ── 额外属性：记录尺寸/形状信息（area light 的宽高）──
+    if light_type == "area":
+        # 尝试读 Arnold 的 width/height 或其他尺寸参数
+        for attr in ("width", "sizeX", "u_size"):
+            exists, val = _read_attr_val(attr)
+            if exists and val is not None:
+                data.transform.scale[0] = float(val)
+                break
+        for attr in ("height", "sizeY", "v_size"):
+            exists, val = _read_attr_val(attr)
+            if exists and val is not None:
+                data.transform.scale[1] = float(val)
+                break
 
     return data
 
