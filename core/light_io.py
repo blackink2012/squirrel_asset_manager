@@ -1008,9 +1008,9 @@ def _restore_node_network(shape_node: str, network: Dict[str, Dict],
                 continue
 
             connected = False
-            # 解析渲染器特定的贴图属性名
-            resolved_attr = _resolve_texture_connect_attr(dest_node, dest_attr, _detect_renderer())
             for dest_node in dest_nodes:
+                # 解析渲染器特定的贴图属性名
+                resolved_attr = _resolve_texture_connect_attr(dest_node, dest_attr, _detect_renderer())
                 for candidate_attr in (resolved_attr, dest_attr):
                     full_dest = f"{dest_node}.{candidate_attr}"
                     try:
