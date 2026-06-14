@@ -55,6 +55,8 @@ class LightData:
 
     hdr_path: str = ""               # dome 的 HDR 贴图路径
 
+    ies_file: str = ""               # IES 光域网文件路径
+
     # ── 连接的贴图/IES/光域网 ──
     # {"color": "C:/tex/hdr.hdr", "iesProfile": "C:/ies/light.ies", ...}
     connected_files: Dict[str, str] = field(default_factory=dict)
@@ -80,7 +82,7 @@ _MAYA_TYPE_TO_LIGHT_TYPE: Dict[str, str] = {
     # Arnold
     "aiAreaLight":        "area",
     "aiSkyDomeLight":     "dome",
-    "aiPhotometricLight": "point",
+    "aiPhotometricLight": "ies",      # Arnold IES/点光源
     "aiLightBlocker":     None,
     # Maya 原生
     "areaLight":          "area",
@@ -93,7 +95,7 @@ _MAYA_TYPE_TO_LIGHT_TYPE: Dict[str, str] = {
     "VRayLightRectShape":    "area",
     "VRayLightDomeShape":    "dome",
     "VRayLightSphereShape":  "point",
-    "VRayLightIESShape":     "point",
+    "VRayLightIESShape":     "ies",
     "VRayLightMeshShape":    "area",
     "VRayLightDiscShape":    "area",
     "VRayLightSpotShape":    "spot",
@@ -103,7 +105,7 @@ _MAYA_TYPE_TO_LIGHT_TYPE: Dict[str, str] = {
     # Redshift
     "RedshiftPhysicalLight":    "area",
     "RedshiftDomeLight":        "dome",
-    "RedshiftIESLight":         "point",
+    "RedshiftIESLight":         "ies",
     "RedshiftPortalLight":      None,
     "RedshiftSunAndSky":        "directional",
     "RedshiftNightSky":         None,
@@ -119,6 +121,7 @@ _RENDERER_LIGHT_MAP: Dict[str, Dict[str, str]] = {
         "dome":        "aiSkyDomeLight",
         "disk":        "aiAreaLight",
         "cylinder":    "aiAreaLight",
+        "ies":         "aiPhotometricLight",
     },
     "vray": {
         "area":        "VRayLightRectShape",
@@ -128,24 +131,27 @@ _RENDERER_LIGHT_MAP: Dict[str, Dict[str, str]] = {
         "dome":        "VRayLightDomeShape",
         "disk":        "VRayLightDiscShape",
         "cylinder":    "VRayLightRectShape",
+        "ies":         "VRayLightIESShape",
     },
     "redshift": {
         "area":        "RedshiftPhysicalLight",
         "point":       "RedshiftIESLight",
-        "spot":        "RedshiftPhysicalLight",     # Redshift 无原生 spot→用 Physical
+        "spot":        "RedshiftPhysicalLight",
         "directional": "RedshiftSunAndSky",
         "dome":        "RedshiftDomeLight",
         "disk":        "RedshiftPhysicalLight",
         "cylinder":    "RedshiftPhysicalLight",
+        "ies":         "RedshiftIESLight",
     },
     "maya": {
         "area":        "areaLight",
         "point":       "pointLight",
         "spot":        "spotLight",
         "directional": "directionalLight",
-        "dome":        "directionalLight",     # Maya 无原生 dome→用 directional 近似
+        "dome":        "directionalLight",
         "disk":        "areaLight",
         "cylinder":    "areaLight",
+        "ies":         "pointLight",
     },
 }
 
@@ -162,24 +168,26 @@ _RENDERER_ATTR_MAP: Dict[str, Dict[str, Any]] = {
         "temperature":  "colorTemperature",
         "normalize":    "normalize",
         "visible":      "lightVisible",
-        "cone_angle":   None,        # Arnold Photometric 无 cone angle
+        "cone_angle":   None,
         "penumbra_angle": None,
         "dropoff":      None,
         "angular_diameter": None,
-        "hdr_path":     "color",     # aiSkyDomeLight.color 连 file 节点
+        "hdr_path":     "color",
+        "ies_file":     "aiFilename",
     },
     "vray": {
         "color":        ("lightColor", "srgb"),
         "intensity":    "intensityMult",
         "exposure":     None,
-        "temperature":  None,
-        "normalize":    None,
-        "visible":      "lightVisible",
-        "cone_angle":   "coneAngle",
-        "penumbra_angle": "penumbraAngle",
-        "dropoff":      "dropOff",
+        "temperature":  ("colorTemperatureType", "onoff"),
+        "normalize":    "normalize",
+        "visible":      "invisible",
+        "cone_angle":   None,
+        "penumbra_angle": None,
+        "dropoff":      None,
         "angular_diameter": None,
         "hdr_path":     "domeTex",
+        "ies_file":     "iesFile",
     },
     "redshift": {
         "color":        "color",
@@ -193,6 +201,7 @@ _RENDERER_ATTR_MAP: Dict[str, Dict[str, Any]] = {
         "dropoff":      None,
         "angular_diameter": None,
         "hdr_path":     "tex0",
+        "ies_file":     "profile",
     },
     "maya": {
         "color":        ("color", "srgb"),
@@ -200,12 +209,13 @@ _RENDERER_ATTR_MAP: Dict[str, Dict[str, Any]] = {
         "exposure":     None,
         "temperature":  None,
         "normalize":    None,
-        "visible":      "lightVisible",
+        "visible":      "visibility",
         "cone_angle":   "coneAngle",
         "penumbra_angle": "penumbraAngle",
         "dropoff":      "dropoff",
         "angular_diameter": None,
         "hdr_path":     None,
+        "ies_file":     None,
     },
 }
 
@@ -480,6 +490,9 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
     # ── 收集灯光自身属性中的文件路径（IES/光域网等非连接值）──
     _scan_shape_file_attrs(shape_node, data)
 
+    # ── 提取 IES 文件路径到 ies_file 字段 ──
+    _try_set_data("ies_file", lambda v: setattr(data, "ies_file", str(v)))
+
     # ── 序列化完整上游节点网络（ZMETAL 方式）──
     try:
         from squirrel_asset_manager.integration.zjg_exporter import _serialize_node
@@ -612,6 +625,7 @@ def _dict_to_lightdata(d: dict) -> LightData:
         dropoff=d.get("dropoff", 0.0),
         angular_diameter=d.get("angular_diameter", 0.53),
         hdr_path=d.get("hdr_path", ""),
+        ies_file=d.get("ies_file", ""),
         connected_files=d.get("connected_files", {}),
         connections=d.get("connections", {}),
         node_network=d.get("node_network", {}),
@@ -664,11 +678,13 @@ def _create_light(ld: LightData, renderer: str) -> Optional[str]:
         if not cmds.objExists(full):
             return
         try:
-            if isinstance(value, list):
+            if isinstance(value, str):
+                cmds.setAttr(full, value, type="string")
+            elif isinstance(value, list):
                 cmds.setAttr(full, *value, type="double3")
             elif isinstance(value, bool):
                 cmds.setAttr(full, value)
-            elif isinstance(value, float):
+            elif isinstance(value, (float, int)):
                 cmds.setAttr(full, value)
         except Exception:
             pass
@@ -701,6 +717,10 @@ def _create_light(ld: LightData, renderer: str) -> Optional[str]:
     # visible
     if amap.get("visible"):
         _set(amap["visible"], ld.visible)
+
+    # IES 文件路径
+    if ld.ies_file and amap.get("ies_file"):
+        _set(amap["ies_file"], ld.ies_file)
 
     # cone angle (spot only)
     if ld.light_type == "spot" and amap.get("cone_angle"):
