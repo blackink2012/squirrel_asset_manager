@@ -111,15 +111,15 @@ class ThumbnailCaptureOverlay(_OriginalCaptureTool):
         """
         if not window:
             return False
-        # 检查窗口是否可见
-        if not window.isVisible():
+        # 检查窗口是否已销毁
+        try:
+            window.winId()
+        except RuntimeError:
             return False
-        # 检查工具栏是否存在且可见（CaptureTool 的关键组件）
+        # 检查工具栏是否存在且未销毁
         if hasattr(window, 'toolbar') and window.toolbar:
             try:
-                # 检查工具栏是否已销毁
                 window.toolbar.winId()
-                return True
             except RuntimeError:
                 return False
         return True
