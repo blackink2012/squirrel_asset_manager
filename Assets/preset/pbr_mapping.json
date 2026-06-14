@@ -685,11 +685,10 @@
       "normal": { "node_attribute": "geometry_normal", "connection_type": "vector", "requires_conversion": true, "conversion_node": "bump2d" },
       "roughness": { "node_attribute": "specular_roughness", "connection_type": "scalar" },
       "metallic": { "node_attribute": "base_metalness", "connection_type": "scalar" },
-      "specular": { "node_attribute": "specular_weight", "connection_type": "scalar" },
-      "specularColor": { "node_attribute": "specular_color", "connection_type": "color" },
+      "specular": { "node_attribute": "specular_color", "connection_type": "color" },
       "emissive": { "node_attribute": "emission_color", "connection_type": "color" },
-      "opacity": { "node_attribute": "base_weight", "connection_type": "scalar" },
-      "ao": { "node_attribute": "coat_weight", "connection_type": "scalar" }
+      "opacity": { "node_attribute": "geometry_opacity", "connection_type": "scalar" },
+      "ao": { "node_attribute": "rs_base_diffuse_direct", "connection_type": "scalar" }
     },
     "lambert": {
       "label": "Lambert",
