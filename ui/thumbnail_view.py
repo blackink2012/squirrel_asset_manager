@@ -230,6 +230,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
     assignTextureToMaterialRequested = QtCore.Signal(dict)  # (texture_material) 贴图→指定给选中材质
     dragDroppedOnViewport = QtCore.Signal(list, int, int)  # ([material_ids], global_x, global_y)
     previewNodeRequested = QtCore.Signal(str)  # (node_file_path) 预览节点文件
+    createLightRequested = QtCore.Signal(str)   # (node_type) 创建渲染器灯光
     VIEW_ICON = 0
     VIEW_LIST = 1
 
@@ -1287,12 +1288,78 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         card.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.PreventContextMenu)
 
+    _CREATE_LIGHT_MENUS = [
+        ("Arnold", [
+            ("区域光（aiAreaLight）", "aiAreaLight"),
+            ("穹顶光（aiSkyDomeLight）", "aiSkyDomeLight"),
+            ("点光源（aiPhotometricLight）", "aiPhotometricLight"),
+        ]),
+        ("V-Ray", [
+            ("矩形光（VRayLightRect）", "VRayLightRectShape"),
+            ("穹顶光（VRayLightDome）", "VRayLightDomeShape"),
+            ("球形光（VRayLightSphere）", "VRayLightSphereShape"),
+            ("聚光灯（VRayLightSpot）", "VRayLightSpotShape"),
+            ("平行光（VRaySun）", "VRaySunShape"),
+        ]),
+        ("Redshift", [
+            ("区域光（RedshiftAreaLight）", "RedshiftAreaLight"),
+            ("穹顶光（RedshiftDomeLight）", "RedshiftDomeLight"),
+        ]),
+        ("Maya 原生", [
+            ("区域光", "areaLight"),
+            ("点光源", "pointLight"),
+            ("聚光灯", "spotLight"),
+            ("平行光", "directionalLight"),
+        ]),
+    ]
+
+    def _is_light_category(self):
+        """判断当前是否在灯光分类中"""
+        if self._filtered_materials:
+            # 从可见卡片取 sub_library
+            first_mat = self._filtered_materials[0]
+            if first_mat.get("sub_library") == "lights":
+                return True
+        # 回退：从当前分类 ID 推断
+        if self._current_cat_id and self._current_cat_id != "all":
+            if hasattr(self, '_manager') and self._manager:
+                try:
+                    tree = self._manager.get_category_tree()
+                    for node in tree:
+                        if node.get("id") == self._current_cat_id:
+                            n_type = node.get("type", "")
+                            # 子库类型由顶层节点 type 决定
+                            return n_type == "lights"
+                        for child in node.get("children", []):
+                            if child.get("id") == self._current_cat_id:
+                                return child.get("type", "") == "lights"
+                except Exception:
+                    pass
+        return False
+
+    def _add_create_light_submenu(self, menu, parent_menu):
+        """在菜单中添加「创建灯光」子菜单"""
+        create_light_sub = parent_menu.addMenu("💡 创建灯光")
+        for renderer, light_list in self._CREATE_LIGHT_MENUS:
+            renderer_menu = create_light_sub.addMenu(renderer)
+            for label, node_type in light_list:
+                action = renderer_menu.addAction(label)
+                action.setData(node_type)
+                action.triggered.connect(
+                    lambda *a, nt=node_type: self.createLightRequested.emit(nt))
+        create_light_sub.addSeparator()
+
     def _on_empty_area_menu(self, pos):
-        """空白区域右键 → 创建资产 / 粘贴 / 导入"""
+        """空白区域右键 → 创建资产 / 粘贴 / 导入 / 创建灯光"""
         child = self._icon_container.childAt(pos)
         if child and hasattr(child, 'material_data'):
             return
         menu = QtWidgets.QMenu(self)
+
+        # ── 灯光分类专属：创建灯光 ──
+        if self._is_light_category():
+            self._add_create_light_submenu(menu, menu)
+
         create_action = menu.addAction("创建资产")
         paste_action = menu.addAction("📋 粘贴")
         menu.addSeparator()
@@ -1479,6 +1546,10 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         font_size = sm.get("font_size", 13)
         menu = QtWidgets.QMenu(self)
         menu.setStyleSheet(_get_sub_style(font_size))
+
+        # ── 灯光分类专属：创建灯光（右键卡片时也显示）──
+        if sub_lib == "lights":
+            self._add_create_light_submenu(menu, menu)
 
         # ── 导入始终在最上 ──
         json_path = mat.get('json_path', '')

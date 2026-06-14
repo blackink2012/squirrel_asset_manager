@@ -954,6 +954,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._thumbnail_grid.updateAssetRequested.connect(self._on_update_asset)
         self._thumbnail_grid.dragDroppedOnViewport.connect(self._on_drag_dropped)
         self._thumbnail_grid.previewNodeRequested.connect(self._on_preview_node)
+        self._thumbnail_grid.createLightRequested.connect(self._on_create_light_from_grid)
 
         self._search_bar.searchChanged.connect(self._on_search)
         self._search_bar.tagFilterChanged.connect(self._on_search_tag_changed)
@@ -6095,6 +6096,32 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             import traceback
             print(f"[NodePreview] 启动失败: {e}")
             traceback.print_exc()
+
+    def _on_create_light_from_grid(self, node_type: str):
+        """从右键菜单创建指定渲染器的灯光节点"""
+        try:
+            import maya.cmds as cmds
+            light_xform = cmds.shadingNode(node_type, asLight=True, skipSelect=True)
+            shapes = cmds.listRelatives(light_xform, shapes=True) or []
+            shape_node = shapes[0] if shapes else light_xform
+            print(f"[CreateLight] 已创建: {light_xform} (shape={shape_node}, type={node_type})")
+        except Exception as e:
+            # 回退：有些渲染器类型需要末尾带 Shape
+            try:
+                import maya.cmds as cmds
+                if not node_type.endswith('Shape'):
+                    alt_type = node_type + 'Shape'
+                elif node_type.endswith('Shape'):
+                    alt_type = node_type[:-5]
+                else:
+                    alt_type = node_type
+                print(f"[CreateLight] shadingNode({node_type}) 失败: {e}，尝试 {alt_type}")
+                light_xform = cmds.shadingNode(alt_type, asLight=True, skipSelect=True)
+                shapes = cmds.listRelatives(light_xform, shapes=True) or []
+                shape_node = shapes[0] if shapes else light_xform
+                print(f"[CreateLight] 已创建(回退): {light_xform} (type={alt_type})")
+            except Exception as e2:
+                print(f"[CreateLight] 创建失败: {e2}")
 
     def _on_settings(self):
         """打开设置窗口（非模态单例）"""
