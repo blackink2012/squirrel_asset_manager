@@ -1864,7 +1864,13 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
         else:
             new_name = old_name
         try:
-            new_node = cmds.createNode(ntype, name=new_name, skipSelect=True)
+            # 灯光 shape 节点需要创建在 transform 父级下才能正常工作
+            if cmds.getClassification(ntype, satisfies="light"):
+                xform_name = new_name.replace('Shape', '').replace('shape', '')
+                xform = cmds.createNode('transform', name=xform_name, skipSelect=True)
+                new_node = cmds.createNode(ntype, name=new_name, parent=xform)
+            else:
+                new_node = cmds.createNode(ntype, name=new_name, skipSelect=True)
             # 按节点类型注册到 Hypershade 对应分类列表
             try:
                 if cmds.getClassification(ntype, satisfies="shader"):

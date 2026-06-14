@@ -1160,18 +1160,7 @@ class ExportOrchestrator:
                 if not cmds.objExists(config.material_node):
                     return files
 
-                # 检测灯光 shape 节点：连带导出其 transform 父级，确保完整灯光节点网络
-                select_nodes = [config.material_node]
-                try:
-                    inherited = cmds.nodeType(config.material_node, inherited=True) or []
-                    if isinstance(inherited, (list, tuple)) and 'light' in inherited:
-                        parents = cmds.listRelatives(config.material_node, parent=True, fullPath=True) or []
-                        if parents:
-                            select_nodes = [parents[0], config.material_node]
-                            print(f"[Export::zmetal] 检测到灯光 shape，连带导出 transform: {parents[0]}")
-                except Exception:
-                    pass
-                cmds.select(select_nodes, replace=True)
+                cmds.select(config.material_node, replace=True)
                 radar_export_materials(
                     target_dir=asset_dir,
                     custom_name=safe_name,
