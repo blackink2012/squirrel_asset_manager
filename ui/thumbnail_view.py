@@ -231,6 +231,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
     dragDroppedOnViewport = QtCore.Signal(list, int, int)  # ([material_ids], global_x, global_y)
     previewNodeRequested = QtCore.Signal(str)  # (node_file_path) 预览节点文件
     importZlightAsRenderer = QtCore.Signal(str, str)  # (zasset_path, renderer) 以指定渲染器导入灯光
+    applyLightToSelectionRequested = QtCore.Signal(str)  # (zasset_path) 应用灯光参数到选中灯光
     VIEW_ICON = 0
     VIEW_LIST = 1
 
@@ -1494,7 +1495,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
             # zlight 格式 → 渲染器子菜单（按渲染器创建灯光）
             if has_zlight:
-                zlight_sub = QtWidgets.QMenu('\U0001f4e5 导入灯光（选择渲染器）', menu)
+                zlight_sub = QtWidgets.QMenu('\U0001f4e5 导入灯光', menu)
                 zlight_sub.setStyleSheet(_get_sub_style(font_size))
                 for r_name, r_label in [("arnold", "Arnold"), ("vray", "V-Ray"),
                                          ("redshift", "Redshift"), ("maya", "Maya 原生")]:
@@ -1726,8 +1727,9 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             menu.addAction('指定贴图到材质').triggered.connect(
                 lambda: self.assignTextureToMaterialRequested.emit(mat))
         elif sub_lib == 'lights':
-            menu.addAction('应用灯光参数').triggered.connect(
-                lambda: print('[MaterialLibrary] 应用灯光参数: TODO'))
+            apply_action = menu.addAction('💡 应用灯光参数到选中灯光')
+            apply_action.triggered.connect(
+                lambda: self.applyLightToSelectionRequested.emit(json_path))
         elif sub_lib == 'hdr':
             preset_dir = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),

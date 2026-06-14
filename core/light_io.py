@@ -757,6 +757,100 @@ def _create_light(ld: LightData, renderer: str) -> Optional[str]:
     return xform
 
 
+def apply_light_params_to_shape(shape_node: str, ld: LightData, renderer: str = "") -> bool:
+    """将 LightData 参数应用到现有 Maya 灯光 shape 节点（不创建新灯光）。
+
+    Args:
+        shape_node: 目标灯光 shape 节点路径
+        ld: LightData 灯光参数
+        renderer: 渲染器名（"" = 自动检测当前渲染器）
+
+    Returns:
+        True = 成功
+    """
+    if not _IN_MAYA or not cmds.objExists(shape_node):
+        return False
+
+    if not renderer:
+        renderer = _detect_renderer()
+
+    amap = _RENDERER_ATTR_MAP.get(renderer, _RENDERER_ATTR_MAP["maya"])
+
+    def _set(attr_name, value):
+        full = f"{shape_node}.{attr_name}"
+        if not cmds.objExists(full):
+            return
+        try:
+            if isinstance(value, str):
+                cmds.setAttr(full, value, type="string")
+            elif isinstance(value, list):
+                cmds.setAttr(full, *value, type="double3")
+            elif isinstance(value, bool):
+                cmds.setAttr(full, value)
+            elif isinstance(value, (float, int)):
+                cmds.setAttr(full, value)
+        except Exception:
+            pass
+
+    # color
+    color_spec = amap.get("color")
+    if color_spec:
+        attr = color_spec[0] if isinstance(color_spec, tuple) else color_spec
+        try:
+            full = f"{shape_node}.{attr}"
+            if cmds.objExists(full) and len(ld.color) >= 3:
+                cmds.setAttr(full, ld.color[0], ld.color[1], ld.color[2], type="double3")
+        except Exception:
+            pass
+
+    # intensity
+    if amap.get("intensity"):
+        _set(amap["intensity"], ld.intensity)
+    # exposure
+    if amap.get("exposure"):
+        _set(amap["exposure"], ld.exposure)
+    # temperature
+    if amap.get("temperature") and ld.temperature > 0:
+        _set(amap["temperature"], ld.temperature)
+    # normalize
+    if amap.get("normalize"):
+        _set(amap["normalize"], ld.normalize)
+    # visible
+    if amap.get("visible"):
+        _set(amap["visible"], ld.visible)
+    # IES
+    if ld.ies_file and amap.get("ies_file"):
+        _set(amap["ies_file"], ld.ies_file)
+    # cone angle (spot only)
+    if ld.light_type == "spot" and amap.get("cone_angle"):
+        _set(amap["cone_angle"], ld.cone_angle)
+    # penumbra
+    if ld.light_type == "spot" and amap.get("penumbra_angle"):
+        _set(amap["penumbra_angle"], ld.penumbra_angle)
+    # dropoff
+    if ld.light_type == "spot" and amap.get("dropoff"):
+        _set(amap["dropoff"], ld.dropoff)
+    # angular diameter
+    if ld.light_type == "directional" and amap.get("angular_diameter"):
+        _set(amap["angular_diameter"], ld.angular_diameter)
+
+    # HDR (dome only)
+    if ld.light_type == "dome" and ld.hdr_path and amap.get("hdr_path"):
+        _set_hdr(shape_node, ld.hdr_path, amap["hdr_path"], renderer)
+
+    # connected files (only if no node_network)
+    if ld.connected_files and not ld.node_network:
+        _restore_connected_files(shape_node, ld.connected_files, renderer)
+        _restore_shape_file_attrs(shape_node, ld.connections, ld.connected_files)
+
+    # upstream node network
+    if ld.node_network:
+        _restore_node_network(shape_node, ld.node_network, ld.connections)
+
+    print(f"[LightIO] 参数已应用: {shape_node}")
+    return True
+
+
 def _set_hdr(shape_node: str, hdr_path: str, attr_name: str, renderer: str):
     """为 dome 灯光连接 HDR 贴图 file 节点"""
     if not os.path.isfile(hdr_path):
