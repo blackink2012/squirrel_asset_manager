@@ -30,7 +30,8 @@ class ToolBar(QtWidgets.QWidget):
         self.setWindowFlags(
             QtCore.Qt.FramelessWindowHint |
             QtCore.Qt.WindowStaysOnTopHint |
-            QtCore.Qt.Window
+            QtCore.Qt.Window |
+            QtCore.Qt.Tool
         )
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground, False)
         self.setStyleSheet("""
@@ -790,12 +791,14 @@ class CaptureTool(QtWidgets.QWidget):
 
     def closeEvent(self, event):
         self.pos_update_timer.stop()
-        self.toolbar.close()
+        # 使用 hide() 而不是 close()，以便下次可以复用
+        self.toolbar.hide()
+        self.hide()
         # 更新全局实例引用
         global _capture_tool_instance
         if _capture_tool_instance is self:
             _capture_tool_instance = None
-        super(CaptureTool, self).closeEvent(event)
+        event.ignore()
 
     # 按钮槽函数
     def _on_resolution_input(self):
