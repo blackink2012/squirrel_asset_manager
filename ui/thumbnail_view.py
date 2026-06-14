@@ -231,6 +231,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
     dragDroppedOnViewport = QtCore.Signal(list, int, int)  # ([material_ids], global_x, global_y)
     previewNodeRequested = QtCore.Signal(str)  # (node_file_path) 预览节点文件
     createLightRequested = QtCore.Signal(str)   # (light_type) 通过 zlight 通用格式创建灯光
+    importZlightAsRenderer = QtCore.Signal(str, str)  # (zasset_path, renderer) 以指定渲染器导入 zlight
     VIEW_ICON = 0
     VIEW_LIST = 1
 
@@ -1532,19 +1533,38 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         json_path = mat.get('json_path', '')
         import_actions = {}
         import_action = None
-        formats = []
+        zlight_renderer = None  # (action, renderer_name) for zlight
         if json_path and json_path.endswith('.zasset'):
             from ..integration.import_executor import get_available_formats
             formats = get_available_formats(json_path)
-            if len(formats) == 1:
-                import_action = menu.addAction(f'\U0001f4e5 \u5bfc\u5165 {formats[0]}')
-            elif len(formats) > 1:
-                import_sub = QtWidgets.QMenu('\U0001f4e5 \u5bfc\u5165', menu)
-                import_sub.setStyleSheet(_get_sub_style(font_size))
-                for fmt in formats:
-                    a = import_sub.addAction(f'  {fmt}')
-                    import_actions[a] = fmt
-                menu.addMenu(import_sub)
+            has_zlight = "zlight" in formats
+            other_formats = [f for f in formats if f != "zlight"]
+
+            # zlight 格式 → 渲染器子菜单（按渲染器创建灯光）
+            if has_zlight:
+                zlight_sub = QtWidgets.QMenu('\U0001f4e5 导入 zlight 灯光（选择渲染器）', menu)
+                zlight_sub.setStyleSheet(_get_sub_style(font_size))
+                for r_name, r_label in [("arnold", "Arnold"), ("vray", "V-Ray"),
+                                         ("redshift", "Redshift"), ("maya", "Maya 原生")]:
+                    a = zlight_sub.addAction(f'  {r_label}')
+                    zlight_renderer = a, r_name
+                    import_actions[a] = f"zlight:{r_name}"
+                menu.addMenu(zlight_sub)
+
+            # 其他格式
+            if other_formats:
+                if len(other_formats) == 1:
+                    import_action = menu.addAction(f'\U0001f4e5 \u5bfc\u5165 {other_formats[0]}')
+                    # Store the actual format for action matching
+                    oa = import_action
+                    import_actions[oa] = other_formats[0]
+                elif len(other_formats) > 1:
+                    other_sub = QtWidgets.QMenu('\U0001f4e5 \u5bfc\u5165', menu)
+                    other_sub.setStyleSheet(_get_sub_style(font_size))
+                    for fmt in other_formats:
+                        a = other_sub.addAction(f'  {fmt}')
+                        import_actions[a] = fmt
+                    menu.addMenu(other_sub)
         else:
             import_action = menu.addAction('\U0001f4e5 \u5bfc\u5165')
 
@@ -1852,8 +1872,14 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                         paths.add(p)
             if json_path:
                 paths.add(json_path)
-            for p in paths:
-                self.assetImportRequested.emit(p, fmt)
+            # zlight:renderer → 以指定渲染器导入
+            if fmt.startswith("zlight:"):
+                renderer = fmt.split(":", 1)[1]
+                for p in paths:
+                    self.importZlightAsRenderer.emit(p, renderer)
+            else:
+                for p in paths:
+                    self.assetImportRequested.emit(p, fmt)
         elif action == import_action and json_path:
             fmt = formats[0] if json_path.endswith('.zasset') else os.path.splitext(json_path)[1].lstrip('.')
             # 收集所有选中+右键卡片路径
