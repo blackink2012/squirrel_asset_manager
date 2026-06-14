@@ -659,40 +659,25 @@
     },
     "rsStandardMaterial": {
       "label": "Redshift Standard Material",
-      "baseColor": {
-        "node_attribute": "base_color",
-        "connection_type": "color"
-      },
-      "normal": {
-        "node_attribute": "bump_input",
-        "connection_type": "vector",
-        "requires_conversion": true,
-        "conversion_node": "bump2d"
-      },
-      "roughness": {
-        "node_attribute": "refl_roughness",
-        "connection_type": "scalar"
-      },
-      "metallic": {
-        "node_attribute": "metalness",
-        "connection_type": "scalar"
-      },
-      "specular": {
-        "node_attribute": "refl_color",
-        "connection_type": "color"
-      },
-      "emissive": {
-        "node_attribute": "emission_color",
-        "connection_type": "color"
-      },
-      "opacity": {
-        "node_attribute": "opacity_color",
-        "connection_type": "color"
-      },
-      "ao": {
-        "node_attribute": "diffuse_direct",
-        "connection_type": "scalar"
-      }
+      "baseColor": { "node_attribute": "base_color", "connection_type": "color" },
+      "normal": { "node_attribute": "bump_input", "connection_type": "vector", "requires_conversion": true, "conversion_node": "bump2d" },
+      "roughness": { "node_attribute": "refl_roughness", "connection_type": "scalar" },
+      "metallic": { "node_attribute": "metalness", "connection_type": "scalar" },
+      "specular": { "node_attribute": "refl_color", "connection_type": "color" },
+      "emissive": { "node_attribute": "emission_color", "connection_type": "color" },
+      "opacity": { "node_attribute": "opacity_color", "connection_type": "color" },
+      "ao": { "node_attribute": "diffuse_direct", "connection_type": "scalar" }
+    },
+    "RedshiftStandardMaterial": {
+      "label": "Redshift Standard Material",
+      "baseColor": { "node_attribute": "base_color", "connection_type": "color" },
+      "normal": { "node_attribute": "bump_input", "connection_type": "vector", "requires_conversion": true, "conversion_node": "bump2d" },
+      "roughness": { "node_attribute": "refl_roughness", "connection_type": "scalar" },
+      "metallic": { "node_attribute": "metalness", "connection_type": "scalar" },
+      "specular": { "node_attribute": "refl_color", "connection_type": "color" },
+      "emissive": { "node_attribute": "emission_color", "connection_type": "color" },
+      "opacity": { "node_attribute": "opacity_color", "connection_type": "color" },
+      "ao": { "node_attribute": "diffuse_direct", "connection_type": "scalar" }
     },
     "lambert": {
       "label": "Lambert",
