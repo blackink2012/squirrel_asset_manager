@@ -29,7 +29,8 @@ class ToolBar(QtWidgets.QWidget):
         self.setWindowTitle("截图工具")
         self.setWindowFlags(
             QtCore.Qt.FramelessWindowHint |
-            QtCore.Qt.WindowStaysOnTopHint
+            QtCore.Qt.WindowStaysOnTopHint |
+            QtCore.Qt.Window
         )
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground, False)
         self.setStyleSheet("""
@@ -380,7 +381,8 @@ class CaptureTool(QtWidgets.QWidget):
         self.setWindowFlags(
             QtCore.Qt.FramelessWindowHint |
             QtCore.Qt.WindowStaysOnTopHint |
-            QtCore.Qt.Window
+            QtCore.Qt.Window |
+            QtCore.Qt.Tool
         )
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.setMouseTracking(True)
@@ -770,20 +772,20 @@ class CaptureTool(QtWidgets.QWidget):
         """将工具栏放置在选区矩形下方中央"""
         if not self.toolbar or self._toolbar_is_dragging:
             return
-        center_global = self.mapToGlobal(self.selection_rect.center())
+        # 使用相对坐标计算工具栏位置
+        center = self.selection_rect.center()
         toolbar_width = self.toolbar.width()
-        x = center_global.x() - toolbar_width // 2
-        y = self.mapToGlobal(self.selection_rect.bottomLeft()).y() + 10
-        screen_rect = self._screen_rect()
-        if y + self.toolbar.height() > screen_rect.bottom():
-            y = self.mapToGlobal(self.selection_rect.topLeft()).y() - self.toolbar.height() - 10
-        if x < screen_rect.left():
-            x = screen_rect.left() + 5
-        if x + toolbar_width > screen_rect.right():
-            x = screen_rect.right() - toolbar_width - 5
-        # 将全局坐标转换为 CaptureTool 相对坐标
-        parent_pos = self.mapToGlobal(QtCore.QPoint(0, 0))
-        self.toolbar.move(x - parent_pos.x(), y - parent_pos.y())
+        x = center.x() - toolbar_width // 2
+        y = self.selection_rect.bottom() + 10
+        screen_rect = self.geometry()
+        # 确保工具栏在窗口内
+        if y + self.toolbar.height() > screen_rect.height():
+            y = self.selection_rect.top() - self.toolbar.height() - 10
+        if x < 0:
+            x = 5
+        if x + toolbar_width > screen_rect.width():
+            x = screen_rect.width() - toolbar_width - 5
+        self.toolbar.move(x, y)
         self.toolbar.raise_()
 
     def closeEvent(self, event):
@@ -876,17 +878,8 @@ class CaptureTool(QtWidgets.QWidget):
         new_rect = self.selection_rect.translated(dx, dy)
         new_rect = self._constrain_rect(new_rect)
         self.selection_rect = new_rect
-        center_global = self.mapToGlobal(new_rect.center())
-        toolbar_x = center_global.x() - self.toolbar.width() // 2
-        toolbar_y = self.mapToGlobal(new_rect.bottomLeft()).y() + 10
-        screen_rect = self._screen_rect()
-        if toolbar_y + self.toolbar.height() > screen_rect.bottom():
-            toolbar_y = self.mapToGlobal(new_rect.topLeft()).y() - self.toolbar.height() - 10
-        if toolbar_x < screen_rect.left():
-            toolbar_x = screen_rect.left() + 5
-        if toolbar_x + self.toolbar.width() > screen_rect.right():
-            toolbar_x = screen_rect.right() - self.toolbar.width() - 5
-        self.toolbar.move(toolbar_x, toolbar_y)
+        # 使用相对坐标更新工具栏位置
+        self._update_toolbar_position()
         self.update()
 
 
@@ -901,19 +894,25 @@ def _get_pictures_folder():
     return os.path.join(os.path.expanduser("~"), "Pictures")
 
 
+_capture_tool_instance = None
+
 def show_capture_tool():
     """在 Maya 中显示截屏工具窗口"""
     global _capture_tool_instance
     # 彻底销毁旧实例
     try:
         if _capture_tool_instance is not None:
+            _capture_tool_instance.pos_update_timer.stop()
+            _capture_tool_instance.toolbar.close()
+            _capture_tool_instance.toolbar.deleteLater()
             _capture_tool_instance.close()
             _capture_tool_instance.deleteLater()
+            # 处理 Qt 事件循环，确保对象被正确销毁
+            QtWidgets.QApplication.processEvents()
             _capture_tool_instance = None
     except Exception:
         _capture_tool_instance = None
     _capture_tool_instance = CaptureTool()
-    _capture_tool_instance.show()
 
 
 if __name__ == "__main__":
