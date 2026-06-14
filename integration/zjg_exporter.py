@@ -1864,12 +1864,13 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
         else:
             new_name = old_name
         try:
+            light_xform = None  # 灯光 transform 父级
             # 灯光 shape 节点需要创建在 transform 父级下才能正常工作
             if cmds.getClassification(ntype, satisfies="light"):
                 xform_name = new_name.replace('Shape', '').replace('shape', '')
-                xform = cmds.createNode('transform', name=xform_name, skipSelect=True)
-                new_node = cmds.createNode(ntype, name=new_name, parent=xform)
-                print(f"[Import] 灯光节点: {new_node} (type={ntype}) → transform父级: {xform}")
+                light_xform = cmds.createNode('transform', name=xform_name, skipSelect=True)
+                new_node = cmds.createNode(ntype, name=new_name, parent=light_xform)
+                print(f"[Import] 灯光节点: {new_node} (type={ntype}) → transform父级: {light_xform}")
             else:
                 new_node = cmds.createNode(ntype, name=new_name, skipSelect=True)
             # 按节点类型注册到 Hypershade 对应分类列表
@@ -1879,7 +1880,9 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
                 elif cmds.getClassification(ntype, satisfies="texture"):
                     cmds.connectAttr(f"{new_node}.message", "defaultTextureList1.tx", nextAvailable=True)
                 elif cmds.getClassification(ntype, satisfies="light"):
-                    cmds.connectAttr(f"{new_node}.message", "defaultLightList1.l", nextAvailable=True)
+                    # defaultLightList1 需注册 transform 节点而非 shape 节点
+                    reg_node = light_xform if light_xform else new_node
+                    cmds.connectAttr(f"{reg_node}.message", "defaultLightList1.l", nextAvailable=True)
                 else:
                     cmds.connectAttr(f"{new_node}.message", "defaultRenderUtilityList1.u", nextAvailable=True)
             except Exception:
