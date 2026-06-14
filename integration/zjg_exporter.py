@@ -1865,36 +1865,52 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
             new_name = old_name
         try:
             light_xform = None  # 灯光 transform 父级
-            # 灯光 shape 节点需要创建在 transform 父级下才能正常工作
+            # 灯光 shape 节点：使用 shadingNode(asLight=True) 自动创建完整灯光
+            # Maya 会自动注册到 defaultLightList1 / defaultLightSet
             if cmds.getClassification(ntype, satisfies="light"):
-                xform_name = new_name.replace('Shape', '').replace('shape', '')
-                light_xform = cmds.createNode('transform', name=xform_name, skipSelect=True)
-                new_node = cmds.createNode(ntype, name=new_name, parent=light_xform)
-                print(f"[Import] 灯光节点: {new_node} (type={ntype}) → transform父级: {light_xform}")
-            else:
-                new_node = cmds.createNode(ntype, name=new_name, skipSelect=True)
-            # 按节点类型注册到 Hypershade 对应分类列表
-            try:
-                if cmds.getClassification(ntype, satisfies="shader"):
-                    cmds.connectAttr(f"{new_node}.message", "defaultShaderList1.s", nextAvailable=True)
-                elif cmds.getClassification(ntype, satisfies="texture"):
-                    cmds.connectAttr(f"{new_node}.message", "defaultTextureList1.tx", nextAvailable=True)
-                elif cmds.getClassification(ntype, satisfies="light"):
-                    # defaultLightList1 需注册 transform 节点而非 shape 节点
-                    reg_node = light_xform if light_xform else new_node
+                # 推断 shading node 类型名：shape 类型去掉 "Shape" 后缀
+                shading_type = ntype[:-5] if ntype.endswith('Shape') or ntype.endswith('shape') else ntype
+                try:
+                    # shadingNode 自动创建 transform+shape 并完成所有注册
+                    light_xform = cmds.shadingNode(shading_type, asLight=True, skipSelect=True)
+                    shapes = cmds.listRelatives(light_xform, shapes=True) or []
+                    new_node = shapes[0] if shapes else light_xform
+                    # 重命名 shape 为 ZMETAL 中的节点名
+                    if not cmds.objExists(new_name):
+                        new_node = cmds.rename(new_node, new_name)
+                    # 重命名 transform
+                    xform_name = new_name.replace('Shape', '').replace('shape', '')
+                    if not cmds.objExists(xform_name):
+                        cmds.rename(light_xform, xform_name)
+                    print(f"[Import] 灯光节点(完整): {new_node} (type={ntype})")
+                except Exception as e:
+                    print(f"[Import] shadingNode({shading_type}) 失败: {e}，回退到 createNode")
+                    # 回退：手动创建 transform + shape
+                    xform_name = new_name.replace('Shape', '').replace('shape', '')
+                    light_xform = cmds.createNode('transform', name=xform_name, skipSelect=True)
+                    new_node = cmds.createNode(ntype, name=new_name, parent=light_xform)
+                    # 回退模式下仍需手动注册
                     try:
-                        cmds.connectAttr(f"{reg_node}.message", "defaultLightList1.l", nextAvailable=True)
-                    except Exception as e:
-                        print(f"[Import] defaultLightList1 连接失败: {e}，尝试 defaultLightSet")
-                    # 同时加入 defaultLightSet（Hypershade 灯光分类也会显示）
-                    try:
-                        cmds.sets(reg_node, add='defaultLightSet')
+                        cmds.connectAttr(f"{light_xform}.message", "defaultLightList1.l", nextAvailable=True)
                     except Exception:
                         pass
-                else:
-                    cmds.connectAttr(f"{new_node}.message", "defaultRenderUtilityList1.u", nextAvailable=True)
-            except Exception as e:
-                print(f"[Import] 节点注册到分类列表失败 [{new_name}]: {e}")
+                    try:
+                        cmds.sets(light_xform, add='defaultLightSet')
+                    except Exception:
+                        pass
+                    print(f"[Import] 灯光节点(回退): {new_node} (type={ntype})")
+            else:
+                new_node = cmds.createNode(ntype, name=new_name, skipSelect=True)
+                # 非灯光节点：原有注册逻辑
+                try:
+                    if cmds.getClassification(ntype, satisfies="shader"):
+                        cmds.connectAttr(f"{new_node}.message", "defaultShaderList1.s", nextAvailable=True)
+                    elif cmds.getClassification(ntype, satisfies="texture"):
+                        cmds.connectAttr(f"{new_node}.message", "defaultTextureList1.tx", nextAvailable=True)
+                    else:
+                        cmds.connectAttr(f"{new_node}.message", "defaultRenderUtilityList1.u", nextAvailable=True)
+                except Exception as e:
+                    print(f"[Import] 节点注册到分类列表失败 [{new_name}]: {e}")
             name_map[old_name] = new_node
         except Exception as e:
             cmds.warning(f"创建节点失败 [{old_name}]: {e}")
