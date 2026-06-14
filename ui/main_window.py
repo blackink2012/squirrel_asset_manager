@@ -5393,6 +5393,18 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         configs = []
 
+        def _resolve_light_shape(dag_obj):
+            """如果 DAG 物体有灯光 shape 子节点，返回其 shape 节点名；否则返回空字符串"""
+            try:
+                shapes = cmds.listRelatives(dag_obj, shapes=True, fullPath=True) or []
+                for shp in shapes:
+                    inherited = cmds.nodeType(shp, inherited=True) or []
+                    if isinstance(inherited, (list, tuple)) and 'light' in inherited:
+                        return shp
+            except Exception:
+                pass
+            return ""
+
         if export_mode == "single":
             # ⑤ 合并模式：所有物体一个资产
             all_objects = list(dag_objects)
@@ -5403,7 +5415,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 first_mat = get_first_material_for_object(dag_objects[0])
                 # 回退：所选物体无关联材质，尝试作为可导出节点本身
                 if not first_mat and dag_objects:
-                    first_mat = dag_objects[0]
+                    # 检测灯光：使用 shape 节点代替 transform，确保灯光参数完整导出
+                    light_shape = _resolve_light_shape(dag_objects[0])
+                    first_mat = light_shape or dag_objects[0]
             cfg = _clone_base({
                 "material_node": first_mat or "",
                 "associated_objects": all_objects,
@@ -5420,6 +5434,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                     asset_name = mat_node or obj
                 else:
                     asset_name = obj
+                # 检测灯光：使用 shape 节点代替 transform
+                if not mat_node:
+                    light_shape = _resolve_light_shape(obj)
+                    mat_node = light_shape
                 cfg = _clone_base({
                     "asset_name": base_config.asset_name or asset_name,
                     "name_cn": base_config.name_cn if is_first else "",
@@ -5887,7 +5905,6 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 print(f"[AssetExport] ⚠ .zasset 文件未就绪: {zasset_path}")
         try:
             self._thumbnail_grid._thumb_cache.clear()
-            self._thumbnail_grid._card_pool.clear()
             self._thumbnail_grid._clear_grid()
             self._refresh_keep_current(reload_materials=True)
         except Exception:
