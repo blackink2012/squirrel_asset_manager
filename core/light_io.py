@@ -1033,10 +1033,13 @@ def _restore_shape_file_attrs(shape_node: str, connections: Dict, connected_file
     """
     if not connections or not connected_files:
         return
-    # 获取当前渲染器的 IES 属性名
-    renderer = _detect_renderer()
-    amap = _RENDERER_ATTR_MAP.get(renderer, {})
-    ies_attr = amap.get("ies_file", "")
+    # 收集所有渲染器的 IES 属性名候选（不依赖当前渲染器设置）
+    ies_candidates = set()
+    for rn in ("arnold", "vray", "redshift", "maya"):
+        amap = _RENDERER_ATTR_MAP.get(rn, {})
+        a = amap.get("ies_file", "")
+        if a:
+            ies_candidates.add(a)
 
     for attr_key, conn_info in connections.items():
         if conn_info.get("node_type") != "string_attr":
@@ -1044,10 +1047,8 @@ def _restore_shape_file_attrs(shape_node: str, connections: Dict, connected_file
         file_path = connected_files.get(attr_key)
         if not file_path or not os.path.isfile(file_path):
             continue
-        # 尝试多个候选属性名（原始名 + 当前渲染器的 IES 属性名）
-        candidates = [attr_key]
-        if ies_attr and ies_attr != attr_key:
-            candidates.append(ies_attr)
+        # 尝试原始属性名 + 所有渲染器的 IES 属性名
+        candidates = [attr_key] + [c for c in ies_candidates if c != attr_key]
         ok = False
         for cand in candidates:
             full = f"{shape_node}.{cand}"
