@@ -739,6 +739,16 @@ def _restore_node_network(shape_node: str, network: Dict[str, Dict],
         try:
             new_node = cmds.createNode(ntype, skipSelect=True)
             name_map[old_name] = new_node
+            # 注册到对应列表（材质编辑器可见）
+            try:
+                if cmds.getClassification(ntype, satisfies="shader"):
+                    cmds.connectAttr(f"{new_node}.message", "defaultShaderList1.s", nextAvailable=True)
+                elif cmds.getClassification(ntype, satisfies="texture"):
+                    cmds.connectAttr(f"{new_node}.message", "defaultTextureList1.tx", nextAvailable=True)
+                else:
+                    cmds.connectAttr(f"{new_node}.message", "defaultRenderUtilityList1.u", nextAvailable=True)
+            except Exception:
+                pass
         except Exception as e:
             print(f"[LightIO] 网络节点创建失败 [{old_name} ({ntype})]: {e}")
             name_map[old_name] = None
@@ -800,21 +810,45 @@ def _restore_node_network(shape_node: str, network: Dict[str, Dict],
 
     # ── 第四步：将上游节点连回灯光 shape ──
     if connections:
+        import maya.mel as mel
+        # 构建 short→long 属性名映射
+        attr_map = {}
+        try:
+            for a in cmds.listAttr(shape_node) or []:
+                la = cmds.attributeQuery(a, node=shape_node, longName=True)
+                attr_map[la] = a
+                attr_map[a] = la
+        except Exception:
+            pass
+
         for dest_attr, conn_info in connections.items():
             old_src = conn_info.get("source_node", "")
             src_attr = conn_info.get("source_attr", "")
-            # 通过 name_map 映射到新创建的节点
             src_new = name_map.get(old_src, old_src)
             if not src_new or not cmds.objExists(src_new):
+                print(f"[LightIO] 源节点不存在: {old_src}")
                 continue
-            full_src = f"{src_new}.{src_attr}"
-            full_dest = f"{shape_node}.{dest_attr}"
-            if cmds.objExists(full_src) and cmds.objExists(full_dest):
-                try:
-                    cmds.connectAttr(full_src, full_dest, force=True)
-                    print(f"[LightIO] 连回灯光: {full_src} → {full_dest}")
-                except Exception as e:
-                    print(f"[LightIO] 连回灯光失败 [{dest_attr}]: {e}")
+
+            # 尝试多种 dest_attr 变体（short/long）
+            dest_candidates = [dest_attr]
+            if dest_attr in attr_map:
+                dest_candidates.append(attr_map[dest_attr])
+
+            connected = False
+            for dc in dest_candidates:
+                full_src = f"{src_new}.{src_attr}"
+                full_dest = f"{shape_node}.{dc}"
+                if cmds.objExists(full_src) and cmds.objExists(full_dest):
+                    try:
+                        cmds.connectAttr(full_src, full_dest, force=True)
+                        print(f"[LightIO] 连回灯光: {full_src} → {full_dest}")
+                        connected = True
+                        break
+                    except Exception as e:
+                        print(f"[LightIO] 连回灯光失败 [{dc}]: {e}")
+
+            if not connected:
+                print(f"[LightIO] 无法连回灯光: {old_src}.{src_attr} → {shape_node}.{dest_attr}")
 
     print(f"[LightIO] 节点网络重建完成: {len(name_map)} 个节点")
 
