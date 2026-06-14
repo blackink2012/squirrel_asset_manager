@@ -587,7 +587,7 @@
         },
         {
             "name": "rsStandardMaterial",
-            "node_type": "rsStandardMaterial"
+            "node_type": "RedshiftStandardMaterial"
         },
         {
             "name": "standardSurface",
