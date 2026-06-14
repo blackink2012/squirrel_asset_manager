@@ -30,7 +30,7 @@ class ToolBar(QtWidgets.QWidget):
         self.setWindowFlags(
             QtCore.Qt.FramelessWindowHint |
             QtCore.Qt.WindowStaysOnTopHint |
-            QtCore.Qt.Window
+            QtCore.Qt.Tool
         )
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground, False)
         self.setStyleSheet("""
@@ -907,8 +907,16 @@ def show_capture_tool():
             _capture_tool_instance.deleteLater()
     except:
         pass
+
+    # 临时设置应用显示名，使任务栏显示「截图工具」
+    app = QtWidgets.QApplication.instance()
+    old_display = app.applicationDisplayName()
+    app.setApplicationDisplayName("截图工具")
+
     _capture_tool_instance = CaptureTool()
     _capture_tool_instance.show()
+
+    app.setApplicationDisplayName(old_display)
 
 
 if __name__ == "__main__":
