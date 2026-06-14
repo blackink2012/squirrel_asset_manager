@@ -1,9 +1,8 @@
 """
-.zoolight — 渲染器无关的灯光资产格式
+.zlight �?渲染器无关的灯光资产格式
 
-类似 PBR 贴图可创建不同渲染器材质，.zoolight 描述灯光的物理属性，
-导入时根据当前渲染器自动创建对应的灯光节点。
-
+类似 PBR 贴图可创建不同渲染器材质�?zlight 描述灯光的物理属性，
+导入时根据当前渲染器自动创建对应的灯光节点�?
 支持类型: area / point / spot / directional / dome / disk / cylinder
 """
 
@@ -21,10 +20,8 @@ except ImportError:
     _IN_MAYA = False
 
 
-# ═══════════════════════════════════════════════════════════════
-# 数据模型
-# ═══════════════════════════════════════════════════════════════
-
+# ══════════════════════════════════════════════════════════════�?# 数据模型
+# ══════════════════════════════════════════════════════════════�?
 @dataclass
 class LightTransform:
     translate: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
@@ -38,32 +35,29 @@ class LightData:
     name: str = "light"
     light_type: str = "area"  # area | point | spot | directional | dome | disk | cylinder
 
-    # ── 通用物理属性 ──
+    # ── 通用物理属�?──
     color:       List[float] = field(default_factory=lambda: [1.0, 1.0, 1.0])
     intensity:   float = 1.0
     exposure:    float = 0.0
-    temperature: float = 6500.0      # 0 = 不使用色温
-    normalize:   bool = True
+    temperature: float = 6500.0      # 0 = 不使用色�?    normalize:   bool = True
     visible:     bool = False
 
-    # ── 类型特有属性 ──
+    # ── 类型特有属�?──
     cone_angle:     float = 45.0     # spot 光锥角度
     penumbra_angle: float = 0.0      # spot 半影角度
     dropoff:        float = 0.0       # spot 衰减
 
     angular_diameter: float = 0.53   # directional 角直径（度）
 
-    hdr_path: str = ""               # dome 的 HDR 贴图路径
+    hdr_path: str = ""               # dome �?HDR 贴图路径
 
     # ── 变换 ──
     transform: LightTransform = field(default_factory=LightTransform)
 
 
-# ═══════════════════════════════════════════════════════════════
-# 渲染器 → 灯光类型映射
-# ═══════════════════════════════════════════════════════════════
-
-# 导出：Maya 灯光 nodeType → 通用类型
+# ══════════════════════════════════════════════════════════════�?# 渲染�?�?灯光类型映射
+# ══════════════════════════════════════════════════════════════�?
+# 导出：Maya 灯光 nodeType �?通用类型
 _MAYA_TYPE_TO_LIGHT_TYPE: Dict[str, str] = {
     # Arnold
     "aiAreaLight":        "area",
@@ -99,12 +93,11 @@ _MAYA_TYPE_TO_LIGHT_TYPE: Dict[str, str] = {
     "RedshiftPortalLight":  None,
 }
 
-# 导入：通用类型 → 当前渲染器灯光节点类型
-_RENDERER_LIGHT_MAP: Dict[str, Dict[str, str]] = {
+# 导入：通用类型 �?当前渲染器灯光节点类�?_RENDERER_LIGHT_MAP: Dict[str, Dict[str, str]] = {
     "arnold": {
         "area":        "aiAreaLight",
         "point":       "aiPhotometricLight",
-        "spot":        "aiPhotometricLight",  # Arnold 无原生 spot→用 point
+        "spot":        "aiPhotometricLight",  # Arnold 无原�?spot→用 point
         "directional": "aiSkyDomeLight",       # Arnold 无原生平行光→用 dome 近似
         "dome":        "aiSkyDomeLight",
         "disk":        "aiAreaLight",
@@ -133,17 +126,15 @@ _RENDERER_LIGHT_MAP: Dict[str, Dict[str, str]] = {
         "point":       "pointLight",
         "spot":        "spotLight",
         "directional": "directionalLight",
-        "dome":        "directionalLight",     # Maya 无原生 dome→用 directional 近似
+        "dome":        "directionalLight",     # Maya 无原�?dome→用 directional 近似
         "disk":        "areaLight",
         "cylinder":    "areaLight",
     },
 }
 
 
-# ═══════════════════════════════════════════════════════════════
-# 属性映射：通用属性 → 各渲染器节点属性名
-# ═══════════════════════════════════════════════════════════════
-
+# ══════════════════════════════════════════════════════════════�?# 属性映射：通用属�?�?各渲染器节点属性名
+# ══════════════════════════════════════════════════════════════�?
 _RENDERER_ATTR_MAP: Dict[str, Dict[str, Any]] = {
     "arnold": {
         "color":        "color",
@@ -152,11 +143,11 @@ _RENDERER_ATTR_MAP: Dict[str, Dict[str, Any]] = {
         "temperature":  "colorTemperature",
         "normalize":    "normalize",
         "visible":      "lightVisible",
-        "cone_angle":   None,        # Arnold Photometric 无 cone angle
+        "cone_angle":   None,        # Arnold Photometric �?cone angle
         "penumbra_angle": None,
         "dropoff":      None,
         "angular_diameter": None,
-        "hdr_path":     "color",     # aiSkyDomeLight.color 连 file 节点
+        "hdr_path":     "color",     # aiSkyDomeLight.color �?file 节点
     },
     "vray": {
         "color":        ("lightColor", "srgb"),
@@ -200,19 +191,15 @@ _RENDERER_ATTR_MAP: Dict[str, Dict[str, Any]] = {
 }
 
 
-# ═══════════════════════════════════════════════════════════════
-# 导出 — Maya → .zoolight JSON
-# ═══════════════════════════════════════════════════════════════
-
+# ══════════════════════════════════════════════════════════════�?# 导出 �?Maya �?.zlight JSON
+# ══════════════════════════════════════════════════════════════�?
 def export_light_from_maya(shape_node: str) -> Optional[LightData]:
-    """从 Maya 灯光 shape 节点提取通用光参数。
-
+    """�?Maya 灯光 shape 节点提取通用光参数�?
     Args:
         shape_node: Maya 灯光 shape 节点完整路径
 
     Returns:
-        LightData 或 None（无效类型/导出失败）
-    """
+        LightData �?None（无效类�?导出失败�?    """
     if not _IN_MAYA or not cmds.objExists(shape_node):
         return None
 
@@ -227,7 +214,7 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
         light_type=light_type,
     )
 
-    # ── 变换（从 transform 父级读取） ──
+    # ── 变换（从 transform 父级读取�?──
     parents = cmds.listRelatives(shape_node, parent=True, fullPath=True) or []
     if parents:
         data.name = parents[0]
@@ -241,13 +228,13 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
         except Exception:
             pass
 
-    # ── 通用属性提取 ──
+    # ── 通用属性提�?──
     # 使用当前渲染器的属性名尝试读取，回退到常见属性名
     renderer = _detect_renderer()
     rmap = _RENDERER_ATTR_MAP.get(renderer, _RENDERER_ATTR_MAP["maya"])
 
     def _read(attr_name):
-        """尝试从 shape_node 读取 attr_name，不存在返回 None"""
+        """尝试�?shape_node 读取 attr_name，不存在返回 None"""
         full = f"{shape_node}.{attr_name}"
         if cmds.objExists(full):
             try:
@@ -257,7 +244,7 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
         return None
 
     def _read_color(attr_name):
-        """读取 RGB 颜色，处理 srgb/linear 差异"""
+        """读取 RGB 颜色，处�?srgb/linear 差异"""
         full = f"{shape_node}.{attr_name}"
         if not cmds.objExists(full):
             return None
@@ -289,8 +276,7 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
             except Exception:
                 continue
 
-            # 取第一组（处理 list-of-list）
-            if isinstance(val, list) and len(val) >= 3 and isinstance(val[0], list):
+            # 取第一组（处理 list-of-list�?            if isinstance(val, list) and len(val) >= 3 and isinstance(val[0], list):
                 val = val[0]
 
             if ukey == "color":
@@ -318,15 +304,13 @@ def export_light_from_maya(shape_node: str) -> Optional[LightData]:
                 if isinstance(val, str) and val.strip():
                     data.hdr_path = val
 
-            # 已找到值就不再尝试其他渲染器的同名属性
-            break
+            # 已找到值就不再尝试其他渲染器的同名属�?            break
 
     return data
 
 
 def export_lights_to_json(shape_nodes: List[str], filepath: str) -> bool:
-    """导出多个灯光 shape 节点到 .zoolight JSON 文件。
-
+    """导出多个灯光 shape 节点�?.zlight JSON 文件�?
     Returns:
         bool 是否成功
     """
@@ -340,7 +324,7 @@ def export_lights_to_json(shape_nodes: List[str], filepath: str) -> bool:
             warnings.append(f"  跳过: {shp} (不支持的灯光类型)")
 
     if warnings and not lights:
-        print(f"[LightIO] 所有灯光均不支持: {', '.join(shape_nodes)}")
+        print(f"[LightIO] 所有灯光均不支�? {', '.join(shape_nodes)}")
         return False
 
     if warnings:
@@ -349,7 +333,7 @@ def export_lights_to_json(shape_nodes: List[str], filepath: str) -> bool:
     # 构建 JSON
     doc = {
         "version": "1.0",
-        "description": "渲染器无关灯光资产",
+        "description": "渲染器无关灯光资�?,
         "software": _get_software(),
         "lights": [_lightdata_to_dict(ld) for ld in lights],
     }
@@ -358,35 +342,32 @@ def export_lights_to_json(shape_nodes: List[str], filepath: str) -> bool:
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=2, ensure_ascii=False)
 
-    print(f"[LightIO] 导出成功: {filepath} ({len(lights)} 个灯光)")
+    print(f"[LightIO] 导出成功: {filepath} ({len(lights)} 个灯�?")
     return True
 
 
 def _lightdata_to_dict(ld: LightData) -> dict:
-    """LightData → JSON 字典（清理空值/默认值）"""
+    """LightData �?JSON 字典（清理空�?默认值）"""
     d = asdict(ld)
     d["transform"] = {
         "translate": [round(v, 6) for v in ld.transform.translate],
         "rotate":    [round(v, 6) for v in ld.transform.rotate],
         "scale":     [round(v, 6) for v in ld.transform.scale],
     }
-    # 移除零值/none 避免 JSON 臃肿
+    # 移除零�?none 避免 JSON 臃肿
     d["color"] = [round(v, 6) for v in ld.color]
     return d
 
 
-# ═══════════════════════════════════════════════════════════════
-# 导入 — .zoolight JSON → Maya 灯光节点
-# ═══════════════════════════════════════════════════════════════
-
+# ══════════════════════════════════════════════════════════════�?# 导入 �?.zlight JSON �?Maya 灯光节点
+# ══════════════════════════════════════════════════════════════�?
 def import_lights_from_json(filepath: str) -> Tuple[int, List[str]]:
-    """从 .zoolight JSON 创建当前渲染器灯光节点。
-
+    """�?.zlight JSON 创建当前渲染器灯光节点�?
     Args:
-        filepath: .zoolight 文件路径
+        filepath: .zlight 文件路径
 
     Returns:
-        (创建数量, 创建的灯光 transform 名称列表)
+        (创建数量, 创建的灯�?transform 名称列表)
     """
     if not _IN_MAYA:
         return 0, []
@@ -408,12 +389,12 @@ def import_lights_from_json(filepath: str) -> Tuple[int, List[str]]:
         except Exception as e:
             print(f"[LightIO] 灯光创建失败 [{ld.name}]: {e}")
 
-    print(f"[LightIO] 导入完成: {filepath} — {len(created)}/{len(lights_data)} 个灯光")
+    print(f"[LightIO] 导入完成: {filepath} �?{len(created)}/{len(lights_data)} 个灯�?)
     return len(created), created
 
 
 def _dict_to_lightdata(d: dict) -> LightData:
-    """JSON 字典 → LightData"""
+    """JSON 字典 �?LightData"""
     t = d.get("transform", {})
     return LightData(
         name=d.get("name", "light"),
@@ -438,27 +419,25 @@ def _dict_to_lightdata(d: dict) -> LightData:
 
 
 def _create_light(ld: LightData, renderer: str) -> Optional[str]:
-    """根据 LightData + 渲染器在 Maya 中创建灯光节点。
-
+    """根据 LightData + 渲染器在 Maya 中创建灯光节点�?
     Returns:
         transform 节点名，失败返回 None
     """
     node_type = _RENDERER_LIGHT_MAP.get(renderer, {}).get(ld.light_type)
     if not node_type:
-        print(f"[LightIO] 渲染器 {renderer} 不支持灯光类型 {ld.light_type}")
+        print(f"[LightIO] 渲染�?{renderer} 不支持灯光类�?{ld.light_type}")
         return None
 
     amap = _RENDERER_ATTR_MAP.get(renderer, {})
     if not amap:
-        print(f"[LightIO] 渲染器 {renderer} 无属性映射")
+        print(f"[LightIO] 渲染�?{renderer} 无属性映�?)
         return None
 
     # ── 创建灯光 ──
     try:
         xform = cmds.shadingNode(node_type, asLight=True)
     except Exception as e:
-        # shadingNode 失败 → 有些渲染器要完整 shape 名
-        print(f"[LightIO] shadingNode({node_type}) 失败: {e}")
+        # shadingNode 失败 �?有些渲染器要完整 shape �?        print(f"[LightIO] shadingNode({node_type}) 失败: {e}")
         return None
 
     shapes = cmds.listRelatives(xform, shapes=True) or []
@@ -472,7 +451,7 @@ def _create_light(ld: LightData, renderer: str) -> Optional[str]:
     except Exception:
         pass
 
-    # ── 设置通用属性 ──
+    # ── 设置通用属�?──
     def _set(attr_name, value):
         full = f"{shape_node}.{attr_name}"
         if not cmds.objExists(full):
@@ -541,9 +520,9 @@ def _create_light(ld: LightData, renderer: str) -> Optional[str]:
 
 
 def _set_hdr(shape_node: str, hdr_path: str, attr_name: str, renderer: str):
-    """为 dome 灯光连接 HDR 贴图 file 节点"""
+    """�?dome 灯光连接 HDR 贴图 file 节点"""
     if not os.path.isfile(hdr_path):
-        print(f"[LightIO] HDR 文件不存在: {hdr_path}")
+        print(f"[LightIO] HDR 文件不存�? {hdr_path}")
         return
 
     try:
@@ -551,7 +530,7 @@ def _set_hdr(shape_node: str, hdr_path: str, attr_name: str, renderer: str):
         cmds.setAttr(f"{file_node}.fileTextureName", hdr_path, type="string")
         cmds.setAttr(f"{file_node}.ignoreColorSpaceFileRules", True)
 
-        # 尝试设置色彩空间为 Raw
+        # 尝试设置色彩空间�?Raw
         try:
             cmds.setAttr(f"{file_node}.colorSpace", "Raw", type="string")
         except Exception:
@@ -560,17 +539,15 @@ def _set_hdr(shape_node: str, hdr_path: str, attr_name: str, renderer: str):
         full_attr = f"{shape_node}.{attr_name}"
         if cmds.objExists(full_attr):
             cmds.connectAttr(f"{file_node}.outColor", full_attr, force=True)
-            print(f"[LightIO] HDR 已连接: {hdr_path} → {full_attr}")
+            print(f"[LightIO] HDR 已连�? {hdr_path} �?{full_attr}")
     except Exception as e:
         print(f"[LightIO] HDR 连接失败: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# 工具函数
-# ═══════════════════════════════════════════════════════════════
-
+# ══════════════════════════════════════════════════════════════�?# 工具函数
+# ══════════════════════════════════════════════════════════════�?
 def _detect_renderer() -> str:
-    """检测当前 Maya 激活的渲染器"""
+    """检测当�?Maya 激活的渲染�?""
     if not _IN_MAYA:
         return "maya"
     try:
