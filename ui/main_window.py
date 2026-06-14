@@ -955,6 +955,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._thumbnail_grid.dragDroppedOnViewport.connect(self._on_drag_dropped)
         self._thumbnail_grid.previewNodeRequested.connect(self._on_preview_node)
         self._thumbnail_grid.createLightRequested.connect(self._on_create_light_from_grid)
+        self._thumbnail_grid.importZlightAsRenderer.connect(self._on_import_zlight_as_renderer)
 
         self._search_bar.searchChanged.connect(self._on_search)
         self._search_bar.tagFilterChanged.connect(self._on_search_tag_changed)
@@ -6113,6 +6114,48 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             import traceback
             traceback.print_exc()
             print(f"[CreateLight] 异常: {e}")
+
+    def _on_import_zlight_as_renderer(self, zasset_path: str, renderer: str):
+        """以指定渲染器导入 zlight 灯光资产"""
+        import json, tempfile, os
+        from squirrel_asset_manager.core.zasset_io import ZassetIO
+        from squirrel_asset_manager.core.light_io import import_lights_from_json
+
+        try:
+            all_names = ZassetIO.list_contents(zasset_path)
+            zlight_name = None
+            for n in all_names:
+                if n.endswith(".zlight") and os.path.dirname(n) == "":
+                    zlight_name = n
+                    break
+            if not zlight_name:
+                for n in all_names:
+                    if n.endswith(".zlight"):
+                        zlight_name = n
+                        break
+            if not zlight_name:
+                print(f"[ImportZlight] .zasset 不含 .zlight 文件")
+                return
+
+            zlight_data = json.loads(ZassetIO.read_file(zasset_path, zlight_name))
+            tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zlight")
+            with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
+                json.dump(zlight_data, f, indent=2, ensure_ascii=False)
+
+            count, created = import_lights_from_json(tmp_path, renderer=renderer)
+            os.unlink(tmp_path)
+
+            if count > 0:
+                print(f"[ImportZlight] 已创建 {count} 个 {renderer} 灯光")
+                try:
+                    import maya.cmds as cmds
+                    cmds.select(created, replace=True)
+                except Exception:
+                    pass
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[ImportZlight] 导入失败: {e}")
 
     def _on_settings(self):
         """打开设置窗口（非模态单例）"""

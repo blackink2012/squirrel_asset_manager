@@ -379,11 +379,12 @@ def _lightdata_to_dict(ld: LightData) -> dict:
 # 导入 — .zlight JSON → Maya 灯光节点
 # ═══════════════════════════════════════════════════════════════
 
-def import_lights_from_json(filepath: str) -> Tuple[int, List[str]]:
-    """从 .zlight JSON 创建当前渲染器灯光节点。
+def import_lights_from_json(filepath: str, renderer: str = "") -> Tuple[int, List[str]]:
+    """从 .zlight JSON 创建灯光节点。
 
     Args:
         filepath: .zlight 文件路径
+        renderer: 指定渲染器（"" = 自动检测当前渲染器）
 
     Returns:
         (创建数量, 创建的灯光 transform 名称列表)
@@ -395,7 +396,8 @@ def import_lights_from_json(filepath: str) -> Tuple[int, List[str]]:
         doc = json.load(f)
 
     lights_data = doc.get("lights", [])
-    renderer = _detect_renderer()
+    if not renderer:
+        renderer = _detect_renderer()
     created = []
 
     for light_dict in lights_data:
