@@ -802,6 +802,18 @@ class CaptureTool(QtWidgets.QWidget):
             _capture_tool_instance = None
         event.ignore()
 
+    def showEvent(self, event):
+        """窗口显示时重新启动工具栏位置更新定时器"""
+        super(CaptureTool, self).showEvent(event)
+        if self.pos_update_timer and not self.pos_update_timer.isActive():
+            self.pos_update_timer.start()
+        # 显示工具栏
+        if self.toolbar and not self.toolbar.isVisible():
+            self.toolbar.show()
+            self.toolbar.raise_()
+        # 更新工具栏位置
+        self._update_toolbar_position()
+
     # 按钮槽函数
     def _on_resolution_input(self):
         if self.is_locked:
