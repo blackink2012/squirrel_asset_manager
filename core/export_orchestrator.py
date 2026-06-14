@@ -317,8 +317,13 @@ class ExportOrchestrator:
 
             # Stage 3: 材质预设 .zmetal / .mcm（按配置）→ staging_dir
             if config.export_zmetal:
-                self._stage_zmetal(config, staging_dir, safe_name)
-                exported_formats.append("zmetal")
+                # 灯光资产使用 .zoolight 格式（渲染器无关）
+                if config.asset_type == "lights":
+                    self._stage_zoolight(config, staging_dir, safe_name)
+                    exported_formats.append("zoolight")
+                else:
+                    self._stage_zmetal(config, staging_dir, safe_name)
+                    exported_formats.append("zmetal")
                 # Stage 3b: 更新 .zmetal 内的 fileTextureName → textures/{材质名}/{文件名}
                 zmetal_path = os.path.join(staging_dir, f"{safe_name}.zmetal")
                 if os.path.isfile(zmetal_path) and tex_path_map:
@@ -1197,6 +1202,75 @@ class ExportOrchestrator:
             traceback.print_exc()
 
         return files
+
+    def _stage_zoolight(self, config: ExportConfig, asset_dir: str, safe_name: str) -> bool:
+        """导出 .zoolight 灯光预设文件（渲染器无关格式）。
+
+        从 Maya 灯光 shape 节点提取通用物理参数，
+        写入 .zoolight JSON 文件。
+
+        Returns:
+            bool 是否成功
+        """
+        if not _IN_MAYA:
+            return False
+
+        try:
+            from squirrel_asset_manager.core.light_io import export_light_from_maya, export_lights_to_json
+
+            shape_nodes = []
+
+            # 方法1: material_node 本身就是 shape（main_window 中 _resolve_light_shape 保证）
+            if config.material_node and cmds.objExists(config.material_node):
+                # 确认是 shape 节点
+                if not cmds.getClassification(cmds.nodeType(config.material_node), satisfies="light"):
+                    # 可能是 transform→找 shape
+                    shapes = cmds.listRelatives(config.material_node, shapes=True, fullPath=True) or []
+                    for shp in shapes:
+                        if cmds.getClassification(cmds.nodeType(shp), satisfies="light"):
+                            shape_nodes.append(shp)
+                    # 递归子级（处理 VRaySun 的嵌套结构）
+                    children = cmds.listRelatives(config.material_node, children=True, fullPath=True) or []
+                    for child in children:
+                        grand_shapes = cmds.listRelatives(child, shapes=True, fullPath=True) or []
+                        for gs in grand_shapes:
+                            try:
+                                if cmds.getClassification(cmds.nodeType(gs), satisfies="light"):
+                                    shape_nodes.append(gs)
+                            except Exception:
+                                pass
+                else:
+                    shape_nodes.append(config.material_node)
+
+            # 方法2: 从 associated_objects 收集灯光 shape
+            for obj in config.associated_objects or []:
+                if not cmds.objExists(obj):
+                    continue
+                # 直接 shape
+                if cmds.getClassification(cmds.nodeType(obj), satisfies="light"):
+                    if obj not in shape_nodes:
+                        shape_nodes.append(obj)
+                    continue
+                # transform→找子级 shape
+                shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
+                for shp in shapes:
+                    if cmds.getClassification(cmds.nodeType(shp), satisfies="light"):
+                        if shp not in shape_nodes:
+                            shape_nodes.append(shp)
+
+            if not shape_nodes:
+                print(f"[Export::zoolight] 未找到灯光 shape 节点")
+                return False
+
+            print(f"[Export::zoolight] 找到 {len(shape_nodes)} 个灯光 shape: {[cmds.nodeType(s) for s in shape_nodes]}")
+            filepath = os.path.join(asset_dir, f"{safe_name}.zoolight")
+            return export_lights_to_json(shape_nodes, filepath)
+
+        except Exception as e:
+            print(f"[Export] zoolight 导出异常: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
     def _stage_mcm(self, config: ExportConfig, asset_dir: str, safe_name: str) -> str:
         """导出 .mcm 材质→模型映射文件。
