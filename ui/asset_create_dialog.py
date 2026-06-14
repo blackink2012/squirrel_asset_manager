@@ -514,10 +514,24 @@ class AssetCreateDialog(QtWidgets.QDialog):
 
         # ▸ 节点格式（材质/灯光/其他）
         is_material_asset = (self._asset_type == "materials")
+        is_light_asset = (self._asset_type == "lights")
         self._is_material_asset = is_material_asset
-        self._subsection_nodes = self._make_subsection("材质格式" if is_material_asset else "节点格式")
+        self._is_light_asset = is_light_asset
+        if is_light_asset:
+            subsection_title = "灯光格式"
+        elif is_material_asset:
+            subsection_title = "材质格式"
+        else:
+            subsection_title = "节点格式"
+        self._subsection_nodes = self._make_subsection(subsection_title)
         right.addWidget(self._subsection_nodes)
-        self._cb_zmetal = self._add_checkbox_row(right, "节点预设 .zmetal" if not is_material_asset else "材质预设 .zmetal", self._export_zmetal)
+        # 灯光 → .zlight，材质/其他 → .zmetal
+        if is_light_asset:
+            self._cb_zmetal = self._add_checkbox_row(right, "灯光预设 .zlight", self._export_zmetal)
+        elif is_material_asset:
+            self._cb_zmetal = self._add_checkbox_row(right, "材质预设 .zmetal", self._export_zmetal)
+        else:
+            self._cb_zmetal = self._add_checkbox_row(right, "节点预设 .zmetal", self._export_zmetal)
         self._checkboxes["zmetal"] = self._cb_zmetal
         self._cb_zmetal.toggled.connect(self._on_zmetal_toggled)
 
@@ -533,7 +547,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         mcm_layout.addWidget(self._cb_mcm)
         mcm_layout.addStretch()
         right.addWidget(self._mcm_row)
-        self._mcm_row.setVisible(self._cb_zmetal.isChecked())
+        self._mcm_row.setVisible(self._cb_zmetal.isChecked() and not is_light_asset)
 
         # 合并 ZMETAL 缩进行
         self._merge_zmetal_row = QtWidgets.QWidget()
@@ -545,7 +559,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         mz_layout.addWidget(self._cb_merge_zmetal)
         mz_layout.addStretch()
         right.addWidget(self._merge_zmetal_row)
-        self._merge_zmetal_row.setVisible(self._cb_zmetal.isChecked())
+        self._merge_zmetal_row.setVisible(self._cb_zmetal.isChecked() and not is_light_asset)
 
         # ▸ 几何体格式
         right.addWidget(self._make_subsection("几何体格式（通过 Maya 原生导出）"))
@@ -762,9 +776,10 @@ class AssetCreateDialog(QtWidgets.QDialog):
     # ── .mcm 联动 ──────────────────────────────────────
 
     def _on_zmetal_toggled(self, checked):
-        """.zmetal 切换时更新子选项可见性"""
-        self._merge_zmetal_row.setVisible(checked)
-        self._mcm_row.setVisible(checked)
+        """.zmetal/.zlight 切换时更新子选项可见性"""
+        _is_light = getattr(self, '_is_light_asset', False)
+        self._merge_zmetal_row.setVisible(checked and not _is_light)
+        self._mcm_row.setVisible(checked and not _is_light)
 
     # ── 仅材质模式联动 ──────────────────────────────────
 
