@@ -89,7 +89,7 @@ img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #dd
 <p>每个库下包含 6 个子库：<b>材质、模型、贴图、灯光、场景、HDR</b>。每个子库可自定义分类层级。</p>
 
 <h3>资产格式</h3>
-<p>所有资产统一为 <code>.zasset</code> 文件夹格式，内含元数据（<code>meta.json</code>）、缩略图（<code>thumb.sicon</code> / <code>thumb.mp4</code>）、材质数据（<code>node.zmetal</code>）、几何体（<code>node.ma/fbx/abc...</code>）、贴图（<code>textures/</code> 目录）和可选的关联文件（<code>associated/</code>）。一个文件夹即一个完整资产。</p>
+<p>所有资产统一为 <code>.zasset</code> 文件夹格式，内含元数据（<code>meta.json</code>）、缩略图（<code>thumb.sicon</code> / <code>thumb.mp4</code>）、材质数据（<code>node.zmetal</code>）、灯光数据（<code>node.zlight</code>）、几何体（<code>node.ma/fbx/abc...</code>）、贴图（<code>textures/</code> 目录）和可选的关联文件（<code>associated/</code>）。一个文件夹即一个完整资产。</p>
 
 <h2 id="export">2. 导出资产</h2>
 <p>导出是将 Maya 场景中的材质、模型或物体打包为 <code>.zasset</code> 资产的过程。点击 <b>"导出资产"</b> 按钮打开导出对话框（详细格式说明见对话框中的 "?" 帮助）。</p>
@@ -119,7 +119,7 @@ img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #dd
 <tr><td>几何体</td><td>ma / mb / fbx / obj / usd</td><td>标准建模格式，.ma/.mb 导出时引用保持不被烘焙</td></tr>
 <tr><td>缓存</td><td>abc (Alembic)</td><td>动画缓存，支持时间轴和关键帧范围</td></tr>
 <tr><td>代理</td><td>ass / rs / vrscene / vrmesh</td><td>Arnold / Redshift / V-Ray 渲染器代理格式</td></tr>
-<tr><td>节点</td><td>.zmetal / .mcm</td><td>材质节点预设 + 材质映射（拓扑匹配）</td></tr>
+<tr><td>节点</td><td>.zmetal / .zlight / .mcm</td><td>材质节点预设 + 灯光预设 + 材质映射（拓扑匹配）</td></tr>
 <tr><td>贴图</td><td>textures/</td><td>默认勾选，将材质关联贴图打包到资产内。取消则不打包</td></tr>
 </table>
 
@@ -159,6 +159,7 @@ img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #dd
 <tr><th>菜单项</th><th>效果</th></tr>
 <tr><td><b>导入到场景</b></td><td>自动选择最合适的格式导入</td></tr>
 <tr><td><b>导入 → .zmetal</b></td><td>重建完整着色网络（节点、属性、连接、贴图）。材质名保持原名</td></tr>
+<tr><td><b>导入灯光 → 选择渲染器</b></td><td>从 .zlight 重建灯光节点网络（含贴图/IES/HDR），支持 Arnold / V-Ray / Redshift / Maya 原生四选导入</td></tr>
 <tr><td><b>导入 → .mcm</b></td><td>导入材质 + 自动匹配赋予选中物体（见 3.3）</td></tr>
 <tr><td><b>导入 → .ma/.fbx/.obj/...</b></td><td>按指定格式导入几何体</td></tr>
 <tr><td><b>导入 → .ass/.rs/.vrscene/.vrmesh</b></td><td>创建渲染器代理引用节点</td></tr>
@@ -167,6 +168,8 @@ img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #dd
 </table>
 
 <div class="note"><b>.zmetal 原理：</b>记录 Maya 材质网络的完整信息。导入时在场景中重建整个着色网络。原始 Maya 文件不存在也能还原材质。</div>
+
+<div class="note"><b>.zlight 原理：</b>渲染器无关的灯光预设格式。记录灯光通用参数（颜色/强度/曝光/色温等）+ 完整上游节点网络（贴图/IES/棋盘格等），导入时选择目标渲染器自动创建对应灯光类型。同一份 .zlight 可跨 Arnold/V-Ray/Redshift/Maya 原生使用。</div>
 
 <h3 id="import-mcm">3.3 MCM 材质匹配</h3>
 <p><b>.mcm</b> 记录物体拓扑特征（<b>顶点数、面数、边数</b>），导入时通过三维特征精确匹配，自动赋予材质。</p>

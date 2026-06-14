@@ -130,6 +130,7 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 
 <h3>材质 / 节点格式</h3>
 <div class="ui-elem"><strong>材质预设 .zmetal</strong> — 勾选后导出 Maya 材质节点数据。多材质可选"合并"或分别导出。</div>
+<div class="ui-elem"><strong>灯光预设 .zlight</strong> — 勾选后导出渲染器无关的灯光数据（颜色/强度/曝光/色温 + 上游贴图/IES/HDR 节点网络）。导入时可选 Arnold / V-Ray / Redshift / Maya 原生，自动创建对应灯光节点。同一份 .zlight 可跨渲染器使用。</div>
 <div class="ui-elem"><strong>材质映射 .mcm</strong> — 记录物体顶点/面/边数，用于导入时自动匹配模型。仅在勾选 .zmetal 时可用。</div>
 
 <h3>几何体格式</h3>
@@ -221,6 +222,7 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 ├── meta.json
 ├── node.ma
 ├── node.zmetal
+├── node.zlight              ← 灯光预设（灯光分类专属）
 ├── textures/
 │   └── MatName/
 │       └── diffuse.png
