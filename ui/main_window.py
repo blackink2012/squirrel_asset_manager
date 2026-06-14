@@ -5398,8 +5398,16 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             try:
                 shapes = cmds.listRelatives(dag_obj, shapes=True, fullPath=True) or []
                 for shp in shapes:
+                    shp_type = cmds.nodeType(shp)
+                    # 方法1: getClassification（Maya 标准分类，兼容 Arnold/V-Ray/Redshift 等插件）
+                    if cmds.getClassification(shp_type, satisfies="light"):
+                        return shp
+                    # 方法2: inherited types 包含 light（Maya 原生灯光）
                     inherited = cmds.nodeType(shp, inherited=True) or []
                     if isinstance(inherited, (list, tuple)) and 'light' in inherited:
+                        return shp
+                    # 方法3: 类型名包含 Light（宽松兜底）
+                    if 'Light' in shp_type:
                         return shp
             except Exception:
                 pass
@@ -5422,6 +5430,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 "material_node": first_mat or "",
                 "associated_objects": all_objects,
             })
+            print(f"[Export] material_node={first_mat} (type={cmds.nodeType(first_mat) if first_mat and cmds.objExists(first_mat) else '?'})")
             configs.append(cfg)
 
         else:
@@ -5444,6 +5453,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                     "material_node": mat_node or "",
                     "associated_objects": [obj],
                 })
+                if mat_node:
+                    print(f"[Export] batch material_node={mat_node} (type={cmds.nodeType(mat_node) if cmds.objExists(mat_node) else '?'})")
                 configs.append(cfg)
 
             # ⑤-B: 直接选的材质节点
