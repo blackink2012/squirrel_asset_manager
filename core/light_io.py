@@ -746,7 +746,11 @@ def _create_light(ld: LightData, renderer: str) -> Optional[str]:
     # ── 恢复连接的贴图/IES 文件 ──
     # 仅在没有完整 node_network 时才用 connected_files 简单恢复
     if ld.connected_files and not ld.node_network:
-        _restore_connected_files(shape_node, ld.connected_files, renderer)
+        # 过滤掉 IES 等直接属性值（由 _restore_shape_file_attrs 处理）
+        file_only = {k: v for k, v in ld.connected_files.items()
+                     if ld.connections.get(k, {}).get("node_type") != "string_attr"}
+        if file_only:
+            _restore_connected_files(shape_node, file_only, renderer)
         # 恢复灯光自身属性中的文件路径（IES 等非连接值）
         _restore_shape_file_attrs(shape_node, ld.connections, ld.connected_files)
 
@@ -838,9 +842,13 @@ def apply_light_params_to_shape(shape_node: str, ld: LightData, renderer: str = 
     if ld.light_type == "dome" and ld.hdr_path and amap.get("hdr_path"):
         _set_hdr(shape_node, ld.hdr_path, amap["hdr_path"], renderer)
 
-    # connected files (only if no node_network)
+    # connected files (only if no node_network; skip string_attr — those are direct attr values)
     if ld.connected_files and not ld.node_network:
-        _restore_connected_files(shape_node, ld.connected_files, renderer)
+        # 过滤掉 IES 等直接属性值（由 _restore_shape_file_attrs 处理）
+        file_only = {k: v for k, v in ld.connected_files.items()
+                     if ld.connections.get(k, {}).get("node_type") != "string_attr"}
+        if file_only:
+            _restore_connected_files(shape_node, file_only, renderer)
         _restore_shape_file_attrs(shape_node, ld.connections, ld.connected_files)
 
     # upstream node network
