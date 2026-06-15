@@ -31,9 +31,9 @@ git clone https://gitee.com/zhangzhangle/squirrel_asset_manager.git
 
 ```python
 import sys, os
-sys.path.insert(0, r"D:\你的路径\squirrel_asset_manager")
-import squirrel_asset_manager
-squirrel_asset_manager.show()
+sys.path.insert(0, r"D:\你的路径")
+from squirrel_asset_manager.ui.main_window import MaterialLibraryWindow
+MaterialLibraryWindow.show_window()
 ```
 
 ### 卸载
