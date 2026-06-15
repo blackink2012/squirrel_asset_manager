@@ -178,10 +178,32 @@ class Vocabulary:
 # ---------------------------------------------------------------------------
 
 
+def _find_ffprobe() -> str:
+    """查找 ffprobe 可执行文件（优先插件内置 bin/）"""
+    import os
+    import shutil
+    # ① 插件内置 bin/ffprobe.exe
+    plugin_bin = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffprobe.exe')
+    if os.path.isfile(plugin_bin):
+        return plugin_bin
+    # ② 系统 PATH
+    found = shutil.which('ffprobe')
+    if found:
+        return found
+    # ③ 常见安装路径
+    for p in ['C:/ffmpeg/bin/ffprobe.exe', 'C:/Program Files/ffmpeg/bin/ffprobe.exe']:
+        if os.path.isfile(p):
+            return p
+    return ''
+
+
 def _probe_video(video_path: str) -> dict:
     """用 ffprobe 获取视频基本信息。"""
+    ffprobe = _find_ffprobe()
+    if not ffprobe:
+        raise RuntimeError("ffprobe not found")
     args = [
-        "ffprobe", "-v", "quiet", "-print_format", "json",
+        ffprobe, "-v", "quiet", "-print_format", "json",
         "-show_format", "-show_streams", video_path,
     ]
     result = subprocess.run(args, capture_output=True, text=True, timeout=30)
