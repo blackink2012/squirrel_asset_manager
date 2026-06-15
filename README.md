@@ -12,33 +12,33 @@ Maya 插件级别的资产管理与批量操作平台。支持材质、模型、
 git clone https://gitee.com/zhangzhangle/squirrel_asset_manager.git
 ```
 
-克隆后文件夹名为 `squirrel_asset_manager`，直接将此文件夹放入 Maya 脚本路径即可。
+克隆后文件夹名为 `squirrel_asset_manager`，项目路径可放在任意位置。
 
 ### 安装
 
-将`squirrel_asset_manager` 文件夹放入 Maya 脚本路径即可，例如：
+无需将文件夹复制到 Maya 脚本目录，只需拖拽安装脚本即可。
 
-**方式一：Maya 2025 脚本目录（推荐）**
+#### 方式一：拖拽安装（推荐）
 
-```
-C:\Users\<用户名>\Documents\maya\2025\scripts\squirrel_asset_manager\
-```
+找到 `install.py`，直接将其从文件管理器拖入 Maya 视口，会自动完成以下操作：
 
-**方式二：任意路径 + sys.path 添加**
+1. 在 Maya 脚本目录创建 `squirrel_asset_manager_loader.py`（指向项目原始路径）
+2. 在当前工具架上添加「松鼠资产管理器」按钮
+
+#### 方式二：手动加载
+
+将以下代码粘贴到 Maya 脚本编辑器中执行：
 
 ```python
-import sys
+import sys, os
 sys.path.insert(0, r"D:\你的路径\squirrel_asset_manager")
-```
-
-### 调用
-
-在 Maya 脚本编辑器或 Shelf 按钮中执行：
-
-```python
 import squirrel_asset_manager
 squirrel_asset_manager.show()
 ```
+
+### 卸载
+
+删除 Maya 脚本目录下的 `squirrel_asset_manager_loader.py` 即可。
 
 ### 配置资产库
 
