@@ -178,19 +178,28 @@ class Vocabulary:
 # ---------------------------------------------------------------------------
 
 
+def _find_ffmpeg() -> str:
+    """查找 ffmpeg 可执行文件（优先项目内置 bin/）"""
+    plugin_bin = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg.exe')
+    if os.path.isfile(plugin_bin):
+        return plugin_bin
+    found = shutil.which('ffmpeg')
+    if found:
+        return found
+    for p in ['C:/ffmpeg/bin/ffmpeg.exe', 'C:/Program Files/ffmpeg/bin/ffmpeg.exe']:
+        if os.path.isfile(p):
+            return p
+    return ''
+
+
 def _find_ffprobe() -> str:
-    """查找 ffprobe 可执行文件（优先插件内置 bin/）"""
-    import os
-    import shutil
-    # ① 插件内置 bin/ffprobe.exe
+    """查找 ffprobe 可执行文件（优先项目内置 bin/）"""
     plugin_bin = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffprobe.exe')
     if os.path.isfile(plugin_bin):
         return plugin_bin
-    # ② 系统 PATH
     found = shutil.which('ffprobe')
     if found:
         return found
-    # ③ 常见安装路径
     for p in ['C:/ffmpeg/bin/ffprobe.exe', 'C:/Program Files/ffmpeg/bin/ffprobe.exe']:
         if os.path.isfile(p):
             return p
@@ -226,13 +235,15 @@ def _extract_frames(video_path: str, output_dir: str,
                     max_frames: int = 200,
                     scene_threshold: float = 0.3) -> list:
     """用 ffmpeg 场景检测滤镜提取关键帧。"""
+    ffmpeg = _find_ffmpeg()
+    if not ffmpeg:
+        raise RuntimeError("ffmpeg not found")
     info = _probe_video(video_path)
-    duration = info["duration"]
-    if duration > 300:
+    if info["duration"] > 300:
         scene_threshold = min(scene_threshold * 1.5, 0.6)
 
     args = [
-        "ffmpeg", "-y",
+        ffmpeg, "-y",
         "-i", video_path,
         "-vf", f"select=gt(scene,{scene_threshold})",
         "-vsync", "vfr",
@@ -247,10 +258,10 @@ def _extract_frames(video_path: str, output_dir: str,
     ])
 
     if not frames:
-        middle_time = duration / 2
+        middle_time = info["duration"] / 2
         fallback = os.path.join(output_dir, "fallback_frame.png")
         args_fb = [
-            "ffmpeg", "-y",
+            ffmpeg, "-y",
             "-ss", str(middle_time), "-i", video_path,
             "-vf", "scale=1920:-1",
             "-vframes", "1", fallback,
@@ -503,10 +514,6 @@ class StandaloneAnalyzer:
         tmpdir = tempfile.mkdtemp(prefix="video_analysis_")
         try:
             info = _probe_video(video_path)
-            if info["duration"] > 300:
-                scene_threshold_adj = min(scene_threshold * 1.5, 0.6)
-            else:
-                scene_threshold_adj = scene_threshold
 
             frames = _extract_frames(video_path, tmpdir,
                                      max_frames, scene_threshold)
