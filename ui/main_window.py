@@ -119,7 +119,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             if old_path:
                 self._libraries = [{"name": "默认库", "path": old_path}]
             else:
-                default_path = os.path.join(os.path.expanduser("~"), "SquirrelAssetLibrary")
+                default_path = os.path.join(os.path.expanduser("~"), "SquirrelLib")
                 os.makedirs(default_path, exist_ok=True)
                 self._libraries = [{"name": "默认库", "path": default_path}]
                 self._app_settings["library_paths"] = self._libraries
@@ -139,7 +139,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 print(f"[MaterialLibrary] 加载材质库失败: {e}")
 
         # 回退：自动创建默认
-        default_path = os.path.join(os.path.expanduser("~"), "SquirrelAssetLibrary")
+        default_path = os.path.join(os.path.expanduser("~"), "SquirrelLib")
         os.makedirs(default_path, exist_ok=True)
         ok = self._material_manager.load_library(default_path)
         if ok:
@@ -2525,7 +2525,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             proj = cmds.workspace(query=True, rootDirectory=True)
         except (ImportError, Exception):
             proj = os.getcwd()
-        return os.path.join(proj, "SquirrelAssetLibrary")
+        return os.path.join(proj, "SquirrelLib")
 
     def _on_create_project_lib(self):
         """创建简化的资产文件夹（仅根目录，不含子分类）"""
@@ -2533,7 +2533,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         os.makedirs(lib, exist_ok=True)
         # 先写 library.json，避免后续 load_library 自动创建子分类
         self._project_mgr._json_handler.write_json(os.path.join(lib, "library.json"), {
-            "version": "2.0", "name": "SquirrelAssetLibrary",
+            "version": "2.0", "name": "SquirrelLib",
             "sub_libraries": list(self._project_mgr.ASSET_SUB_LIBRARIES.keys()),
         })
         for sub_dir, sub_name in self._project_mgr.ASSET_SUB_LIBRARIES.items():

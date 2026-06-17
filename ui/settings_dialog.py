@@ -885,7 +885,7 @@ class SettingsDialog(QtWidgets.QDialog):
             return
 
         # 输入资产库名称
-        default_name = "SquirrelAssetLibrary"
+        default_name = "SquirrelLib"
         name, ok = QtWidgets.QInputDialog.getText(
             self, "创建资产库", "请输入资产库名称:", text=default_name)
         if not ok or not name.strip():
