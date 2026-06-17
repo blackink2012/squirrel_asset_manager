@@ -1296,7 +1296,9 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
             QComboBox { background: #333; border: 1px solid #4a4a4a; border-radius: 4px; 
                         padding: 3px; color: #d0d0d0;  }
             QComboBox QAbstractItemView { background: #333; border: 1px solid #4a4a4a;  }
-            QScrollArea {  }
+            QScrollArea { border: none; background: #2a2a2a; }
+            QScrollArea::viewport { background: #2a2a2a; }
+            QWidget { background: #2a2a2a; }
         """)
         
         self.config = load_config()
@@ -1352,10 +1354,6 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         left_scroll = QtWidgets.QScrollArea()
         left_scroll.setWidgetResizable(True)
         left_scroll.setWidget(left_widget)
-        left_scroll.setStyleSheet("""
-            QScrollArea { border: none; background: #2a2a2a; }
-            QScrollArea::viewport { background: #2a2a2a; }
-        """)
         
         # 输入文件夹选择
         input_group = QtWidgets.QGroupBox("贴图文件夹")
