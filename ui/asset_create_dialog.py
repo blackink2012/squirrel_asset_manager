@@ -221,6 +221,11 @@ class AssetCreateDialog(QtWidgets.QDialog):
         # mcm 默认勾选由预设的 "mcm" 字段控制，_material_count 运行时确定
         self._preset_mcm_enabled = entry.get("mcm", True)
 
+        # 收集关联文件和贴图选项
+        self._preset_collect_associated = entry.get("collect_associated", False)
+        self._preset_textures = entry.get("textures", True)
+        self._preset_material_only = entry.get("material_only", False)
+
     @staticmethod
     def _find_preset_path():
         import os
@@ -477,6 +482,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
             "收集场景中已挂载的缓存/代理/引用文件")
         self._cb_collect_associated.setStyleSheet(
             self._checkbox_style() + "QCheckBox { color: #a0a0a0; }")
+        self._cb_collect_associated.setChecked(self._preset_collect_associated)
         self._checkboxes["collect_associated"] = self._cb_collect_associated
         row_ca = QtWidgets.QHBoxLayout()
         row_ca.setContentsMargins(8, 2, 0, 2)
@@ -488,7 +494,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         tex_row = QtWidgets.QHBoxLayout()
         tex_row.setContentsMargins(8, 2, 0, 2)
         cb_tex = QtWidgets.QCheckBox("\u2611 \u8d34\u56fe textures/")
-        cb_tex.setChecked(True)
+        cb_tex.setChecked(self._preset_textures)
         cb_tex.setStyleSheet(self._checkbox_style())
         self._checkboxes["textures"] = cb_tex
         tex_row.addWidget(cb_tex)
@@ -500,6 +506,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         # ▸ 仅材质模式（放在核心之后、材质格式之前）
         self._cb_material_only = QtWidgets.QCheckBox("仅导出材质（跳过几何体/代理）")
         self._cb_material_only.setStyleSheet(self._checkbox_style())
+        self._cb_material_only.setChecked(self._preset_material_only)
         self._cb_material_only.toggled.connect(self._on_material_only_toggled)
         self._checkboxes["material_only"] = self._cb_material_only
         row_mo = QtWidgets.QHBoxLayout()

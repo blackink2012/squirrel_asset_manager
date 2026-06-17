@@ -400,6 +400,29 @@ class SettingsDialog(QtWidgets.QDialog):
                 self._export_cbs[key] = cb
         right.addWidget(other_group)
 
+        # 收集关联文件
+        collect_group = self._group("收集关联文件")
+        collect_layout = QtWidgets.QVBoxLayout(collect_group)
+        cb_collect = QtWidgets.QCheckBox("收集场景中已挂载的缓存/代理/引用文件")
+        cb_collect.setStyleSheet("QCheckBox { color:#d0d0d0; font-size:13px; }")
+        collect_layout.addWidget(cb_collect)
+        self._export_cbs["collect_associated"] = cb_collect
+
+        cb_textures = QtWidgets.QCheckBox("贴图 textures/")
+        cb_textures.setStyleSheet("QCheckBox { color:#d0d0d0; font-size:13px; }")
+        collect_layout.addWidget(cb_textures)
+        self._export_cbs["textures"] = cb_textures
+        right.addWidget(collect_group)
+
+        # 仅导出材质
+        mat_only_group = self._group("导出选项")
+        mat_only_layout = QtWidgets.QVBoxLayout(mat_only_group)
+        cb_mat_only = QtWidgets.QCheckBox("仅导出材质（跳过几何体/代理）")
+        cb_mat_only.setStyleSheet("QCheckBox { color:#d0d0d0; font-size:13px; }")
+        mat_only_layout.addWidget(cb_mat_only)
+        self._export_cbs["material_only"] = cb_mat_only
+        right.addWidget(mat_only_group)
+
         right.addStretch()
         layout.addLayout(right, 1)
 
