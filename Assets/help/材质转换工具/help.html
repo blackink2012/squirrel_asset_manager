@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>材质转换工具 - 使用帮助</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+  display: flex; justify-content: center;
+}
+.wrapper { display: flex; max-width: 1100px; width: 100%; }
+.sidebar {
+  width: 230px; min-height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #f5f5f5; padding: 24px 14px; flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+.sidebar h2 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; border: none; padding: 0; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; text-decoration: none; }
+.sidebar a:hover { background: #e0e0e0; color: #000; }
+.sidebar a.sub { padding-left: 22px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 840px; min-width: 0; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 36px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 24px 0 8px; }
+h4 { font-size: 15px; color: #555; margin: 16px 0 6px; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0 8px 24px; }
+li { margin: 4px 0; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+pre { background: #f8f8f8; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 10px 0; border: 1px solid #e0e0e0; font-size: 13px; line-height: 1.6; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; vertical-align: top; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; font-weight: 600; }
+td { background: #fff; font-size: 13px; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; }
+.badge-red { background: #fdecea; color: #e74c3c; }
+.badge-orange { background: #fef5e7; color: #e67e22; }
+.badge-blue { background: #eaf2f8; color: #2980b9; }
+.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h2>目录</h2>
+  <a href="#overview">1. 工具概述</a>
+  <a href="#workflow">2. 使用步骤</a>
+  <a href="#mapping-config" class="sub">2.1 配置材质类型映射</a>
+  <a href="#select-map" class="sub">2.2 选择映射文件</a>
+  <a href="#execute" class="sub">2.3 执行转换</a>
+  <a href="#options" class="sub">2.4 转换选项</a>
+  <a href="#ui">3. 界面说明</a>
+  <a href="#buttons" class="sub">3.1 工具栏按钮</a>
+  <a href="#config-table" class="sub">3.2 映射配置表格</a>
+  <a href="#map-table" class="sub">3.3 映射文件列表</a>
+  <a href="#preset">4. 预设管理</a>
+  <a href="#tips">5. 使用技巧</a>
+  <a href="#faq">6. 常见问题</a>
+</nav>
+
+<div class="content">
+
+<h1>材质转换工具 — 使用帮助</h1>
+
+<p>本工具用于在 Maya 中进行材质类型之间的批量转换，支持自定义映射关系，可处理大批量场景中的材质替换工作（如将所有 <code>lambert</code> 材质转换为 <code>aiStandardSurface</code>）。</p>
+
+<!-- ============================================================ -->
+<h2 id="overview">1. 工具概述</h2>
+
+<p>工具可以帮你做这些事：</p>
+<ul>
+  <li><b>批量转换</b> — 一次性转换场景中所有匹配的材质</li>
+  <li><b>类型映射</b> — 定义源材质类型到目标材质类型的对应关系</li>
+  <li><b>属性映射</b> — 通过 <code>.mmap</code> 映射文件控制属性传递</li>
+  <li><b>预设保存</b> — 常用映射配置可保存为 <code>.mlist</code> 文件复用</li>
+  <li><b>自动搜索</b> — 自动从映射文件夹中找到对应的 <code>.mmap</code> 映射文件</li>
+  <li><b>保留未连接属性</b> — 默认不删除源材质，方便回退</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="workflow">2. 使用步骤</h2>
+
+<h3 id="mapping-config">2.1 配置材质类型映射</h3>
+<div class="step">
+<ol>
+  <li>在"材质类型映射配置"表格中，添加源材质类型和目标材质类型的映射关系</li>
+  <li>可以双击单元格手动输入材质类型（如 <code>lambert</code>、<code>aiStandardSurface</code>）</li>
+  <li>也可以点击"加载源"/"加载目标"按钮从选择的材质节点载入类型</li>
+  <li>当只有一行且源为空时，会将所有材质转换为该目标类型</li>
+  <li>可以点击"保存预设"将当前配置保存为 <code>.mlist</code> 文件</li>
+</ol>
+</div>
+
+<h3 id="select-map">2.2 选择映射文件</h3>
+<div class="step">
+<ol>
+  <li>点击"浏览..."按钮选择包含映射 <code>.mmap</code> 文件的文件夹</li>
+  <li>工具会自动加载该文件夹中的所有 <code>.mmap</code> 文件</li>
+  <li>映射文件会根据"源材质类型"和"目标材质类型"自动匹配</li>
+  <li>点击"打开文件夹"可快速打开映射文件目录进行管理</li>
+</ol>
+</div>
+
+<div class="note">
+  <b>提示：</b><code>.mmap</code> 映射文件可以由"材质节点属性映射工具"创建和管理。
+</div>
+
+<h3 id="execute">2.3 执行转换</h3>
+<div class="step">
+<ol>
+  <li>配置好映射关系后，点击"<b>转换选择</b>"按钮 — 仅转换选中的材质</li>
+  <li>或点击"<b>转换全部</b>"按钮 — 转换场景中所有符合映射配置的材质</li>
+  <li>转换过程中会在底部状态栏显示进度</li>
+  <li>完成后会有弹窗提示成功/失败的材质数量</li>
+</ol>
+</div>
+
+<div class="warn">
+  <b>注意：</b>建议在转换前保存场景文件。虽然工具默认不删除源材质，但批量操作前备份是个好习惯。
+</div>
+
+<h3 id="options">2.4 转换选项</h3>
+<table>
+<tr><th>选项</th><th>说明</th></tr>
+<tr><td><b>删除源材质</b></td><td>转换完成后是否删除源材质节点（默认不删除）</td></tr>
+<tr><td><b>保留未连接属性</b></td><td>目标材质上未连接的属性是否保留默认值</td></tr>
+<tr><td><b>重命名目标材质</b></td><td>使用源材质的名称作为目标材质名（默认开启）</td></tr>
+<tr><td><b>复制 UV 集</b></td><td>将源材质的 UV 集复制到目标材质</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ui">3. 界面说明</h2>
+
+<h3 id="buttons">3.1 工具栏按钮</h3>
+<table>
+<tr><th>按钮</th><th>功能说明</th></tr>
+<tr><td><b>添加行</b></td><td>在映射配置表格中新增一行</td></tr>
+<tr><td><b>删除选中行</b></td><td>删除映射配置表格中选中的行</td></tr>
+<tr><td><b>加载源</b></td><td>将当前选中的 Maya 材质节点类型载入到"源"单元格</td></tr>
+<tr><td><b>加载目标</b></td><td>将当前选中的 Maya 材质节点类型载入到"目标"单元格</td></tr>
+<tr><td><b>保存预设</b></td><td>将当前映射配置保存为 <code>.mlist</code> 文件</td></tr>
+<tr><td><b>加载预设</b></td><td>从 <code>.mlist</code> 文件恢复映射配置</td></tr>
+<tr><td><b>浏览...</b></td><td>选择包含 <code>.mmap</code> 映射文件的文件夹</td></tr>
+<tr><td><b>打开文件夹</b></td><td>在资源管理器中打开映射文件目录</td></tr>
+<tr><td><b>刷新</b></td><td>重新扫描映射文件夹，加载最新的 <code>.mmap</code> 文件</td></tr>
+<tr><td><b>转换选择</b></td><td>仅转换当前在 Maya 中选中的材质</td></tr>
+<tr><td><b>转换全部</b></td><td>转换场景中所有匹配映射配置的材质</td></tr>
+<tr><td><b>使用帮助</b></td><td>打开本 HTML 帮助窗口</td></tr>
+</table>
+
+<h3 id="config-table">3.2 映射配置表格</h3>
+<p>配置"源材质类型 → 目标材质类型"的对应关系：</p>
+<ul>
+  <li><b>源</b>：要转换的材质类型（如 <code>lambert</code>、<code>phong</code>、<code>blinn</code>）</li>
+  <li><b>目标</b>：转换后的材质类型（如 <code>aiStandardSurface</code>、<code>redshiftStandardMaterial</code>）</li>
+</ul>
+
+<div class="note">
+  <b>特殊用法：</b>当只有一行且"源"留空时，会将所有材质都转换为该"目标"类型。这在"全部转换为统一类型"的场景下非常有用。
+</div>
+
+<h3 id="map-table">3.3 映射文件列表</h3>
+<p>显示当前选择的映射文件夹中找到的所有 <code>.mmap</code> 文件：</p>
+<ul>
+  <li><b>文件名</b>：<code>.mmap</code> 文件名（建议使用 <code>源_目标.mmap</code> 命名）</li>
+  <li><b>源类型</b>：该映射文件适用的源材质类型</li>
+  <li><b>目标类型</b>：该映射文件适用的目标材质类型</li>
+  <li><b>规则数</b>：该映射文件中定义的属性映射规则数量</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="preset">4. 预设管理</h2>
+
+<h3>预设文件位置</h3>
+<p>预设文件存放在工具的 <code>preset/</code> 目录下，扩展名为 <code>.mlist</code>。点击"打开文件夹"可快速定位。</p>
+
+<h3>预设文件结构</h3>
+<p>预设文件是 JSON 格式，包含映射关系列表：</p>
+<pre>
+{
+  "version": "1.0",
+  "mappings": [
+    {"source": "lambert", "target": "aiStandardSurface"},
+    {"source": "phong", "target": "redshiftStandardMaterial"},
+    {"source": "", "target": "aiStandardSurface"}
+  ]
+}
+</pre>
+
+<h3>预设 vs 映射文件</h3>
+<table>
+<tr><th>类型</th><th>扩展名</th><th>作用</th></tr>
+<tr><td>预设（Preset）</td><td><code>.mlist</code></td><td>保存"源类型 → 目标类型"的对应关系</td></tr>
+<tr><td>映射文件（Map）</td><td><code>.mmap</code></td><td>保存"源属性 → 目标属性"的详细映射规则</td></tr>
+</table>
+
+<div class="note">
+  <b>配合使用：</b>预设定义"什么类型转什么类型"，映射文件定义"类型之间属性怎么传"。两者配合完成完整转换流程。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="tips">5. 使用技巧</h2>
+
+<div class="step">
+<ol>
+  <li><b>先小范围测试</b>：先用"转换选择"测试一两个材质，确认效果后再用"转换全部"</li>
+  <li><b>统一目标类型</b>：如需将所有材质统一为 PBR 材质，使用"源留空 + 单行"的预设</li>
+  <li><b>复用映射</b>：相同材质类型转换一次后，预设和映射文件可永久复用</li>
+  <li><b>分层处理</b>：复杂场景可分批转换（如先转 lambert，再转 phong）</li>
+  <li><b>检查未匹配</b>：转换完成后查看日志，注意有未被映射的材质</li>
+  <li><b>回退策略</b>：如效果不理想，由于源材质默认保留，可以手动删除目标材质</li>
+  <li><b>团队共享</b>：将 preset/ 目录加入共享路径，统一团队转换标准</li>
+</ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="faq">6. 常见问题</h2>
+
+<h3>Q: 转换后材质效果不对？</h3>
+<p>A: 大多数情况是 <code>.mmap</code> 映射文件不完整。可以使用"材质节点属性映射工具"创建更详细的映射规则。</p>
+
+<h3>Q: 找不到对应的 <code>.mmap</code> 文件？</h3>
+<p>A: 映射文件夹中没有匹配"源_目标"的 <code>.mmap</code> 文件。可以：<br>
+1. 在映射文件夹中创建匹配的文件名（如 <code>lambert_aiStandardSurface.mmap</code>）<br>
+2. 使用"材质节点属性映射工具"创建新的映射文件</p>
+
+<h3>Q: 转换失败了？</h3>
+<p>A: 检查以下几点：<br>
+1. 目标渲染器是否已加载（Arnold / Redshift 插件）<br>
+2. 源节点类型名称是否拼写正确（区分大小写）<br>
+3. 场景中是否有同名材质导致冲突</p>
+
+<h3>Q: 转换很慢？</h3>
+<p>A: 大场景批量转换会逐个节点处理，属正常现象。可以观察状态栏进度条。如卡死请检查是否有复杂节点网络。</p>
+
+<h3>Q: 能撤销转换吗？</h3>
+<p>A: 工具默认不删除源材质，所以可以手动删除目标材质并重新使用源材质。如需彻底转换请在转换前保存场景。</p>
+
+<h3>Q: 支持哪些渲染器？</h3>
+<p>A: 理论上支持所有 Maya 已加载的渲染器。常用支持：<br>
+• Arnold (<code>aiStandardSurface</code>)<br>
+• Redshift (<code>redshiftStandardMaterial</code>)<br>
+• V-Ray (<code>VRayMtl</code>)<br>
+• RenderMan (<code>PxrSurface</code>)<br>
+• Stingray (<code>StingrayStandardMaterial</code>)</p>
+
+<div class="footer">
+  材质转换工具 · Squirrel Asset Manager
+</div>
+
+</div>
+</div>
+
+</body>
+</html>
