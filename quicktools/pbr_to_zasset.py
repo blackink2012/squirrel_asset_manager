@@ -1290,8 +1290,8 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
             QTreeWidget::branch:closed:has-children { image: none; }
             QProgressBar { background: #333; border: 1px solid #4a4a4a; border-radius: 4px; }
             QProgressBar::chunk { background: #5294e2; }
-            QGroupBox { border: 1px solid #4a4a4a; border-radius: 4px; margin-top: 32px; padding-top: 8px; padding-bottom: 8px; padding-left: 8px; padding-right: 8px; }
-            QGroupBox::title { color: #909090; font-weight: bold; subcontrol-origin: margin; subcontrol-position: top left; padding-left: 6px; padding-right: 6px; background: #2a2a2a; margin-top: -10px;  }
+            QGroupBox { border: 1px solid #4a4a4a; border-radius: 4px; margin-top: 24px; padding-top: 14px; padding-bottom: 8px; padding-left: 8px; padding-right: 8px; }
+            QGroupBox::title { color: #909090; font-weight: bold; subcontrol-origin: margin; subcontrol-position: top left; padding-left: 6px; padding-right: 6px; padding-top: 0px; padding-bottom: 0px; background: #2a2a2a; margin-top: -2px; }
             QCheckBox { color: #d0d0d0;  }
             QComboBox { background: #333; border: 1px solid #4a4a4a; border-radius: 4px; 
                         padding: 3px; color: #d0d0d0;  }
