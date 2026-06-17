@@ -144,9 +144,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         ok = self._material_manager.load_library(default_path)
         if ok:
             self._use_mock = False
-            if self._settings_mgr:
-                self._settings_mgr.set("library_paths", [{"name": "默认库", "path": default_path}])
-            print(f"[MaterialLibrary] 已创建默认材质库: {default_path}")
+            print(f"[MaterialLibrary] 已回退到默认材质库: {default_path}")
             return
 
         self._use_mock = True
