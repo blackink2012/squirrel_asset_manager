@@ -176,7 +176,7 @@ class MaterialManager:
         else:
             self._json_handler.write_json(lib_meta, {
                 "version": "2.0",
-                "name": "SquirrelAssetLibrary",
+                "name": "SquirrelLib",
                 "created_date": __import__("datetime").datetime.now().strftime("%Y-%m-%d"),
                 "sub_libraries": list(self.ASSET_SUB_LIBRARIES.keys()),
                 "total_materials": 0,

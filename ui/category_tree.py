@@ -47,7 +47,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
     }
 
     LIBRARIES = [
-        ("asset",    "SquirrelAssetLibrary", ""),
+        ("asset",    "SquirrelLib", ""),
     ]
 
     SUB_LIBRARIES = [
