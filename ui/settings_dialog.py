@@ -1,7 +1,9 @@
 import os
 import json
+import uuid
 
 from ..utils.maya_utils import get_qt_modules
+from ..core.json_handler import JSONHandler
 from ..utils.settings import apply_font_size_to_widget
 from .name_conflict_dialog import NameConflictDialog
 
@@ -241,6 +243,11 @@ class SettingsDialog(QtWidgets.QDialog):
         add_btn.setStyleSheet(btn_style)
         add_btn.clicked.connect(self._on_add_library)
         btn_row.addWidget(add_btn)
+
+        create_btn = QtWidgets.QPushButton("+ 创建资产库")
+        create_btn.setStyleSheet(btn_style)
+        create_btn.clicked.connect(self._on_create_library)
+        btn_row.addWidget(create_btn)
 
         rm_btn = QtWidgets.QPushButton("- 删除选中")
         rm_btn.setStyleSheet(btn_style)
@@ -868,6 +875,69 @@ class SettingsDialog(QtWidgets.QDialog):
             name = os.path.basename(path)
         self._lib_data.append({"name": name.strip(), "path": path})
         self._populate_library_list()
+
+    def _on_create_library(self):
+        """创建新的标准资产库"""
+        # 选择父目录
+        parent_dir = QtWidgets.QFileDialog.getExistingDirectory(
+            self, "选择资产库创建位置", os.path.expanduser("~"))
+        if not parent_dir:
+            return
+
+        # 输入资产库名称
+        default_name = "SquirrelAssetLibrary"
+        name, ok = QtWidgets.QInputDialog.getText(
+            self, "创建资产库", "请输入资产库名称:", text=default_name)
+        if not ok or not name.strip():
+            name = default_name
+
+        lib_path = os.path.join(parent_dir, name.strip())
+        if os.path.exists(lib_path):
+            QtWidgets.QMessageBox.warning(
+                self, "目录已存在",
+                f"目录已存在: {lib_path}\n请选择其他位置或使用其他名称。")
+            return
+
+        # 创建资产库
+        json_handler = JSONHandler()
+        sub_libraries = {
+            "materials": "材质", "models": "模型", "lights": "灯光",
+            "textures": "贴图", "scenes": "场景", "hdr": "HDR",
+        }
+
+        try:
+            os.makedirs(lib_path, exist_ok=True)
+
+            # 创建 library.json
+            json_handler.write_json(os.path.join(lib_path, "library.json"), {
+                "version": "2.0",
+                "name": name.strip(),
+                "sub_libraries": list(sub_libraries.keys()),
+            })
+
+            # 创建子库目录
+            for sub_dir, sub_name in sub_libraries.items():
+                sub_path = os.path.join(lib_path, sub_dir)
+                os.makedirs(sub_path, exist_ok=True)
+                # 创建 FolderMetadata.fdata
+                json_handler.write_json(os.path.join(sub_path, "FolderMetadata.fdata"), {
+                    "id": str(uuid.uuid4()),
+                    "name_cn": sub_name,
+                    "type": sub_dir,
+                })
+
+            QtWidgets.QMessageBox.information(
+                self, "创建成功",
+                f"资产库已创建: {lib_path}")
+
+            # 添加到库列表
+            self._lib_data.append({"name": name.strip(), "path": lib_path})
+            self._populate_library_list()
+
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(
+                self, "创建失败",
+                f"创建资产库失败: {e}")
 
     def _on_remove_library(self):
         """删除选中的库（至少保留1个）"""
