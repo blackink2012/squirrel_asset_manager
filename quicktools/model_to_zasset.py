@@ -579,7 +579,10 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         left_scroll = QtWidgets.QScrollArea()
         left_scroll.setWidgetResizable(True)
         left_scroll.setWidget(left_widget)
-        left_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        left_scroll.setStyleSheet("""
+            QScrollArea { border: none; background: #2a2a2a; }
+            QScrollArea::viewport { background: #2a2a2a; }
+        """)
         
         # 输入文件夹选择
         input_group = QtWidgets.QGroupBox("模型文件夹")
