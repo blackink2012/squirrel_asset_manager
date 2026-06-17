@@ -232,7 +232,7 @@ class ExportOrchestrator:
     所有导出产物先写入临时目录，最终打包为单个 .zasset 文件。
 
     Args:
-        base_dir: 资产库根目录（如 ~/SquirrelAssetLibrary/materials/）
+        base_dir: 资产库根目录（如 ~/SquirrelLib/materials/）
     """
 
     # ── 几何体格式 → Maya file type 映射 ──
