@@ -1290,15 +1290,14 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
             QTreeWidget::branch:closed:has-children { image: none; }
             QProgressBar { background: #333; border: 1px solid #4a4a4a; border-radius: 4px; }
             QProgressBar::chunk { background: #5294e2; }
-            QGroupBox { border: 1px solid #4a4a4a; border-radius: 4px; margin-top: 28px; padding-top: 16px; padding-bottom: 8px; padding-left: 8px; padding-right: 8px; }
-            QGroupBox::title { color: #909090; font-weight: bold; subcontrol-origin: margin; subcontrol-position: top left; padding-left: 6px; padding-right: 6px; padding-top: 2px; padding-bottom: 2px; background: #2a2a2a; margin-top: -14px; }
+            QGroupBox { border: 1px solid #4a4a4a; border-radius: 4px; margin-top: 32px; padding-top: 8px; padding-bottom: 8px; padding-left: 8px; padding-right: 8px; }
+            QGroupBox::title { color: #909090; font-weight: bold; subcontrol-origin: margin; subcontrol-position: top left; padding-left: 6px; padding-right: 6px; background: #2a2a2a; margin-top: -10px;  }
             QCheckBox { color: #d0d0d0;  }
             QComboBox { background: #333; border: 1px solid #4a4a4a; border-radius: 4px; 
                         padding: 3px; color: #d0d0d0;  }
             QComboBox QAbstractItemView { background: #333; border: 1px solid #4a4a4a;  }
             QScrollArea { border: none; background: #2a2a2a; }
             QScrollArea::viewport { background: #2a2a2a; }
-            QWidget { background: #2a2a2a; }
         """)
         
         self.config = load_config()
@@ -1347,6 +1346,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         
         # 左侧：配置区域（放入滚动区域）
         left_widget = QtWidgets.QWidget()
+        left_widget.setStyleSheet("background: #2a2a2a;")
         left_layout = QtWidgets.QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(12)
