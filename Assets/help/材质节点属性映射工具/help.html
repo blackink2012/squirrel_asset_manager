@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>材质节点属性映射工具 - 使用帮助</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+  display: flex; justify-content: center;
+}
+.wrapper { display: flex; max-width: 1100px; width: 100%; }
+.sidebar {
+  width: 230px; min-height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #f5f5f5; padding: 24px 14px; flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+.sidebar h2 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; border: none; padding: 0; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; text-decoration: none; }
+.sidebar a:hover { background: #e0e0e0; color: #000; }
+.sidebar a.sub { padding-left: 22px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 840px; min-width: 0; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 36px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 24px 0 8px; }
+h4 { font-size: 15px; color: #555; margin: 16px 0 6px; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0 8px 24px; }
+li { margin: 4px 0; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+pre { background: #f8f8f8; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 10px 0; border: 1px solid #e0e0e0; font-size: 13px; line-height: 1.6; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; vertical-align: top; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; font-weight: 600; }
+td { background: #fff; font-size: 13px; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; }
+.badge-red { background: #fdecea; color: #e74c3c; }
+.badge-orange { background: #fef5e7; color: #e67e22; }
+.badge-blue { background: #eaf2f8; color: #2980b9; }
+.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h2>目录</h2>
+  <a href="#overview">1. 工具概述</a>
+  <a href="#workflow">2. 快速上手</a>
+  <a href="#buttons">3. 界面按钮说明</a>
+  <a href="#context-menu">4. 右键菜单</a>
+  <a href="#transform-func">5. 转换函数</a>
+  <a href="#preset">6. 预设管理</a>
+  <a href="#examples">7. 常用映射示例</a>
+  <a href="#tips">8. 使用技巧</a>
+  <a href="#faq">9. 常见问题</a>
+</nav>
+
+<div class="content">
+
+<h1>材质节点属性映射工具 — 使用帮助</h1>
+
+<p>本工具用于定义 Maya 材质节点之间的属性映射关系，支持设置默认值和转换函数。主要用于不同渲染器材质类型之间的属性转换（如 <code>lambert</code> → <code>aiStandardSurface</code>）。</p>
+
+<!-- ============================================================ -->
+<h2 id="overview">1. 工具概述</h2>
+
+<p>工具可以帮你做这些事：</p>
+<ul>
+  <li><b>自动加载节点属性</b> — 设置源/目标节点类型后，下拉列表自动填充该类型的所有可读写属性</li>
+  <li><b>批量映射</b> — 通过表格一次性配置多个属性映射关系</li>
+  <li><b>值转换</b> — 支持简单的转换函数（如 <code>1-x</code> 反转粗糙度）</li>
+  <li><b>预设保存/加载</b> — 映射配置可保存为 <code>.mmap</code> 文件，下次快速恢复</li>
+  <li><b>反向映射</b> — 一键互换源和目标角色</li>
+  <li><b>属性浏览器</b> — 独立窗口查看场景中节点的所有属性及当前值</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="workflow">2. 快速上手</h2>
+
+<div class="step">
+<h3>典型使用流程</h3>
+<ol>
+  <li><b>设置源节点类型</b>：在 Maya 中选中一个源材质节点，点击源"浏览"按钮；也可以直接在文本框中输入节点类型（如 <code>lambert</code>）</li>
+  <li><b>设置目标节点类型</b>：用同样的方式设置目标类型（如 <code>aiStandardSurface</code>）</li>
+  <li><b>添加映射行</b>：点击"添加行"按钮，每行的下拉列表会自动填充对应类型的属性</li>
+  <li><b>配置映射</b>：在每行中选择源属性、目标属性，必要时填写转换函数和默认值</li>
+  <li><b>保存预设</b>：点击"保存预设"将映射配置存为 <code>.mmap</code> 文件</li>
+</ol>
+</div>
+
+<div class="note">
+  <b>提示：</b>未设置节点类型时，"添加行"按钮也可以工作，但下拉列表为空。可以后续手动输入属性名。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="buttons">3. 界面按钮说明</h2>
+
+<table>
+<tr><th>按钮</th><th>功能说明</th></tr>
+<tr><td><b>添加行</b></td><td>新增一行映射，自动根据已设置的节点类型填充属性下拉选项</td></tr>
+<tr><td><b>移除选中行</b></td><td>删除当前选中的行或复选框被勾选的行（支持多选）</td></tr>
+<tr><td><b>属性浏览器</b></td><td>打开属性浏览器窗口，可搜索和查看场景中选中节点的所有属性及当前值</td></tr>
+<tr><td><b>使用帮助</b></td><td>显示本帮助窗口（HTML 版）</td></tr>
+<tr><td><b>保存预设</b></td><td>将当前所有映射配置导出为 <code>.mmap</code> 预设文件</td></tr>
+<tr><td><b>加载预设</b></td><td>从 <code>.mmap</code> 预设文件恢复映射配置（包含节点类型信息）</td></tr>
+<tr><td><b>清空源属性</b></td><td>将所有行的源属性列重置为"(无)"</td></tr>
+<tr><td><b>清空目标属性</b></td><td>将所有行的目标属性列重置为"(无)"</td></tr>
+<tr><td><b>反向映射</b></td><td>交换源和目标角色：节点类型互换、每行的源/目标属性互换</td></tr>
+<tr><td><b>清空表格</b></td><td>删除表格中所有行</td></tr>
+<tr><td><b>加载示例数据</b></td><td>加载一组常用的 PBR 材质属性映射示例（baseColor→color 等）</td></tr>
+<tr><td><b>打开文件夹</b></td><td>在资源管理器中打开预设文件存储目录</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="context-menu">4. 右键菜单</h2>
+
+<p>工具提供两处右键菜单：</p>
+<ul>
+  <li><b>表格单元格右键</b>：在源属性列或目标属性列上右键，可快速"清空源属性"或"清空目标属性"</li>
+  <li><b>整体表格右键</b>：在空白处右键，可执行"反向映射"、"清空表格"、"加载示例数据"、"加载预设"等</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="transform-func">5. 转换函数</h2>
+
+<p>"转换函数"列用于在属性值传递时执行简单的数学变换，例如：</p>
+
+<table>
+<tr><th>场景</th><th>转换函数</th><th>说明</th></tr>
+<tr><td>反转粗糙度</td><td><code>1-x</code></td><td>Maya 的 <code>roughness</code> 是 1-roughness 关系时使用</td></tr>
+<tr><td>归一化</td><td><code>x/255</code></td><td>从 0-255 映射到 0-1</td></tr>
+<tr><td>反归一化</td><td><code>x*255</code></td><td>从 0-1 映射到 0-255</td></tr>
+<tr><td>伽马校正</td><td><code>x**2.2</code></td><td>线性→sRGB 转换</td></tr>
+</table>
+
+<div class="warn">
+  <b>注意：</b>转换函数使用 Python 表达式语法，输入 <code>x</code> 表示当前属性值。只支持简单的数学运算，不支持函数调用或自定义函数。
+</div>
+
+<div class="note">
+  <b>默认值</b>：当目标属性无值时使用的默认值。例如 <code>0.5</code>、<code>(0,0,0)</code>、<code>""</code> 等。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="preset">6. 预设管理</h2>
+
+<h3>预设文件位置</h3>
+<p>预设文件存放在工具的 <code>preset/</code> 目录下，扩展名为 <code>.mmap</code>。可以通过界面底部的"打开文件夹"按钮快速定位。</p>
+
+<h3>预设文件命名</h3>
+<p>建议使用 <code>源类型_目标类型.mmap</code> 的命名格式，例如：</p>
+<ul>
+  <li><code>lambert_aiStandardSurface.mmap</code></li>
+  <li><code>phong_redshiftStandardMaterial.mmap</code></li>
+  <li><code>standardSurface_arnold.mmap</code></li>
+</ul>
+
+<h3>预设文件结构</h3>
+<p>预设文件是 JSON 格式，包含：</p>
+<pre>
+{
+  "source_type": "lambert",
+  "target_type": "aiStandardSurface",
+  "mappings": [
+    {"source": "color", "target": "baseColor", "transform": "", "default": ""},
+    {"source": "transparency", "target": "opacity", "transform": "", "default": "1.0"},
+    ...
+  ]
+}
+</pre>
+
+<!-- ============================================================ -->
+<h2 id="examples">7. 常用映射示例</h2>
+
+<h3>lambert → aiStandardSurface</h3>
+<table>
+<tr><th>源属性</th><th>目标属性</th><th>转换函数</th><th>默认值</th></tr>
+<tr><td>color</td><td>baseColor</td><td></td><td></td></tr>
+<tr><td>transparency</td><td>opacity</td><td>1-x</td><td>1.0</td></tr>
+<tr><td>ambientColor</td><td>emission</td><td></td><td>(0,0,0)</td></tr>
+<tr><td>incandescence</td><td>emissionColor</td><td></td><td></td></tr>
+<tr><td>bumpMapping</td><td>normalCamera</td><td></td><td></td></tr>
+</table>
+
+<h3>phong → redshiftStandardMaterial</h3>
+<table>
+<tr><th>源属性</th><th>目标属性</th><th>转换函数</th><th>默认值</th></tr>
+<tr><td>color</td><td>base_color</td><td></td><td></td></tr>
+<tr><td>transparency</td><td>opacity</td><td>1-x</td><td>1.0</td></tr>
+<tr><td>cosinePower</td><td>roughness</td><td>1 - x/100</td><td>0.5</td></tr>
+<tr><td>specularColor</td><td>reflectivity</td><td></td><td></td></tr>
+<tr><td>incandescence</td><td>emission_color</td><td></td><td></td></tr>
+</table>
+
+<div class="note">
+  <b>提示：</b>点击"加载示例数据"按钮可快速加载 lambert → aiStandardSurface 的标准映射。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="tips">8. 使用技巧</h2>
+
+<div class="step">
+<ol>
+  <li><b>快速填充属性</b>：先设置源/目标节点类型，再点击"添加行"，下拉列表会自动出现该类型的所有属性</li>
+  <li><b>批量多选删除</b>：勾选多行前的复选框，然后点击"移除选中行"可一次删除多行</li>
+  <li><b>反向映射复用</b>：完成 <code>A → B</code> 的映射后，点击"反向映射"即可得到 <code>B → A</code> 的配置（注意转换函数需要手动调整）</li>
+  <li><b>复杂值转换</b>：如需复杂逻辑（条件判断、字符串处理等），请使用 Maya 自带的连接表达式或脚本</li>
+  <li><b>预设版本管理</b>：预设文件是纯 JSON，可以用 Git/SVN 进行版本管理</li>
+  <li><b>多人协作</b>：将 preset/ 目录加入共享路径，团队成员可以使用同一套映射</li>
+</ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="faq">9. 常见问题</h2>
+
+<h3>Q: 为什么下拉列表是空的？</h3>
+<p>A: 需要先设置源/目标节点类型（点击"浏览"按钮或手动输入）。节点类型决定了下拉列表的内容。</p>
+
+<h3>Q: 属性浏览器有什么作用？</h3>
+<p>A: 用于快速查看场景中选中节点的所有属性及当前值。可以在"转换函数"列编写时参考实际值。也可以从浏览器中拖拽属性到表格中。</p>
+
+<h3>Q: 转换函数支持哪些语法？</h3>
+<p>A: 支持 Python 数学表达式，使用 <code>x</code> 表示当前属性值。例如 <code>1-x</code>、<code>x*2</code>、<code>x**0.5</code>。</p>
+
+<h3>Q: 预设文件可以跨工具使用吗？</h3>
+<p>A: <code>.mmap</code> 预设是工具专有格式，不能直接用于其他工具。但其 JSON 结构简单，可以编写脚本进行转换。</p>
+
+<h3>Q: 反向映射后转换函数会怎样？</h3>
+<p>A: 转换函数保持原样，不会自动反转。如果原函数是 <code>1-x</code>，反向时可能需要改为 <code>x</code> 或反向函数。</p>
+
+<div class="footer">
+  材质节点属性映射工具 · Squirrel Asset Manager
+</div>
+
+</div>
+</div>
+
+</body>
+</html>
