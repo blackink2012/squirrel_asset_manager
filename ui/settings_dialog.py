@@ -3,7 +3,7 @@ import json
 import uuid
 
 from ..utils.maya_utils import get_qt_modules
-from ..core.json_handler import JSONHandler
+from ..utils.json_handler import JSONHandler
 from ..utils.settings import apply_font_size_to_widget
 from .name_conflict_dialog import NameConflictDialog
 
