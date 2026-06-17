@@ -1343,11 +1343,16 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         main_splitter.setStyleSheet("QSplitter::handle { background: #3a3a3a; }")
         main_splitter.setSizes([550, 400])
         
-        # 左侧：配置区域
+        # 左侧：配置区域（放入滚动区域）
         left_widget = QtWidgets.QWidget()
         left_layout = QtWidgets.QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(12)
+        
+        left_scroll = QtWidgets.QScrollArea()
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setWidget(left_widget)
+        left_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         
         # 输入文件夹选择
         input_group = QtWidgets.QGroupBox("贴图文件夹")
@@ -1559,8 +1564,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         
         left_layout.addWidget(meta_group)
         
-        left_layout.addStretch()
-        main_splitter.addWidget(left_widget)
+        main_splitter.addWidget(left_scroll)
         
         # 右侧：信息显示区域
         right_widget = QtWidgets.QWidget()
