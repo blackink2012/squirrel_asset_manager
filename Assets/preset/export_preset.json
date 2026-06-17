@@ -16,6 +16,8 @@
         "redshift": false,
         "vrmesh": false,
         "material_only": false,
+        "collect_associated": false,
+        "textures": true,
         "ani_frame_mode": "current",
         "delay_ms": 2000,
         "thumb_source": "screenshot"
@@ -36,6 +38,8 @@
         "redshift": false,
         "vrmesh": false,
         "material_only": false,
+        "collect_associated": false,
+        "textures": true,
         "ani_frame_mode": "current",
         "delay_ms": 2000,
         "thumb_source": "screenshot"
@@ -56,6 +60,8 @@
         "redshift": false,
         "vrmesh": false,
         "material_only": false,
+        "collect_associated": false,
+        "textures": true,
         "ani_frame_mode": "current",
         "delay_ms": 2000,
         "thumb_source": "screenshot"
@@ -76,6 +82,8 @@
         "redshift": false,
         "vrmesh": false,
         "material_only": false,
+        "collect_associated": false,
+        "textures": true,
         "ani_frame_mode": "current",
         "delay_ms": 2000,
         "thumb_source": "screenshot"
@@ -96,6 +104,8 @@
         "redshift": false,
         "vrmesh": false,
         "material_only": false,
+        "collect_associated": false,
+        "textures": true,
         "ani_frame_mode": "current",
         "delay_ms": 2000,
         "thumb_source": "screenshot"
@@ -116,6 +126,8 @@
         "redshift": false,
         "vrmesh": false,
         "material_only": false,
+        "collect_associated": false,
+        "textures": true,
         "ani_frame_mode": "current",
         "delay_ms": 2000,
         "thumb_source": "screenshot"
@@ -136,6 +148,8 @@
         "redshift": false,
         "vrmesh": false,
         "material_only": false,
+        "collect_associated": false,
+        "textures": true,
         "ani_frame_mode": "timeline",
         "delay_ms": 2000,
         "thumb_source": "screenshot"
