@@ -1126,7 +1126,10 @@ class ExportOrchestrator:
                 for obj in config.associated_objects or []:
                     if not cmds.objExists(obj):
                         continue
-                    shapes = cmds.listRelatives(obj, shapes=True, allDescendents=True, fullPath=True) or [obj]
+                    descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
+                    shapes = cmds.ls(descendants, shapes=True) or []
+                    if not shapes:
+                        shapes = cmds.ls(obj, shapes=True) or []
                     for shp in shapes:
                         if not cmds.objExists(shp):
                             continue
@@ -2444,7 +2447,11 @@ class ExportOrchestrator:
             try:
                 if not cmds.objExists(obj):
                     continue
-                shapes = cmds.listRelatives(obj, shapes=True, allDescendents=True, fullPath=True) or [obj]
+                shapes = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
+                if shapes:
+                    shapes = cmds.ls(shapes, shapes=True) or []
+                if not shapes:
+                    shapes = cmds.ls(obj, shapes=True) or [obj]
                 for shape in shapes:
                     ses = cmds.listConnections(shape, type='shadingEngine') or []
                     for se in ses:
