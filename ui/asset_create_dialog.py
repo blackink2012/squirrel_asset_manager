@@ -193,11 +193,17 @@ class AssetCreateDialog(QtWidgets.QDialog):
         """从预设文件加载导出格式默认值（按 asset_type）"""
         preset_path = self._find_preset_path()
         preset = self._load_preset_json(preset_path)
-        entry = preset.get(self._asset_type, preset.get("materials", {})) if preset else {}
-        if not preset:
-            print(f"[ExportPreset] 未加载到预设 (path={preset_path}), 使用内置默认值 asset_type={self._asset_type}")
-        elif self._asset_type not in preset:
-            print(f"[ExportPreset] 预设中未找到 asset_type={self._asset_type}, 回退到 materials")
+        entry = {}
+        if preset:
+            entry = preset.get(self._asset_type,
+                     preset.get("_default",
+                     preset.get("materials", {})))
+            if self._asset_type not in preset:
+                print(f"[ExportPreset] 预设中未找到 asset_type={self._asset_type}, "
+                      f"使用 _default 默认配置")
+        else:
+            print(f"[ExportPreset] 未加载到预设 (path={preset_path}), "
+                  f"使用内置默认值 asset_type={self._asset_type}")
 
         self._export_zmetal = entry.get("zmetal", True)
         self._export_ma = entry.get("ma", False)
