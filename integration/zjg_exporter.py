@@ -1272,27 +1272,44 @@ def _get_attr_value(node, attr):
 def _serialize_node(node, nodes_dict):
     if node in nodes_dict:
         return
-    node_type = cmds.nodeType(node)
+    try:
+        node_type = cmds.nodeType(node)
+    except Exception:
+        print(f"[zjg_exporter] 跳过无法识别的节点: {node}")
+        nodes_dict[node] = {'node_type': 'unknown', 'attrs': {}}
+        return
     attrs_data = {}
 
     for attr in _get_processable_attrs(node):
         full_attr = f"{node}.{attr}"
-        incoming = cmds.listConnections(full_attr, source=True, destination=False, plugs=True)
-        val = _get_attr_value(node, attr)
+        try:
+            incoming = cmds.listConnections(full_attr, source=True, destination=False, plugs=True)
+        except Exception:
+            incoming = None
+        try:
+            val = _get_attr_value(node, attr)
+        except Exception:
+            val = None
 
         if not incoming:
             # 复合属性的连接可能在子属性上（如 input2X / i2x 等）
             for suffix in COMPOUND_CHILD_ENDS:
                 child_attr = full_attr + suffix
                 if cmds.objExists(child_attr):
-                    conns = cmds.listConnections(child_attr, source=True, destination=False, plugs=True)
+                    try:
+                        conns = cmds.listConnections(child_attr, source=True, destination=False, plugs=True)
+                    except Exception:
+                        conns = None
                     if conns:
                         incoming = conns
                         break
 
         if incoming:
             src_plug = incoming[0]
-            src_node, src_attr = src_plug.split('.', 1)
+            try:
+                src_node, src_attr = src_plug.split('.', 1)
+            except Exception:
+                continue
             _serialize_node(src_node, nodes_dict)
             attrs_data[attr] = {'type': 'connection', 'source_node': src_node, 'source_attr': src_attr}
             if val is not None:
