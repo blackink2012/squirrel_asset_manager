@@ -692,18 +692,54 @@ class SettingsDialog(QtWidgets.QDialog):
         layout = QtWidgets.QHBoxLayout(w)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # 左侧：子库列表
+        # ── 左侧：子库 + 顶级分类 ──
+        left_panel = QtWidgets.QVBoxLayout()
+        left_panel.setSpacing(4)
+
+        # 子库列表
+        sub_label = QtWidgets.QLabel("子库")
+        sub_label.setStyleSheet("color:#909090;font-size:12px;font-weight:bold;padding:2px 0;")
+        left_panel.addWidget(sub_label)
         self._sub_lib_list = QtWidgets.QListWidget()
-        self._sub_lib_list.setFixedWidth(160)
         self._sub_lib_list.setStyleSheet(
             "QListWidget { background:#2a2a2a; border:1px solid #3a3a3a; border-radius:4px; "
             "color:#d0d0d0; font-size:12px; }"
             "QListWidget::item:selected { background:#2d4a6f; }")
-        layout.addWidget(self._sub_lib_list)
+        left_panel.addWidget(self._sub_lib_list)
 
-        # 右侧编辑区
+        left_panel.addSpacing(8)
+
+        # 顶级分类
+        cat_label = QtWidgets.QLabel("顶级分类")
+        cat_label.setStyleSheet("color:#909090;font-size:12px;font-weight:bold;padding:2px 0;")
+        left_panel.addWidget(cat_label)
+        cat_btn_row = QtWidgets.QHBoxLayout()
+        cat_btn_style = ("QPushButton { background:#3a3a3a; color:#d0d0d0; border:none; "
+                         "padding:4px 10px; font-size:11px; border-radius:3px; }"
+                         "QPushButton:hover { background:#4a4a4a; }")
+        add_cat_btn = QtWidgets.QPushButton("+ 添加")
+        add_cat_btn.setStyleSheet(cat_btn_style)
+        add_cat_btn.clicked.connect(self._on_add_category)
+        cat_btn_row.addWidget(add_cat_btn)
+        rm_cat_btn = QtWidgets.QPushButton("- 删除")
+        rm_cat_btn.setStyleSheet(cat_btn_style)
+        rm_cat_btn.clicked.connect(self._on_remove_category)
+        cat_btn_row.addWidget(rm_cat_btn)
+        cat_btn_row.addStretch()
+        left_panel.addLayout(cat_btn_row)
+        self._cat_list = QtWidgets.QListWidget()
+        self._cat_list.setStyleSheet(
+            "QListWidget { background:#2a2a2a; border:1px solid #3a3a3a; border-radius:4px; "
+            "color:#d0d0d0; font-size:12px; }"
+            "QListWidget::item:selected { background:#2d4a6f; }")
+        left_panel.addWidget(self._cat_list, 1)
+
+        layout.addLayout(left_panel, 1)
+
+        # ── 右侧编辑区 ──
         right = QtWidgets.QVBoxLayout()
         right.setSpacing(8)
+        right.setContentsMargins(8, 0, 0, 0)
 
         # 子库ID
         id_row = QtWidgets.QHBoxLayout()
@@ -729,33 +765,7 @@ class SettingsDialog(QtWidgets.QDialog):
         name_row.addWidget(self._sub_name_edit, 1)
         right.addLayout(name_row)
 
-        # 默认分类
-        cat_label = QtWidgets.QLabel("默认分类列表（每行一个，格式: id 名称）")
-        cat_label.setStyleSheet("color:#707070;font-size:11px;")
-        right.addWidget(cat_label)
-
-        # 分类操作按钮
-        cat_btn_row = QtWidgets.QHBoxLayout()
-        cat_btn_style = ("QPushButton { background:#3a3a3a; color:#d0d0d0; border:none; "
-                         "padding:4px 10px; font-size:11px; border-radius:3px; }"
-                         "QPushButton:hover { background:#4a4a4a; }")
-        add_cat_btn = QtWidgets.QPushButton("+ 添加分类")
-        add_cat_btn.setStyleSheet(cat_btn_style)
-        add_cat_btn.clicked.connect(self._on_add_category)
-        cat_btn_row.addWidget(add_cat_btn)
-        rm_cat_btn = QtWidgets.QPushButton("- 删除选中")
-        rm_cat_btn.setStyleSheet(cat_btn_style)
-        rm_cat_btn.clicked.connect(self._on_remove_category)
-        cat_btn_row.addWidget(rm_cat_btn)
-        cat_btn_row.addStretch()
-        right.addLayout(cat_btn_row)
-
-        self._sub_cats_edit = QtWidgets.QPlainTextEdit()
-        self._sub_cats_edit.setStyleSheet(
-            "QPlainTextEdit { background:#333; border:1px solid #4a4a4a; border-radius:4px; "
-            "padding:8px; color:#e0e0e0; font-size:12px; font-family:monospace; }")
-        right.addWidget(self._sub_cats_edit, 1)
-
+        right.addStretch()
         layout.addLayout(right, 1)
 
         # 加载数据
@@ -780,51 +790,79 @@ class SettingsDialog(QtWidgets.QDialog):
         """切换子库时保存当前编辑并加载新子库数据"""
         if row < 0:
             return
-        # 保存当前
+        # 保存当前子库的编辑
         if hasattr(self, '_sub_lib_list') and self._sub_lib_list.count() > 0:
             prev_row = self._sub_lib_list.property("_prev_row")
             if prev_row is not None and 0 <= prev_row < self._sub_lib_list.count():
                 prev_key = list(self._subs_data.keys())[prev_row]
-                cats_lines = self._sub_cats_edit.toPlainText().strip()
-                self._subs_data[prev_key]["categories"] = [
-                    l.strip().split(None, 1) for l in cats_lines.split("\n") if l.strip()
-                ]
+                self._subs_data[prev_key]["display"] = self._sub_name_edit.text().strip()
         self._sub_lib_list.setProperty("_prev_row", row)
-        # 加载新
+        # 加载新子库
         key = list(self._subs_data.keys())[row]
         data = self._subs_data[key]
         self._sub_id_edit.setText(key)
         self._sub_name_edit.setText(data["display"])
-        cats_lines = "\n".join(f"{c[0]} {c[1]}" for c in data["categories"] if len(c) >= 2)
-        self._sub_cats_edit.setPlainText(cats_lines)
+        # 刷新分类列表
+        self._cat_list.clear()
+        for cat in data["categories"]:
+            if len(cat) >= 2:
+                self._cat_list.addItem(f"{cat[1]} ({cat[0]})")
+
+    def _get_current_sub_key(self):
+        """获取当前选中的子库 key"""
+        row = self._sub_lib_list.currentRow()
+        if row < 0:
+            return None
+        return list(self._subs_data.keys())[row]
+
+    def _refresh_cat_list(self):
+        """刷新左侧分类列表"""
+        key = self._get_current_sub_key()
+        if not key:
+            return
+        self._cat_list.clear()
+        for cat in self._subs_data[key]["categories"]:
+            if len(cat) >= 2:
+                self._cat_list.addItem(f"{cat[1]} ({cat[0]})")
 
     def _on_add_category(self):
         """添加顶级分类到当前子库"""
+        key = self._get_current_sub_key()
+        if not key:
+            return
         cat_id, ok = QtWidgets.QInputDialog.getText(
             self, "添加分类", "分类ID（英文，如 metal）:")
         if not ok or not cat_id.strip():
             return
+        # 检查是否已存在
+        for cat in self._subs_data[key]["categories"]:
+            if cat[0] == cat_id.strip():
+                QtWidgets.QMessageBox.warning(self, "添加分类", f"分类 {cat_id} 已存在！")
+                return
         cat_name, ok = QtWidgets.QInputDialog.getText(
-            self, "添加分类", f"分类名称（中文，如 金属）:")
+            self, "添加分类", "分类名称（中文，如 金属）:")
         if not ok or not cat_name.strip():
             return
-        text = self._sub_cats_edit.toPlainText()
-        if text.strip():
-            text += "\n"
-        text += f"{cat_id.strip()} {cat_name.strip()}"
-        self._sub_cats_edit.setPlainText(text)
+        self._subs_data[key]["categories"].append([cat_id.strip(), cat_name.strip()])
+        self._cat_list.addItem(f"{cat_name.strip()} ({cat_id.strip()})")
 
     def _on_remove_category(self):
         """删除选中的顶级分类"""
-        cursor = self._sub_cats_edit.textCursor()
-        if cursor.hasSelection():
-            # 删除选中文本
-            cursor.removeSelectedText()
-        else:
-            # 删除光标所在行
-            cursor.select(QtWidgets.QTextCursor.LineUnderCursor)
-            cursor.removeSelectedText()
-            cursor.deleteChar()  # 删除换行
+        key = self._get_current_sub_key()
+        if not key:
+            return
+        row = self._cat_list.currentRow()
+        if row < 0:
+            QtWidgets.QMessageBox.warning(self, "删除分类", "请先在左侧分类列表中选中要删除的分类！")
+            return
+        cat = self._subs_data[key]["categories"][row]
+        confirm = QtWidgets.QMessageBox.question(
+            self, "删除分类", f"确定删除分类「{cat[1]} ({cat[0]})」？",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        if confirm != QtWidgets.QMessageBox.Yes:
+            return
+        del self._subs_data[key]["categories"][row]
+        self._cat_list.takeItem(row)
 
     # ── 高级配置标签页 ────────────────────────────
 
@@ -1125,14 +1163,7 @@ class SettingsDialog(QtWidgets.QDialog):
                     t.strip() for t in raw_tags.split("\n") if t.strip()
                 ]
 
-        # 子库与分类
-        cur_row = self._sub_lib_list.currentRow()
-        if cur_row >= 0:
-            key = list(self._subs_data.keys())[cur_row]
-            cats_lines = self._sub_cats_edit.toPlainText().strip()
-            self._subs_data[key]["categories"] = [
-                l.strip().split(None, 1) for l in cats_lines.split("\n") if l.strip()
-            ]
+        # 子库与分类（数据已在 _subs_data 中实时更新）
         new_subs = {}
         new_cats = {}
         for k, data in self._subs_data.items():
