@@ -1596,23 +1596,6 @@ class ExportOrchestrator:
             if end - start > 240:
                 end = start + 240
 
-            # 框显物体（与截图工具逻辑一致）
-            try:
-                from maya import mel
-                dag_objs = [o for o in (config.associated_objects or [])
-                            if 'dagNode' in cmds.nodeType(o, inherited=True)]
-                if dag_objs:
-                    cmds.select(dag_objs, replace=True)
-                    mel.eval('fitAllPanels -selectedNoChildren')
-                    cmds.select(clear=True)
-                    cmds.refresh()
-                else:
-                    mel.eval('FrameAll')
-                import time
-                time.sleep(0.5)
-            except Exception:
-                pass
-
             # 增大 preScale 让物体在画面中占比更大
             try:
                 cmds.setAttr('perspShape.preScale', 2)
@@ -1740,7 +1723,7 @@ class ExportOrchestrator:
         old_images = ""
 
         try:
-            # ── 框显 + 可见性处理 ──
+            # ── 可见性处理（不框显，保留用户视口构图）──
             dag_objs = [o for o in (config.associated_objects or [])
                         if 'dagNode' in cmds.nodeType(o, inherited=True)]
             if dag_objs:
@@ -1754,11 +1737,6 @@ class ExportOrchestrator:
                         cmds.setAttr(obj + '.visibility', True)
                     except Exception:
                         pass
-                cmds.select(dag_objs, replace=True)
-                mel.eval('fitAllPanels -selectedNoChildren')
-                cmds.select(clear=True)
-            else:
-                mel.eval('FrameAll')
             cmds.refresh()
 
             # ── 保存渲染设置 ──

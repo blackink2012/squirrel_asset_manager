@@ -5537,10 +5537,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
     # ── 视口管理：模型缩略图截图前的视口设置 ─────────────────
 
     def _prepare_viewport_for_model_thumbnail(self, cfg):
-        """doHideObjects 独显 + fitAllPanels 框显
+        """doHideObjects 独显（不框显）
 
         为模型资产截图做准备：选中 DAG 物体 → 隐藏未选中（doHideObjects false）
-        → 框显选中物体（fitAllPanels）→ 取消选择。
+        → 取消选择。保留用户当前的视口构图。
         截图后 _restore_viewport_after_thumbnail 用 showLastHidden 恢复。
         """
         import maya.cmds as cmds
@@ -5552,21 +5552,18 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                         if 'dagNode' in cmds.nodeType(o, inherited=True)]
 
             if not dag_objs:
-                print(f"[Thumbnail] 无 DAG 物体可框显 (associated_objects={cfg.associated_objects})")
+                print(f"[Thumbnail] 无 DAG 物体 (associated_objects={cfg.associated_objects})")
                 return False
 
             # 2. 选中 DAG 物体
             cmds.select(dag_objs, replace=True)
 
-            # 3. 隐藏未选中物体（独显）
+            # 3. 隐藏未选中物体（独显），但不框显，保留用户视口构图
             mel.eval('doHideObjects false')
 
-            # 4. 框显选中的物体
-            mel.eval('fitAllPanels -selectedNoChildren')
-
-            # 5. 取消选择（避免取景框被选中高亮干扰）
+            # 4. 取消选择（避免取景框被选中高亮干扰）
             cmds.select(clear=True)
-            print(f"[Thumbnail] 视口已设置: hidden unselected, framed {len(dag_objs)} objects")
+            print(f"[Thumbnail] 视口已设置: hidden unselected, {len(dag_objs)} objects (no frame)")
             return True
 
         except Exception as e:
