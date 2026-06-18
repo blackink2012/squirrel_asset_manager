@@ -5537,10 +5537,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
     # ── 视口管理：模型缩略图截图前的视口设置 ─────────────────
 
     def _prepare_viewport_for_model_thumbnail(self, cfg):
-        """doHideObjects 独显（不框显）
+        """doHideObjects 独显 + fitAllPanels 框显
 
         为模型资产截图做准备：选中 DAG 物体 → 隐藏未选中（doHideObjects false）
-        → 取消选择。保留用户当前的视口构图。
+        → 框显选中物体（fitAllPanels）→ 取消选择。
         截图后 _restore_viewport_after_thumbnail 用 showLastHidden 恢复。
         """
         import maya.cmds as cmds
@@ -5558,12 +5558,15 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             # 2. 选中 DAG 物体
             cmds.select(dag_objs, replace=True)
 
-            # 3. 隐藏未选中物体（独显），但不框显，保留用户视口构图
+            # 3. 隐藏未选中物体（独显）
             mel.eval('doHideObjects false')
 
-            # 4. 取消选择（避免取景框被选中高亮干扰）
+            # 4. 框显选中的物体
+            mel.eval('fitAllPanels -selectedNoChildren')
+
+            # 5. 取消选择（避免取景框被选中高亮干扰）
             cmds.select(clear=True)
-            print(f"[Thumbnail] 视口已设置: hidden unselected, {len(dag_objs)} objects (no frame)")
+            print(f"[Thumbnail] 视口已设置: hidden unselected, framed {len(dag_objs)} objects")
             return True
 
         except Exception as e:
@@ -5663,7 +5666,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         #     截图完成后 on_captured 回调中的 _refresh_after_export 只更新缩略图
         self._refresh_after_export()
 
-        # ②¾ 模型类：截面前设置视口（fitAllPanels + isolateSelect 独显）
+        # ②¾ 模型类：截面前设置视口（doHideObjects 独显，不框显）
         # 单资产模式不自动隐藏/独显，由用户手动隔离物体
         if not cfg.export_material_only and cfg.export_mode != "single":
             self._prepare_viewport_for_model_thumbnail(cfg)
@@ -5819,8 +5822,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         except Exception:
             pass
 
-        # 模型类：自动截图前设置视口（fitAllPanels + isolateSelect 独显）
-        if not cfg.export_material_only:
+        # 模型类：自动截图前设置视口（doHideObjects 独显 + fitAllPanels 框显）
+        # 单资产模式不自动框显/独显，由用户手动控制视口构图
+        if not cfg.export_material_only and cfg.export_mode != "single":
             self._prepare_viewport_for_model_thumbnail(cfg)
 
         # 如果有截图 overlay 且已保存选区，自动截图
