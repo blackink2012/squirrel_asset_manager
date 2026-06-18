@@ -692,50 +692,14 @@ class SettingsDialog(QtWidgets.QDialog):
         layout = QtWidgets.QHBoxLayout(w)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # 左侧：顶级库 + 子库
-        left_panel = QtWidgets.QVBoxLayout()
-        left_panel.setSpacing(6)
-
-        # ── 顶级库管理 ──
-        lib_label = QtWidgets.QLabel("顶级库")
-        lib_label.setStyleSheet("color:#909090;font-size:12px;font-weight:bold;padding:4px 0;")
-        left_panel.addWidget(lib_label)
-
-        lib_btn_row = QtWidgets.QHBoxLayout()
-        lib_btn_style = ("QPushButton { background:#3a3a3a; color:#d0d0d0; border:none; "
-                         "padding:4px 10px; font-size:11px; border-radius:3px; }"
-                         "QPushButton:hover { background:#4a4a4a; }")
-        add_lib_btn = QtWidgets.QPushButton("添加")
-        add_lib_btn.setStyleSheet(lib_btn_style)
-        add_lib_btn.clicked.connect(self._on_add_library)
-        lib_btn_row.addWidget(add_lib_btn)
-        create_lib_btn = QtWidgets.QPushButton("新建")
-        create_lib_btn.setStyleSheet(lib_btn_style)
-        create_lib_btn.clicked.connect(self._on_create_library)
-        lib_btn_row.addWidget(create_lib_btn)
-        rm_lib_btn = QtWidgets.QPushButton("删除")
-        rm_lib_btn.setStyleSheet(lib_btn_style)
-        rm_lib_btn.clicked.connect(self._on_remove_library)
-        lib_btn_row.addWidget(rm_lib_btn)
-        lib_btn_row.addStretch()
-        left_panel.addLayout(lib_btn_row)
-
-        left_panel.addSpacing(8)
-
-        # ── 子库列表 ──
-        sub_label = QtWidgets.QLabel("子库与分类")
-        sub_label.setStyleSheet("color:#909090;font-size:12px;font-weight:bold;padding:4px 0;")
-        left_panel.addWidget(sub_label)
-
+        # 左侧：子库列表
         self._sub_lib_list = QtWidgets.QListWidget()
-        self._sub_lib_list.setMinimumHeight(200)
+        self._sub_lib_list.setFixedWidth(160)
         self._sub_lib_list.setStyleSheet(
             "QListWidget { background:#2a2a2a; border:1px solid #3a3a3a; border-radius:4px; "
             "color:#d0d0d0; font-size:12px; }"
             "QListWidget::item:selected { background:#2d4a6f; }")
-        left_panel.addWidget(self._sub_lib_list, 1)
-
-        layout.addLayout(left_panel)
+        layout.addWidget(self._sub_lib_list)
 
         # 右侧编辑区
         right = QtWidgets.QVBoxLayout()
@@ -769,6 +733,22 @@ class SettingsDialog(QtWidgets.QDialog):
         cat_label = QtWidgets.QLabel("默认分类列表（每行一个，格式: id 名称）")
         cat_label.setStyleSheet("color:#707070;font-size:11px;")
         right.addWidget(cat_label)
+
+        # 分类操作按钮
+        cat_btn_row = QtWidgets.QHBoxLayout()
+        cat_btn_style = ("QPushButton { background:#3a3a3a; color:#d0d0d0; border:none; "
+                         "padding:4px 10px; font-size:11px; border-radius:3px; }"
+                         "QPushButton:hover { background:#4a4a4a; }")
+        add_cat_btn = QtWidgets.QPushButton("+ 添加分类")
+        add_cat_btn.setStyleSheet(cat_btn_style)
+        add_cat_btn.clicked.connect(self._on_add_category)
+        cat_btn_row.addWidget(add_cat_btn)
+        rm_cat_btn = QtWidgets.QPushButton("- 删除选中")
+        rm_cat_btn.setStyleSheet(cat_btn_style)
+        rm_cat_btn.clicked.connect(self._on_remove_category)
+        cat_btn_row.addWidget(rm_cat_btn)
+        cat_btn_row.addStretch()
+        right.addLayout(cat_btn_row)
 
         self._sub_cats_edit = QtWidgets.QPlainTextEdit()
         self._sub_cats_edit.setStyleSheet(
@@ -817,6 +797,34 @@ class SettingsDialog(QtWidgets.QDialog):
         self._sub_name_edit.setText(data["display"])
         cats_lines = "\n".join(f"{c[0]} {c[1]}" for c in data["categories"] if len(c) >= 2)
         self._sub_cats_edit.setPlainText(cats_lines)
+
+    def _on_add_category(self):
+        """添加顶级分类到当前子库"""
+        cat_id, ok = QtWidgets.QInputDialog.getText(
+            self, "添加分类", "分类ID（英文，如 metal）:")
+        if not ok or not cat_id.strip():
+            return
+        cat_name, ok = QtWidgets.QInputDialog.getText(
+            self, "添加分类", f"分类名称（中文，如 金属）:")
+        if not ok or not cat_name.strip():
+            return
+        text = self._sub_cats_edit.toPlainText()
+        if text.strip():
+            text += "\n"
+        text += f"{cat_id.strip()} {cat_name.strip()}"
+        self._sub_cats_edit.setPlainText(text)
+
+    def _on_remove_category(self):
+        """删除选中的顶级分类"""
+        cursor = self._sub_cats_edit.textCursor()
+        if cursor.hasSelection():
+            # 删除选中文本
+            cursor.removeSelectedText()
+        else:
+            # 删除光标所在行
+            cursor.select(QtWidgets.QTextCursor.LineUnderCursor)
+            cursor.removeSelectedText()
+            cursor.deleteChar()  # 删除换行
 
     # ── 高级配置标签页 ────────────────────────────
 
