@@ -214,6 +214,26 @@ def _collect_texture_paths_from_materials(materials):
                             texture_paths.add(ftn.replace('\\', '/'))
                     except Exception:
                         pass
+
+            # 额外收集 displacement 贴图
+            # displacement 节点通过 shadingEngine.displacementShader 连接，
+            # 在材质的下游，listHistory 追溯不到
+            try:
+                ses = cmds.listConnections(mat + '.outColor', type='shadingEngine') or []
+                for se in ses:
+                    disp_nodes = cmds.listConnections(se + '.displacementShader') or []
+                    for dn in disp_nodes:
+                        disp_history = cmds.listHistory(dn, allConnections=True) or []
+                        for node in disp_history:
+                            if cmds.nodeType(node) == 'file':
+                                try:
+                                    ftn = cmds.getAttr(node + '.fileTextureName')
+                                    if ftn and os.path.isfile(ftn):
+                                        texture_paths.add(ftn.replace('\\', '/'))
+                                except Exception:
+                                    pass
+            except Exception:
+                pass
         except Exception:
             pass
     return sorted(texture_paths)
