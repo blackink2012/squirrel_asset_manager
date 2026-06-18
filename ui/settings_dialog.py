@@ -692,14 +692,50 @@ class SettingsDialog(QtWidgets.QDialog):
         layout = QtWidgets.QHBoxLayout(w)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # 左侧：子库列表
+        # 左侧：顶级库 + 子库
+        left_panel = QtWidgets.QVBoxLayout()
+        left_panel.setSpacing(6)
+
+        # ── 顶级库管理 ──
+        lib_label = QtWidgets.QLabel("顶级库")
+        lib_label.setStyleSheet("color:#909090;font-size:12px;font-weight:bold;padding:4px 0;")
+        left_panel.addWidget(lib_label)
+
+        lib_btn_row = QtWidgets.QHBoxLayout()
+        lib_btn_style = ("QPushButton { background:#3a3a3a; color:#d0d0d0; border:none; "
+                         "padding:4px 10px; font-size:11px; border-radius:3px; }"
+                         "QPushButton:hover { background:#4a4a4a; }")
+        add_lib_btn = QtWidgets.QPushButton("添加")
+        add_lib_btn.setStyleSheet(lib_btn_style)
+        add_lib_btn.clicked.connect(self._on_add_library)
+        lib_btn_row.addWidget(add_lib_btn)
+        create_lib_btn = QtWidgets.QPushButton("新建")
+        create_lib_btn.setStyleSheet(lib_btn_style)
+        create_lib_btn.clicked.connect(self._on_create_library)
+        lib_btn_row.addWidget(create_lib_btn)
+        rm_lib_btn = QtWidgets.QPushButton("删除")
+        rm_lib_btn.setStyleSheet(lib_btn_style)
+        rm_lib_btn.clicked.connect(self._on_remove_library)
+        lib_btn_row.addWidget(rm_lib_btn)
+        lib_btn_row.addStretch()
+        left_panel.addLayout(lib_btn_row)
+
+        left_panel.addSpacing(8)
+
+        # ── 子库列表 ──
+        sub_label = QtWidgets.QLabel("子库与分类")
+        sub_label.setStyleSheet("color:#909090;font-size:12px;font-weight:bold;padding:4px 0;")
+        left_panel.addWidget(sub_label)
+
         self._sub_lib_list = QtWidgets.QListWidget()
-        self._sub_lib_list.setFixedWidth(160)
+        self._sub_lib_list.setMinimumHeight(200)
         self._sub_lib_list.setStyleSheet(
             "QListWidget { background:#2a2a2a; border:1px solid #3a3a3a; border-radius:4px; "
             "color:#d0d0d0; font-size:12px; }"
             "QListWidget::item:selected { background:#2d4a6f; }")
-        layout.addWidget(self._sub_lib_list)
+        left_panel.addWidget(self._sub_lib_list, 1)
+
+        layout.addLayout(left_panel)
 
         # 右侧编辑区
         right = QtWidgets.QVBoxLayout()
