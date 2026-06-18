@@ -1063,16 +1063,14 @@ class ExportOrchestrator:
                 _collect_texture_paths_from_materials,
             )
 
-            # 确定材质列表
-            if config.merge_zmetal:
+            # 确定材质列表：优先从关联物体收集所有材质，补充 material_node
+            if config.associated_objects:
                 mats = self._get_materials_from_objects(config.associated_objects)
                 if config.material_node and cmds.objExists(config.material_node) \
                         and config.material_node not in mats:
                     mats.append(config.material_node)
             elif config.material_node and cmds.objExists(config.material_node):
                 mats = [config.material_node]
-            elif config.associated_objects:
-                mats = self._get_materials_from_objects(config.associated_objects)
             else:
                 mats = []
 
