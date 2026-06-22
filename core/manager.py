@@ -72,10 +72,11 @@ class MaterialManager:
         """将 config.json 的值应用到实例属性"""
         cfg = self._config
 
-        # 子库列表 — 核心6个始终存在，config.json 可追加自定义子库
+        # 子库列表 — 核心7个始终存在，config.json 可追加自定义子库
         _CORE_LIBS = {
             "materials": "材质", "models": "模型", "lights": "灯光",
             "textures": "贴图", "scenes": "场景", "hdr": "HDR",
+            "ani": "动态",
         }
         _cfg_libs = cfg.get("sub_libraries", {})
         # 合并：核心库始终保留，config 中可能在核心之外追加了自定义库（如 "ani"）

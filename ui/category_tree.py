@@ -12,7 +12,7 @@ _CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 # ── 核心顶级分类（不可删除） ──────────────────────
-_CORE_SUB_LIBS = frozenset({"materials", "models", "lights", "textures", "scenes", "hdr"})
+_CORE_SUB_LIBS = frozenset({"materials", "models", "lights", "textures", "scenes", "hdr", "ani"})
 
 # ── 复合分类 ID 工具 ─────────────────────────────
 # 用 "||" 拼接 root_lib 和 short_id，彻底避免跨子库同名分类歧义
