@@ -536,6 +536,13 @@ class SettingsDialog(QtWidgets.QDialog):
         except Exception as e:
             print(f"[Settings] 保存 context_menu_preset.json 失败: {e}")
 
+    def _get_ctx_entry(self, atype: str) -> dict:
+        """获取指定子库的右键菜单配置，若子库未定义则继承 _default"""
+        entry = self._ctx_preset_data.get(atype)
+        if entry is None:
+            entry = self._ctx_preset_data.get("_default", {})
+        return entry
+
     def _on_ctx_type_changed(self, row):
         """切换子库类型时，保存当前勾选状态并加载新类型的配置"""
         if row < 0:
@@ -548,9 +555,9 @@ class SettingsDialog(QtWidgets.QDialog):
                 for key, cb in self._ctx_cbs.items():
                     entry[key] = cb.isChecked()
         self._ctx_type_list.setProperty("_prev_row", row)
-        # 加载新类型
+        # 加载新类型（未定义的子库继承 _default）
         atype = self._ctx_types[row]
-        entry = self._ctx_preset_data.get(atype, {})
+        entry = self._get_ctx_entry(atype)
         for key, cb in self._ctx_cbs.items():
             cb.setChecked(entry.get(key, False))
 
@@ -1254,7 +1261,7 @@ class SettingsDialog(QtWidgets.QDialog):
             cur_row = self._ctx_type_list.currentRow()
             if cur_row >= 0:
                 atype = self._ctx_types[cur_row]
-                entry = self._ctx_preset_data.get(atype, {})
+                entry = self._get_ctx_entry(atype)
                 for key, cb in self._ctx_cbs.items():
                     cb.setChecked(entry.get(key, False))
 

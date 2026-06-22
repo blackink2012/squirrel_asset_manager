@@ -1,5 +1,22 @@
 {
-    "_comment": "右键菜单预设 — 按子库(asset_type)配置可在右键菜单中显示的项目。仅列出该子库实际拥有的右键菜单项，不存在的项不列出（默认 false）。",
+    "_comment": "右键菜单预设 — 按子库(asset_type)配置可在右键菜单中显示的项目。仅列出该子库实际拥有的右键菜单项，不存在的项不列出（默认 false）。若子库未在此文件中定义，则继承 _default 段的配置。",
+    "_default": {
+        "import": true,
+        "import_geometry": true,
+        "favorites": true,
+        "select_all": true,
+        "duplicate": true,
+        "open_folder": true,
+        "move_to": true,
+        "copy_to": true,
+        "edit": true,
+        "create_asset": true,
+        "update_thumbnail": true,
+        "update_asset": true,
+        "delete": true,
+        "preview_node": true,
+        "ai_analysis": true
+    },
     "materials": {
         "import": true,
         "import_geometry": true,
@@ -16,7 +33,12 @@
         "update_asset": true,
         "delete": true,
         "preview_node": true,
-        "ai_analysis": true
+        "ai_analysis": true,
+        "create_material": false,
+        "import_texture": false,
+        "assign_texture": false,
+        "apply_light": false,
+        "create_dome_light": false
     },
     "models": {
         "import": true,
@@ -126,5 +148,28 @@
         "delete": true,
         "preview_node": true,
         "ai_analysis": true
+    },
+    "fffffff": {
+        "import": true,
+        "import_geometry": true,
+        "favorites": true,
+        "select_all": true,
+        "duplicate": true,
+        "open_folder": true,
+        "move_to": true,
+        "copy_to": true,
+        "edit": true,
+        "create_asset": true,
+        "update_thumbnail": true,
+        "update_asset": true,
+        "delete": true,
+        "preview_node": true,
+        "ai_analysis": true,
+        "apply_material": false,
+        "create_material": false,
+        "import_texture": false,
+        "assign_texture": false,
+        "apply_light": false,
+        "create_dome_light": false
     }
 }
