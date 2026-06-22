@@ -485,7 +485,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
                     lambda checked=False, cid=cat_id: self._on_move_category(cid)
                 )
                 menu.addSeparator()
-                menu.addAction("\u7f16\u8f91\u6613\u8bfb\u540d").triggered.connect(
+                menu.addAction("编辑").triggered.connect(
                     lambda checked=False, cid=cat_id: self._on_edit_category(cid)
                 )
                 # 核心顶级分类不可删除
@@ -702,17 +702,15 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         if cat is None:
             return
 
-        # 自定义双输入对话框（文件夹名只读 + 易读名可编辑）
         dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle("\u7f16\u8f91\u5206\u7c7b")
-        dialog.setFixedSize(380, 130)
+        dialog.setWindowTitle("编辑分类")
+        dialog.setFixedSize(380, 180)
         dialog.setStyleSheet("background-color: #2a2a2a;")
         layout = QtWidgets.QVBoxLayout(dialog)
         layout.setSpacing(8)
 
-        # 第一行：文件夹名（只读）
         id_layout = QtWidgets.QHBoxLayout()
-        id_label = QtWidgets.QLabel("\u6587\u4ef6\u5939\u540d:")
+        id_label = QtWidgets.QLabel("文件夹名:")
         id_label.setFixedWidth(80)
         id_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         id_input = QtWidgets.QLineEdit(cat_id)
@@ -722,9 +720,8 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         id_layout.addWidget(id_input)
         layout.addLayout(id_layout)
 
-        # 第二行：易读名
         cn_layout = QtWidgets.QHBoxLayout()
-        cn_label = QtWidgets.QLabel("\u6613\u8bfb\u540d:")
+        cn_label = QtWidgets.QLabel("易读名:")
         cn_label.setFixedWidth(80)
         cn_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         cn_input = QtWidgets.QLineEdit(cat.get("name_cn") or cat.get("name") or cat_id)
@@ -733,13 +730,38 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         cn_layout.addWidget(cn_input)
         layout.addLayout(cn_layout)
 
-        # 确定/取消
+        type_layout = QtWidgets.QHBoxLayout()
+        type_label = QtWidgets.QLabel("类型(type):")
+        type_label.setFixedWidth(80)
+        type_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
+        type_combo = QtWidgets.QComboBox()
+        type_combo.setStyleSheet("QComboBox { background-color: #333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px; color: #e0e0e0; } QComboBox::drop-down { border: none; } QComboBox QAbstractItemView { background-color: #2a2a2a; color: #d0d0d0; selection-background-color: #2a3a5a; }")
+        try:
+            with open(_CONFIG_PATH, 'r', encoding='utf-8') as _f:
+                _cfg = json.loads(_f.read())
+            _sub_libs = _cfg.get("sub_libraries", {})
+        except Exception:
+            _sub_libs = {
+                "materials": "\u6750\u8d28", "models": "\u6a21\u578b", "lights": "\u706f\u5149",
+                "textures": "\u8d34\u56fe", "scenes": "\u573a\u666f", "hdr": "HDR", "ani": "\u52a8\u6001"
+            }
+        for _key, _label in _sub_libs.items():
+            type_combo.addItem(f"{_label} ({_key})", _key)
+        current_type = cat.get("type", "")
+        if current_type:
+            idx = type_combo.findData(current_type)
+            if idx >= 0:
+                type_combo.setCurrentIndex(idx)
+        type_layout.addWidget(type_label)
+        type_layout.addWidget(type_combo)
+        layout.addLayout(type_layout)
+
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
-        cancel_btn = QtWidgets.QPushButton("\u53d6\u6d88")
+        cancel_btn = QtWidgets.QPushButton("取消")
         cancel_btn.setStyleSheet("QPushButton { background-color: #3a3a3a; color: #a0a0a0; border: none; padding: 6px 16px; border-radius: 4px; } QPushButton:hover { color: #e0e0e0; }")
         cancel_btn.clicked.connect(dialog.reject)
-        ok_btn = QtWidgets.QPushButton("\u786e\u5b9a")
+        ok_btn = QtWidgets.QPushButton("确定")
         ok_btn.setStyleSheet("QPushButton { background-color: #5294e2; color: #fff; border: none; padding: 6px 16px; border-radius: 4px; } QPushButton:hover { background-color: #6ab0ff; }")
         ok_btn.clicked.connect(dialog.accept)
         btn_layout.addWidget(cancel_btn)
@@ -753,9 +775,8 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         if not new_name:
             return
 
-        # 只更新易读名（name_cn），不覆盖文件夹名（name/id）
         cat["name_cn"] = new_name
-        # 在 _populate_tree 之前保存 root_lib（重建树后 currentItem 丢失）
+        cat["type"] = type_combo.currentData()
         item = self._tree.currentItem()
         root_lib = item.data(0, QtCore.Qt.ItemDataRole.UserRole + 3) if item else ""
         self._populate_tree()
