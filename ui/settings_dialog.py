@@ -693,14 +693,44 @@ class SettingsDialog(QtWidgets.QDialog):
         layout = QtWidgets.QHBoxLayout(w)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # 左侧：子库列表
+        # 左侧：子库列表和操作按钮
+        left = QtWidgets.QVBoxLayout()
+        left.setSpacing(6)
+
         self._sub_lib_list = QtWidgets.QListWidget()
         self._sub_lib_list.setFixedWidth(160)
         self._sub_lib_list.setStyleSheet(
             "QListWidget { background:#2a2a2a; border:1px solid #3a3a3a; border-radius:4px; "
             "color:#d0d0d0; font-size:12px; }"
             "QListWidget::item:selected { background:#2d4a6f; }")
-        layout.addWidget(self._sub_lib_list)
+        left.addWidget(self._sub_lib_list)
+
+        # + - 按钮
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.setSpacing(4)
+
+        add_btn = QtWidgets.QPushButton("+")
+        add_btn.setFixedSize(28, 28)
+        add_btn.setStyleSheet(
+            "QPushButton { background:#4a8c4a; color:#fff; border:none; border-radius:4px; "
+            "font-size:14px; font-weight:bold; }"
+            "QPushButton:hover { background:#5aa55a; }")
+        add_btn.clicked.connect(self._on_add_sub_lib)
+        btn_row.addWidget(add_btn)
+
+        del_btn = QtWidgets.QPushButton("-")
+        del_btn.setFixedSize(28, 28)
+        del_btn.setStyleSheet(
+            "QPushButton { background:#a84a4a; color:#fff; border:none; border-radius:4px; "
+            "font-size:14px; font-weight:bold; }"
+            "QPushButton:hover { background:#c05a5a; }")
+        del_btn.clicked.connect(self._on_delete_sub_lib)
+        btn_row.addWidget(del_btn)
+
+        btn_row.addStretch()
+        left.addLayout(btn_row)
+
+        layout.addLayout(left)
 
         # 右侧编辑区
         right = QtWidgets.QVBoxLayout()
@@ -1260,6 +1290,37 @@ class SettingsDialog(QtWidgets.QDialog):
             settings["library_paths"] = list(self._lib_data)
             settings["default_library"] = self._settings.get("default_library", "")
         self.settingsChanged.emit(settings)
+
+    def _on_add_sub_lib(self):
+        """添加新的自定义子库"""
+        idx = 1
+        while f"custom_{idx}" in self._subs_data:
+            idx += 1
+        new_id = f"custom_{idx}"
+        self._subs_data[new_id] = {
+            "display": f"自定义{idx}",
+            "categories": [],
+        }
+        self._populate_sub_lib_list()
+
+    def _on_delete_sub_lib(self):
+        """删除选中的子库（核心子库不可删除）"""
+        row = self._sub_lib_list.currentRow()
+        if row < 0:
+            return
+        key = list(self._subs_data.keys())[row]
+        CORE_LIBS = {"materials", "models", "lights", "textures", "scenes", "hdr", "ani"}
+        if key in CORE_LIBS:
+            QtWidgets.QMessageBox.warning(
+                self, "无法删除", "核心子库（材质、模型、灯光、贴图、场景、HDR、动态）不可删除"
+            )
+            return
+        reply = QtWidgets.QMessageBox.question(
+            self, "确认删除", f"确定要删除子库「{self._subs_data[key].get('display', key)}」吗？"
+        )
+        if reply == QtWidgets.QMessageBox.Yes:
+            del self._subs_data[key]
+            self._populate_sub_lib_list()
 
     def _on_ok(self):
         self._on_apply()
