@@ -1270,7 +1270,10 @@ class SettingsDialog(QtWidgets.QDialog):
         add_action = menu.addAction("添加子库")
         add_action.triggered.connect(self._on_add_sub_lib)
 
-        row = self._sub_lib_list.rowAt(pos.y())
+        row = -1
+        item = self._sub_lib_list.itemAt(pos)
+        if item is not None:
+            row = self._sub_lib_list.row(item)
         if row >= 0:
             key = list(self._subs_data.keys())[row]
             CORE_LIBS = {"materials", "models", "lights", "textures", "scenes", "hdr", "ani"}
