@@ -1,6 +1,13 @@
+import json
+import os
+
 from ..utils.maya_utils import get_qt_modules
 from ..utils.mock_data import DEFAULT_CATEGORIES
 from ..utils.settings import SettingsManager
+
+# config.json 路径（与 manager.py 保持一致）
+_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "Assets", "preset", "config.json")
 
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
@@ -278,9 +285,10 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         children = cat.get("children", [])
         indent = "  " * (depth + 1)
 
-        # 顶级节点：自身就是根子库
+        # 顶级节点：优先使用 type 字段（FolderMetadata 中存储的类型），
+        # 确保自定义顶级分类的右键菜单 root_lib 与其实际类型一致
         if parent_item is None:
-            root_lib = cat["id"]
+            root_lib = cat.get("type") or cat["id"]
 
         count = cat.get("material_count", 0)
         if count > 0:
@@ -547,18 +555,32 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         layout.addLayout(cn_layout)
 
         # 第三行：类型 type（仅顶级分类可定义，子分类继承父类型）
-        type_layout = QtWidgets.QHBoxLayout()
-        type_label = QtWidgets.QLabel("\u7c7b\u578b(type):")
-        type_label.setFixedWidth(80)
-        type_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
-        type_input = QtWidgets.QLineEdit()
-        type_input.setPlaceholderText("\u9ed8\u8ba4\u4e3a general\uff0c\u53ef\u81ea\u5b9a\u4e49\u5982 material/model/texture")
-        type_input.setText("general")
-        type_input.setStyleSheet("background-color: #333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px; color: #e0e0e0;")
-        type_layout.addWidget(type_label)
-        type_layout.addWidget(type_input)
+        # 改为下拉菜单，选项来自 config.json 的 sub_libraries，
+        # 确保类型始终是合法子库以适配个性化右键菜单
         if parent_id is None:
+            type_layout = QtWidgets.QHBoxLayout()
+            type_label = QtWidgets.QLabel("\u7c7b\u578b(type):")
+            type_label.setFixedWidth(80)
+            type_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
+            type_combo = QtWidgets.QComboBox()
+            type_combo.setStyleSheet("QComboBox { background-color: #333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px; color: #e0e0e0; } QComboBox::drop-down { border: none; } QComboBox QAbstractItemView { background-color: #2a2a2a; color: #d0d0d0; selection-background-color: #2a3a5a; }")
+            # 从 config.json 读取子库列表作为下拉选项
+            try:
+                with open(_CONFIG_PATH, 'r', encoding='utf-8') as _f:
+                    _cfg = json.loads(_f.read())
+                _sub_libs = _cfg.get("sub_libraries", {})
+            except Exception:
+                _sub_libs = {
+                    "materials": "\u6750\u8d28", "models": "\u6a21\u578b", "lights": "\u706f\u5149",
+                    "textures": "\u8d34\u56fe", "scenes": "\u573a\u666f", "hdr": "HDR", "ani": "\u52a8\u6001"
+                }
+            for _key, _label in _sub_libs.items():
+                type_combo.addItem(f"{_label} ({_key})", _key)
+            type_layout.addWidget(type_label)
+            type_layout.addWidget(type_combo)
             layout.addLayout(type_layout)
+        else:
+            type_combo = None
 
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
@@ -583,9 +605,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         # 易读名为空则用文件夹名
         if not name_cn:
             name_cn = cat_id
-        cat_type = type_input.text().strip() if parent_id is None else None
-        if parent_id is None and not cat_type:
-            cat_type = "general"
+        cat_type = type_combo.currentData() if parent_id is None else None
 
         self.categoryAdded.emit({"id": cat_id, "name_cn": name_cn, "parent": parent_id,
                                  "root_lib": root_lib, "type": cat_type})

@@ -1436,29 +1436,32 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
     def _find_category_folder(self, cat_id, root_lib=None) -> str:
         """搜索 cat_id 对应的磁盘文件夹路径，找不到返回空字符串。
-        指定 root_lib 时只在对应子库下搜索，避免同名跨子库歧义。
+        指定 root_lib 时优先在对应子库下搜索，避免同名跨子库歧义；
+        若受限搜索未命中（如自定义顶级分类不在子库目录下），则回退到全库搜索。
         同时处理根目录匹配：如 cat_id="materials" 且 root_lib="materials"→直接返回根路径。
         """
         lib = self._active_mgr.get_library_path()
         if not lib:
             return ""
-        # 指定了 root_lib 则限定搜索范围
+        # 指定了 root_lib 则先限定搜索范围
         if root_lib:
             root_path = os.path.join(lib, root_lib)
             # 根目录本身匹配 → 直接返回
             if cat_id == root_lib and os.path.isdir(root_path):
                 return root_path
-            if not os.path.isdir(root_path):
-                return ""
-            for root, dirs, _ in os.walk(root_path):
-                for d in dirs:
-                    if d == cat_id:
-                        return os.path.join(root, d)
-        else:
-            for root, dirs, _ in os.walk(lib):
-                for d in dirs:
-                    if d == cat_id:
-                        return os.path.join(root, d)
+            if os.path.isdir(root_path):
+                for root, dirs, _ in os.walk(root_path):
+                    for d in dirs:
+                        if d == cat_id:
+                            return os.path.join(root, d)
+        # 受限搜索未命中 → 回退全库搜索（处理自定义顶级分类、直接放在库根目录的分类等场景）
+        if root_lib == "common":
+            # 跳过根目录自身的特殊标记
+            return ""
+        for root, dirs, _ in os.walk(lib):
+            for d in dirs:
+                if d == cat_id:
+                    return os.path.join(root, d)
         return ""
 
     # ── 分类增删改 ────────────────────────────────
