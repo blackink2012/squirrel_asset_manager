@@ -429,7 +429,10 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # 加载数据
         self._export_preset_data = self._load_export_preset()
-        for atype in self._EXPORT_ASSET_TYPES:
+        self._export_types = list(self._config.get("sub_libraries", {}).keys())
+        if not self._export_types:
+            self._export_types = ["materials", "models", "lights", "textures", "scenes", "hdr", "ani"]
+        for atype in self._export_types:
             self._export_type_list.addItem(atype)
 
         self._export_type_list.currentRowChanged.connect(self._on_export_type_changed)
@@ -496,13 +499,13 @@ class SettingsDialog(QtWidgets.QDialog):
         if hasattr(self, '_export_type_list') and self._export_type_list.count() > 0:
             prev_row = self._export_type_list.property("_prev_row")
             if prev_row is not None and 0 <= prev_row < self._export_type_list.count():
-                prev_type = self._EXPORT_ASSET_TYPES[prev_row]
+                prev_type = self._export_types[prev_row]
                 entry = self._export_preset_data.setdefault(prev_type, {})
                 for key, cb in self._export_cbs.items():
                     entry[key] = cb.isChecked()
         self._export_type_list.setProperty("_prev_row", row)
         # 加载新类型
-        atype = self._EXPORT_ASSET_TYPES[row]
+        atype = self._export_types[row]
         entry = self._export_preset_data.get(atype, {})
         for key, cb in self._export_cbs.items():
             cb.setChecked(entry.get(key, False))
@@ -1101,7 +1104,7 @@ class SettingsDialog(QtWidgets.QDialog):
             self._export_preset_data = self._load_export_preset()
             cur_row = self._export_type_list.currentRow()
             if cur_row >= 0:
-                atype = self._EXPORT_ASSET_TYPES[cur_row]
+                atype = self._export_types[cur_row]
                 entry = self._export_preset_data.get(atype, {})
                 for key, cb in self._export_cbs.items():
                     cb.setChecked(entry.get(key, False))
@@ -1144,7 +1147,7 @@ class SettingsDialog(QtWidgets.QDialog):
         # 导出默认值 → 保存到 export_preset.json
         cur_row = self._export_type_list.currentRow()
         if cur_row >= 0:
-            atype = self._EXPORT_ASSET_TYPES[cur_row]
+            atype = self._export_types[cur_row]
             entry = self._export_preset_data.setdefault(atype, {})
             for key, cb in self._export_cbs.items():
                 entry[key] = cb.isChecked()
