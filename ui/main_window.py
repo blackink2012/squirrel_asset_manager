@@ -1581,6 +1581,26 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             shutil.rmtree(folder, ignore_errors=True)
             print(f"[MaterialLibrary] 删除文件夹: {folder}")
 
+        # 如果删除的是顶级子库（在 ASSET_SUB_LIBRARIES 中），同步更新 config.json
+        if cat_id in mgr.ASSET_SUB_LIBRARIES and not parent_id:
+            config_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "Assets", "preset", "config.json"
+            )
+            if os.path.isfile(config_path):
+                try:
+                    with open(config_path, "r", encoding="utf-8") as f:
+                        cfg = json.load(f)
+                    if "sub_libraries" in cfg and cat_id in cfg["sub_libraries"]:
+                        del cfg["sub_libraries"][cat_id]
+                    if "default_sub_categories" in cfg and cat_id in cfg["default_sub_categories"]:
+                        del cfg["default_sub_categories"][cat_id]
+                    with open(config_path, "w", encoding="utf-8") as f:
+                        json.dump(cfg, f, indent=4, ensure_ascii=False)
+                    print(f"[MaterialLibrary] 从 config.json 移除子库: {cat_id}")
+                except Exception as e:
+                    print(f"[MaterialLibrary] 更新 config.json 失败: {e}")
+
         # 材质移到 custom
         if root_lib == "materials":
             for mid, mat in list(mgr._materials.items()):
