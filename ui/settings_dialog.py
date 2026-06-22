@@ -22,6 +22,10 @@ _EXPORT_PRESET_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "Assets", "preset", "export_preset.json"
 )
+_CONTEXT_MENU_PRESET_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "Assets", "preset", "context_menu_preset.json"
+)
 
 
 class SettingsDialog(QtWidgets.QDialog):
@@ -92,6 +96,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         self._tab_widget.addTab(self._create_general_tab(), "常规")
         self._tab_widget.addTab(self._create_export_defaults_tab(), "导出默认值")
+        self._tab_widget.addTab(self._create_context_menu_tab(), "右键菜单")
         self._tab_widget.addTab(self._create_formats_tab(), "支持格式")
         self._tab_widget.addTab(self._create_texture_suffixes_tab(), "贴图后缀")
         self._tab_widget.addTab(self._create_tags_tab(), "常用标签")
@@ -440,6 +445,114 @@ class SettingsDialog(QtWidgets.QDialog):
             self._export_type_list.setCurrentRow(0)
 
         return w
+
+    # ── 右键菜单标签页 ────────────────────────────
+
+    _CONTEXT_MENU_ITEMS = [
+        ("import", "导入"),
+        ("import_geometry", "导入几何体"),
+        ("favorites", "收藏夹"),
+        ("select_all", "全选"),
+        ("duplicate", "复制"),
+        ("open_folder", "打开文件夹"),
+        ("move_to", "移动到"),
+        ("copy_to", "复制到"),
+        ("edit", "编辑"),
+        ("create_asset", "创建资产"),
+        ("update_thumbnail", "更新缩略图"),
+        ("update_asset", "更新资产"),
+        ("delete", "删除"),
+        ("preview_node", "预览节点"),
+        ("ai_analysis", "AI 分析缩略图"),
+        ("apply_material", "应用材质到选中对象"),
+        ("create_material", "创建材质"),
+        ("import_texture", "导入贴图"),
+        ("assign_texture", "指定贴图到材质"),
+        ("apply_light", "应用灯光参数到选中灯光"),
+        ("create_dome_light", "创建环境光"),
+    ]
+
+    def _create_context_menu_tab(self):
+        w = QtWidgets.QWidget()
+        layout = QtWidgets.QHBoxLayout(w)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # 左侧：子库类型列表
+        self._ctx_type_list = QtWidgets.QListWidget()
+        self._ctx_type_list.setFixedWidth(140)
+        self._ctx_type_list.setStyleSheet(
+            "QListWidget { background:#2a2a2a; border:1px solid #3a3a3a; border-radius:4px; "
+            "color:#d0d0d0; font-size:12px; }"
+            "QListWidget::item:selected { background:#2d4a6f; }")
+        layout.addWidget(self._ctx_type_list)
+
+        # 右侧：菜单项勾选
+        right = QtWidgets.QVBoxLayout()
+        right.setSpacing(8)
+
+        # 操作提示
+        tip = QtWidgets.QLabel("勾选要在右键菜单中显示的项目，取消勾选则隐藏")
+        tip.setStyleSheet("color:#707070;font-size:11px;")
+        right.addWidget(tip)
+
+        self._ctx_cbs = {}
+        for key, label in self._CONTEXT_MENU_ITEMS:
+            cb = QtWidgets.QCheckBox(label)
+            cb.setStyleSheet("QCheckBox { color:#d0d0d0; font-size:13px; }")
+            right.addWidget(cb)
+            self._ctx_cbs[key] = cb
+
+        right.addStretch()
+        layout.addLayout(right, 1)
+
+        # 加载数据
+        self._ctx_preset_data = self._load_context_menu_preset()
+        self._ctx_types = list(self._config.get("sub_libraries", {}).keys())
+        if not self._ctx_types:
+            self._ctx_types = ["materials", "models", "lights", "textures", "scenes", "hdr", "ani"]
+        for atype in self._ctx_types:
+            self._ctx_type_list.addItem(atype)
+
+        self._ctx_type_list.currentRowChanged.connect(self._on_ctx_type_changed)
+        if self._ctx_type_list.count() > 0:
+            self._ctx_type_list.setCurrentRow(0)
+
+        return w
+
+    def _load_context_menu_preset(self) -> dict:
+        """从 context_menu_preset.json 加载全部预设"""
+        try:
+            with open(_CONTEXT_MENU_PRESET_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[Settings] 加载 context_menu_preset.json 失败: {e}")
+            return {}
+
+    def _save_context_menu_preset(self):
+        """将 _ctx_preset_data 写回 context_menu_preset.json"""
+        try:
+            with open(_CONTEXT_MENU_PRESET_PATH, "w", encoding="utf-8") as f:
+                json.dump(self._ctx_preset_data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            print(f"[Settings] 保存 context_menu_preset.json 失败: {e}")
+
+    def _on_ctx_type_changed(self, row):
+        """切换子库类型时，保存当前勾选状态并加载新类型的配置"""
+        if row < 0:
+            return
+        if hasattr(self, '_ctx_type_list') and self._ctx_type_list.count() > 0:
+            prev_row = self._ctx_type_list.property("_prev_row")
+            if prev_row is not None and 0 <= prev_row < self._ctx_type_list.count():
+                prev_type = self._ctx_types[prev_row]
+                entry = self._ctx_preset_data.setdefault(prev_type, {})
+                for key, cb in self._ctx_cbs.items():
+                    entry[key] = cb.isChecked()
+        self._ctx_type_list.setProperty("_prev_row", row)
+        # 加载新类型
+        atype = self._ctx_types[row]
+        entry = self._ctx_preset_data.get(atype, {})
+        for key, cb in self._ctx_cbs.items():
+            cb.setChecked(entry.get(key, True))
 
     def _set_locked(self, locked: bool):
         """锁定或解锁所有非通用标签页 — 锁定可查看不可编辑"""
@@ -1136,6 +1249,15 @@ class SettingsDialog(QtWidgets.QDialog):
                 key = self._ADV_KEYS[cur_row][0]
                 self._adv_edit.setPlainText("\n".join(self._adv_data[key]))
 
+            # 重置右键菜单 → 重读 context_menu_preset.json
+            self._ctx_preset_data = self._load_context_menu_preset()
+            cur_row = self._ctx_type_list.currentRow()
+            if cur_row >= 0:
+                atype = self._ctx_types[cur_row]
+                entry = self._ctx_preset_data.get(atype, {})
+                for key, cb in self._ctx_cbs.items():
+                    cb.setChecked(entry.get(key, True))
+
     def _collect_config(self) -> dict:
         """从各编辑控件收集配置并写入 self._config"""
         # 支持格式
@@ -1152,6 +1274,15 @@ class SettingsDialog(QtWidgets.QDialog):
             for key, cb in self._export_cbs.items():
                 entry[key] = cb.isChecked()
         self._save_export_preset()
+
+        # 右键菜单 → 保存到 context_menu_preset.json
+        cur_row = self._ctx_type_list.currentRow()
+        if cur_row >= 0:
+            atype = self._ctx_types[cur_row]
+            entry = self._ctx_preset_data.setdefault(atype, {})
+            for key, cb in self._ctx_cbs.items():
+                entry[key] = cb.isChecked()
+        self._save_context_menu_preset()
 
         # 贴图别名 → 先保存当前编辑，再写回 pbr_mapping.json
         cur_row = self._tex_type_list.currentRow()

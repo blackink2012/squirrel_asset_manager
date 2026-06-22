@@ -18,6 +18,24 @@ def _get_sub_style(font_size=13):
     """
 
 
+def _load_context_menu_preset() -> dict:
+    """从 context_menu_preset.json 加载右键菜单预设"""
+    import os, json
+    cfg_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "Assets", "preset", "context_menu_preset.json")
+    try:
+        with open(cfg_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _is_ctx_enabled(sub_lib: str, item_key: str, preset: dict) -> bool:
+    """检查指定子库的某个右键菜单项是否启用（默认 True）"""
+    entry = preset.get(sub_lib, {})
+    return entry.get(item_key, True)
+
+
 def _load_presets(key: str) -> list:
     """从 config.json 加载预设列表（material_presets / dome_light_presets 等）"""
     import os, json
@@ -557,53 +575,63 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         sm = SettingsManager()
         sm.load()
         font_size = sm.get("font_size", 13)
+        sub_lib = mat.get('sub_library', '')
+        ctx_preset = _load_context_menu_preset()
         
         menu = QtWidgets.QMenu(self)
         menu.setStyleSheet(_get_sub_style(font_size))
-        apply_action = menu.addAction("\u5e94\u7528\u6750\u8d28")
-        menu.addSeparator()
+        apply_action = menu.addAction("\u5e94\u7528\u6750\u8d28") if _is_ctx_enabled(sub_lib, "apply_material", ctx_preset) else None
+        if apply_action:
+            menu.addSeparator()
 
         # 收藏夹子菜单（列表视图）
         mid = mat.get("id", "") if mat else ""
-        if self._manager and mid:
-            fav_sub = QtWidgets.QMenu("☆ 添加到收藏夹", menu)
-            fav_sub.setStyleSheet(_get_sub_style(font_size))
-            for cid in self._manager._favorites.keys():
-                name = self._manager._favorites_meta.get(cid, "默认收藏夹" if cid == "default" else cid)
-                is_in = mid in self._manager._favorites.get(cid, set())
-                label = f"{'★ ' if is_in else '☆ '}{name}"
-                a = fav_sub.addAction(label)
-                a.setData(cid)
-                def make_handler(coll_id, already_in):
-                    def handler():
-                        if already_in:
-                            self._manager._favorites[coll_id].discard(mid)
-                        else:
-                            self._manager._favorites[coll_id].add(mid)
-                        self._manager.save_favorites()
-                        self.addToFavoriteRequested.emit(mid, coll_id)
-                    return handler
-                a.triggered.connect(make_handler(cid, is_in))
-            menu.addMenu(fav_sub)
-        else:
-            fav_action = menu.addAction("☆ 添加到收藏夹")
+        if _is_ctx_enabled(sub_lib, "favorites", ctx_preset):
+            if self._manager and mid:
+                fav_sub = QtWidgets.QMenu("☆ 添加到收藏夹", menu)
+                fav_sub.setStyleSheet(_get_sub_style(font_size))
+                for cid in self._manager._favorites.keys():
+                    name = self._manager._favorites_meta.get(cid, "默认收藏夹" if cid == "default" else cid)
+                    is_in = mid in self._manager._favorites.get(cid, set())
+                    label = f"{'★ ' if is_in else '☆ '}{name}"
+                    a = fav_sub.addAction(label)
+                    a.setData(cid)
+                    def make_handler(coll_id, already_in):
+                        def handler():
+                            if already_in:
+                                self._manager._favorites[coll_id].discard(mid)
+                            else:
+                                self._manager._favorites[coll_id].add(mid)
+                            self._manager.save_favorites()
+                            self.addToFavoriteRequested.emit(mid, coll_id)
+                        return handler
+                    a.triggered.connect(make_handler(cid, is_in))
+                menu.addMenu(fav_sub)
+            else:
+                fav_action = menu.addAction("☆ 添加到收藏夹")
         menu.addSeparator()
-        edit_action = menu.addAction("\u7f16\u8f91")
-        export_action = menu.addAction("\u521b\u5efa\u8d44\u4ea7")
-        menu.addSeparator()
+        edit_action = menu.addAction("\u7f16\u8f91") if _is_ctx_enabled(sub_lib, "edit", ctx_preset) else None
+        export_action = menu.addAction("\u521b\u5efa\u8d44\u4ea7") if _is_ctx_enabled(sub_lib, "create_asset", ctx_preset) else None
+        if edit_action or export_action:
+            menu.addSeparator()
         if self._manager and mid:
-            move_sub = self._build_category_submenu("\u2795 \u79fb\u52a8\u5230", mid, move=True, font_size=font_size)
-            if move_sub: menu.addMenu(move_sub)
-            copy_sub = self._build_category_submenu("\ud83d\udcc1 \u590d\u5236\u5230", mid, move=False, font_size=font_size)
-            if copy_sub: menu.addMenu(copy_sub)
-        folder_action = menu.addAction("\ud83d\udcc2 \u6253\u5f00\u6587\u4ef6\u5939")
-        # 更新缩略图 → 子菜单（截取 / 导入）
-        thumb_menu = QtWidgets.QMenu("\u66f4\u65b0\u7f29\u7565\u56fe", menu)
-        thumb_menu.setStyleSheet(_get_sub_style(font_size))
-        cap_action = thumb_menu.addAction("\ud83d\udcf7 \u622a\u53d6")
-        imp_action = thumb_menu.addAction("\ud83d\udcc2 \u5bfc\u5165")
-        menu.addMenu(thumb_menu)
-        delete_action = menu.addAction("\u5220\u9664")
+            if _is_ctx_enabled(sub_lib, "move_to", ctx_preset):
+                move_sub = self._build_category_submenu("\u2795 \u79fb\u52a8\u5230", mid, move=True, font_size=font_size)
+                if move_sub: menu.addMenu(move_sub)
+            if _is_ctx_enabled(sub_lib, "copy_to", ctx_preset):
+                copy_sub = self._build_category_submenu("\ud83d\udcc1 \u590d\u5236\u5230", mid, move=False, font_size=font_size)
+                if copy_sub: menu.addMenu(copy_sub)
+        folder_action = menu.addAction("\ud83d\udcc2 \u6253\u5f00\u6587\u4ef6\u5939") if _is_ctx_enabled(sub_lib, "open_folder", ctx_preset) else None
+        cap_action = None
+        imp_action = None
+        if _is_ctx_enabled(sub_lib, "update_thumbnail", ctx_preset):
+            # 更新缩略图 → 子菜单（截取 / 导入）
+            thumb_menu = QtWidgets.QMenu("\u66f4\u65b0\u7f29\u7565\u56fe", menu)
+            thumb_menu.setStyleSheet(_get_sub_style(font_size))
+            cap_action = thumb_menu.addAction("\ud83d\udcf7 \u622a\u53d6")
+            imp_action = thumb_menu.addAction("\ud83d\udcc2 \u5bfc\u5165")
+            menu.addMenu(thumb_menu)
+        delete_action = menu.addAction("\u5220\u9664") if _is_ctx_enabled(sub_lib, "delete", ctx_preset) else None
 
         action = menu.exec(self._table_view.viewport().mapToGlobal(pos))
         if action == apply_action:
@@ -1479,6 +1507,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         sm = SettingsManager()
         sm.load()
         font_size = sm.get("font_size", 13)
+        ctx_preset = _load_context_menu_preset()
         menu = QtWidgets.QMenu(self)
         menu.setStyleSheet(_get_sub_style(font_size))
 
@@ -1487,49 +1516,50 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         import_actions = {}
         import_action = None
         zlight_renderer = None  # (action, renderer_name) for zlight
-        if sub_lib == 'textures':
-            # 贴图：不显示通用导入，由下方「导入贴图」子菜单处理
-            pass
-        elif json_path and json_path.endswith('.zasset'):
-            from ..integration.import_executor import get_available_formats
-            formats = get_available_formats(json_path)
-            has_zlight = "zlight" in formats
-            other_formats = [f for f in formats if f != "zlight"]
+        if _is_ctx_enabled(sub_lib, "import", ctx_preset):
+            if sub_lib == 'textures':
+                # 贴图：不显示通用导入，由下方「导入贴图」子菜单处理
+                pass
+            elif json_path and json_path.endswith('.zasset'):
+                from ..integration.import_executor import get_available_formats
+                formats = get_available_formats(json_path)
+                has_zlight = "zlight" in formats
+                other_formats = [f for f in formats if f != "zlight"]
 
-            # zlight 格式 → 渲染器子菜单（按渲染器创建灯光）
-            if has_zlight:
-                zlight_sub = QtWidgets.QMenu('\U0001f4e5 导入灯光', menu)
-                zlight_sub.setStyleSheet(_get_sub_style(font_size))
-                for r_name, r_label in [("arnold", "Arnold"), ("vray", "V-Ray"),
-                                         ("redshift", "Redshift"), ("maya", "Maya 原生")]:
-                    a = zlight_sub.addAction(f'  {r_label}')
-                    zlight_renderer = a, r_name
-                    import_actions[a] = f"zlight:{r_name}"
-                menu.addMenu(zlight_sub)
+                # zlight 格式 → 渲染器子菜单（按渲染器创建灯光）
+                if has_zlight:
+                    zlight_sub = QtWidgets.QMenu('\U0001f4e5 导入灯光', menu)
+                    zlight_sub.setStyleSheet(_get_sub_style(font_size))
+                    for r_name, r_label in [("arnold", "Arnold"), ("vray", "V-Ray"),
+                                             ("redshift", "Redshift"), ("maya", "Maya 原生")]:
+                        a = zlight_sub.addAction(f'  {r_label}')
+                        zlight_renderer = a, r_name
+                        import_actions[a] = f"zlight:{r_name}"
+                    menu.addMenu(zlight_sub)
 
-            # 其他格式
-            if other_formats:
-                if len(other_formats) == 1:
-                    import_action = menu.addAction(f'\U0001f4e5 \u5bfc\u5165 {other_formats[0]}')
-                    # Store the actual format for action matching
-                    oa = import_action
-                    import_actions[oa] = other_formats[0]
-                elif len(other_formats) > 1:
-                    other_sub = QtWidgets.QMenu('\U0001f4e5 \u5bfc\u5165', menu)
-                    other_sub.setStyleSheet(_get_sub_style(font_size))
-                    for fmt in other_formats:
-                        a = other_sub.addAction(f'  {fmt}')
-                        import_actions[a] = fmt
-                    menu.addMenu(other_sub)
-        else:
-            import_action = menu.addAction('\U0001f4e5 \u5bfc\u5165')
+                # 其他格式
+                if other_formats:
+                    if len(other_formats) == 1:
+                        import_action = menu.addAction(f'\U0001f4e5 \u5bfc\u5165 {other_formats[0]}')
+                        # Store the actual format for action matching
+                        oa = import_action
+                        import_actions[oa] = other_formats[0]
+                    elif len(other_formats) > 1:
+                        other_sub = QtWidgets.QMenu('\U0001f4e5 \u5bfc\u5165', menu)
+                        other_sub.setStyleSheet(_get_sub_style(font_size))
+                        for fmt in other_formats:
+                            a = other_sub.addAction(f'  {fmt}')
+                            import_actions[a] = fmt
+                        menu.addMenu(other_sub)
+            else:
+                import_action = menu.addAction('\U0001f4e5 \u5bfc\u5165')
 
         # ── 变体几何体导入 ──
         variant_types = mat.get('variant_types', [])
         variant_actions = {}
         mat_actions = {}
         delete_actions = {}
-        if variant_types and json_path.endswith('.zasset'):
+        if _is_ctx_enabled(sub_lib, "import_geometry", ctx_preset) and variant_types and json_path.endswith('.zasset'):
             from ..core.zasset_io import ZassetIO
             variants_data = ZassetIO.read_variants(json_path)
             versions = variants_data.get('versions', [])
@@ -1632,51 +1662,54 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         # 分类专属按钮
         if sub_lib == 'materials':
-            menu.addAction('\u5e94\u7528\u6750\u8d28\u5230\u9009\u4e2d\u5bf9\u8c61').triggered.connect(
-                lambda: self._do_apply_material(mat))
+            if _is_ctx_enabled(sub_lib, "apply_material", ctx_preset):
+                menu.addAction('\u5e94\u7528\u6750\u8d28\u5230\u9009\u4e2d\u5bf9\u8c61').triggered.connect(
+                    lambda: self._do_apply_material(mat))
         elif sub_lib == 'textures':
-            menu.addAction('应用材质到选中对象').triggered.connect(
-                lambda: self._do_apply_material(mat))
+            if _is_ctx_enabled(sub_lib, "apply_material", ctx_preset):
+                menu.addAction('应用材质到选中对象').triggered.connect(
+                    lambda: self._do_apply_material(mat))
             # 提前获取贴图列表，用于判断是否有分辨率子目录
             tex_names = _get_texture_names(json_path)
 
             # 贴图额外：创建材质子菜单
-            presets = _load_presets('material_presets')
-            if presets:
-                mat_sub = QtWidgets.QMenu('创建材质', menu)
-                mat_sub.setStyleSheet(_get_sub_style(font_size))
+            if _is_ctx_enabled(sub_lib, "create_material", ctx_preset):
+                presets = _load_presets('material_presets')
+                if presets:
+                    mat_sub = QtWidgets.QMenu('创建材质', menu)
+                    mat_sub.setStyleSheet(_get_sub_style(font_size))
 
-                # 检测是否有分辨率子目录
-                resolutions = sorted(set(
-                    tn.split('/')[0] for tn in tex_names if '/' in tn
-                ))
-                has_res = len(resolutions) > 1  # 仅多个精度时才需要选择
+                    # 检测是否有分辨率子目录
+                    resolutions = sorted(set(
+                        tn.split('/')[0] for tn in tex_names if '/' in tn
+                    ))
+                    has_res = len(resolutions) > 1  # 仅多个精度时才需要选择
 
-                for p in presets:
-                    if has_res:
-                        # 精度子目录 → 二级菜单：材质名 → 精度列表
-                        preset_sub = QtWidgets.QMenu(p['name'], mat_sub)
-                        preset_sub.setStyleSheet(_get_sub_style(font_size))
-                        for res in resolutions:
-                            a = preset_sub.addAction(f'  {res}')
+                    for p in presets:
+                        if has_res:
+                            # 精度子目录 → 二级菜单：材质名 → 精度列表
+                            preset_sub = QtWidgets.QMenu(p['name'], mat_sub)
+                            preset_sub.setStyleSheet(_get_sub_style(font_size))
+                            for res in resolutions:
+                                a = preset_sub.addAction(f'  {res}')
+                                a.triggered.connect(
+                                    lambda *a, nt=p['node_type'], md=mat, r=res:
+                                        self.createMaterialRequested.emit(nt, md, r))
+                            mat_sub.addMenu(preset_sub)
+                        elif len(resolutions) == 1:
+                            # 只有一个精度，直接创建不弹菜单
+                            a = mat_sub.addAction(f'  {p["name"]}')
                             a.triggered.connect(
-                                lambda *a, nt=p['node_type'], md=mat, r=res:
+                                lambda *a, nt=p['node_type'], md=mat, r=resolutions[0]:
                                     self.createMaterialRequested.emit(nt, md, r))
-                        mat_sub.addMenu(preset_sub)
-                    elif len(resolutions) == 1:
-                        # 只有一个精度，直接创建不弹菜单
-                        a = mat_sub.addAction(f'  {p["name"]}')
-                        a.triggered.connect(
-                            lambda *a, nt=p['node_type'], md=mat, r=resolutions[0]:
-                                self.createMaterialRequested.emit(nt, md, r))
-                    else:
-                        a = mat_sub.addAction(f'  {p["name"]}')
-                        a.triggered.connect(
-                            lambda *a, nt=p['node_type'], md=mat:
-                                self.createMaterialRequested.emit(nt, md, ''))
-                menu.addMenu(mat_sub)
+                        else:
+                            a = mat_sub.addAction(f'  {p["name"]}')
+                            a.triggered.connect(
+                                lambda *a, nt=p['node_type'], md=mat:
+                                    self.createMaterialRequested.emit(nt, md, ''))
+                    menu.addMenu(mat_sub)
             # 贴图额外：导入贴图子菜单
-            if tex_names:
+            if _is_ctx_enabled(sub_lib, "import_texture", ctx_preset) and tex_names:
                 tex_sub = QtWidgets.QMenu('导入贴图', menu)
                 tex_sub.setStyleSheet(_get_sub_style(font_size))
 
@@ -1727,71 +1760,82 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
                 menu.addMenu(tex_sub)
             # 贴图额外：指定贴图到选中材质
-            menu.addAction('指定贴图到材质').triggered.connect(
-                lambda: self.assignTextureToMaterialRequested.emit(mat))
+            if _is_ctx_enabled(sub_lib, "assign_texture", ctx_preset):
+                menu.addAction('指定贴图到材质').triggered.connect(
+                    lambda: self.assignTextureToMaterialRequested.emit(mat))
         elif sub_lib == 'lights':
-            apply_action = menu.addAction('💡 应用灯光参数到选中灯光')
-            apply_action.triggered.connect(
-                lambda: self.applyLightToSelectionRequested.emit(json_path))
+            if _is_ctx_enabled(sub_lib, "apply_light", ctx_preset):
+                apply_action = menu.addAction('💡 应用灯光参数到选中灯光')
+                apply_action.triggered.connect(
+                    lambda: self.applyLightToSelectionRequested.emit(json_path))
         elif sub_lib == 'hdr':
-            preset_dir = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                'Assets', 'HDR_ligt')
-            if os.path.isdir(preset_dir):
-                ma_files = sorted(
-                    [f for f in os.listdir(preset_dir) if f.lower().endswith('.ma')])
-                dome_sub = QtWidgets.QMenu('创建环境光', menu)
-                dome_sub.setStyleSheet(_get_sub_style(font_size))
-                for ma_file in ma_files:
-                    preset_path = os.path.join(preset_dir, ma_file)
-                    preset_name = os.path.splitext(ma_file)[0]
-                    a = dome_sub.addAction(f'  {preset_name}')
-                    a.triggered.connect(lambda *a, pp=preset_path, m=mat:
-                        self.createDomeLightRequested.emit(pp, m))
-                menu.addMenu(dome_sub)
+            if _is_ctx_enabled(sub_lib, "create_dome_light", ctx_preset):
+                preset_dir = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    'Assets', 'HDR_ligt')
+                if os.path.isdir(preset_dir):
+                    ma_files = sorted(
+                        [f for f in os.listdir(preset_dir) if f.lower().endswith('.ma')])
+                    dome_sub = QtWidgets.QMenu('创建环境光', menu)
+                    dome_sub.setStyleSheet(_get_sub_style(font_size))
+                    for ma_file in ma_files:
+                        preset_path = os.path.join(preset_dir, ma_file)
+                        preset_name = os.path.splitext(ma_file)[0]
+                        a = dome_sub.addAction(f'  {preset_name}')
+                        a.triggered.connect(lambda *a, pp=preset_path, m=mat:
+                            self.createDomeLightRequested.emit(pp, m))
+                    menu.addMenu(dome_sub)
+            if _is_ctx_enabled(sub_lib, "assign_texture", ctx_preset):
                 menu.addAction('指定贴图').triggered.connect(
                     lambda: self.assignHdrToDomeRequested.emit(mat))
 
         menu.addSeparator()
         mid = mat.get('id', '')
-        self._build_favorites_submenu(menu, mid, font_size)
-        menu.addSeparator()
+        if _is_ctx_enabled(sub_lib, "favorites", ctx_preset):
+            self._build_favorites_submenu(menu, mid, font_size)
+            menu.addSeparator()
 
-        select_all_action = menu.addAction('全选')
-        duplicate_action = menu.addAction('复制')
-        folder_action = menu.addAction('📂 打开文件夹')
+        select_all_action = menu.addAction('全选') if _is_ctx_enabled(sub_lib, "select_all", ctx_preset) else None
+        duplicate_action = menu.addAction('复制') if _is_ctx_enabled(sub_lib, "duplicate", ctx_preset) else None
+        folder_action = menu.addAction('📂 打开文件夹') if _is_ctx_enabled(sub_lib, "open_folder", ctx_preset) else None
         menu.addSeparator()
 
         if self._manager:
-            move_sub = self._build_category_submenu('➕ 移动到', mid, move=True, font_size=font_size)
-            if move_sub: menu.addMenu(move_sub)
-            copy_sub = self._build_category_submenu('📁 复制到', mid, move=False, font_size=font_size)
-            if copy_sub: menu.addMenu(copy_sub)
+            if _is_ctx_enabled(sub_lib, "move_to", ctx_preset):
+                move_sub = self._build_category_submenu('➕ 移动到', mid, move=True, font_size=font_size)
+                if move_sub: menu.addMenu(move_sub)
+            if _is_ctx_enabled(sub_lib, "copy_to", ctx_preset):
+                copy_sub = self._build_category_submenu('📁 复制到', mid, move=False, font_size=font_size)
+                if copy_sub: menu.addMenu(copy_sub)
         menu.addSeparator()
 
-        edit_action = menu.addAction('编辑')
-        thumb_menu = QtWidgets.QMenu('更新缩略图', menu)
-        thumb_menu.setStyleSheet(_get_sub_style(font_size))
-        cap_action = thumb_menu.addAction('📷 截取')
-        imp_thumb_action = thumb_menu.addAction('📂 导入')
-        menu.addMenu(thumb_menu)
+        edit_action = menu.addAction('编辑') if _is_ctx_enabled(sub_lib, "edit", ctx_preset) else None
+        cap_action = None
+        imp_thumb_action = None
+        if _is_ctx_enabled(sub_lib, "update_thumbnail", ctx_preset):
+            thumb_menu = QtWidgets.QMenu('更新缩略图', menu)
+            thumb_menu.setStyleSheet(_get_sub_style(font_size))
+            cap_action = thumb_menu.addAction('📷 截取')
+            imp_thumb_action = thumb_menu.addAction('📂 导入')
+            menu.addMenu(thumb_menu)
         
-        update_asset_action = menu.addAction('更新资产')
-        delete_action = menu.addAction('删除')
+        update_asset_action = menu.addAction('更新资产') if _is_ctx_enabled(sub_lib, "update_asset", ctx_preset) else None
+        delete_action = menu.addAction('删除') if _is_ctx_enabled(sub_lib, "delete", ctx_preset) else None
         menu.addSeparator()
 
         # ── 预览节点（zmetal / ma 文件）──
         preview_node_actions = {}
-        node_files = self._collect_node_files(json_path, mat.get('variant_types', []))
-        if node_files:
-            preview_sub = QtWidgets.QMenu('🔍 预览节点', menu)
-            preview_sub.setStyleSheet(_get_sub_style(font_size))
-            for display_name, file_path in node_files:
-                a = preview_sub.addAction(f'  {display_name}')
-                preview_node_actions[a] = file_path
-            menu.addMenu(preview_sub)
+        if _is_ctx_enabled(sub_lib, "preview_node", ctx_preset):
+            node_files = self._collect_node_files(json_path, mat.get('variant_types', []))
+            if node_files:
+                preview_sub = QtWidgets.QMenu('🔍 预览节点', menu)
+                preview_sub.setStyleSheet(_get_sub_style(font_size))
+                for display_name, file_path in node_files:
+                    a = preview_sub.addAction(f'  {display_name}')
+                    preview_node_actions[a] = file_path
+                menu.addMenu(preview_sub)
 
-        ai_action = menu.addAction('\U0001f9e0 AI 分析缩略图')
+        ai_action = menu.addAction('\U0001f9e0 AI 分析缩略图') if _is_ctx_enabled(sub_lib, "ai_analysis", ctx_preset) else None
 
         action = menu.exec(card.mapToGlobal(pos))
         if action is None:  # 菜单被取消，不做任何操作
