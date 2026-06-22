@@ -1621,7 +1621,23 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         if not item:
             return
 
-        # 从树节点层级反向构建完整相对路径
+        # 顶级分类（depth==0）：直接构建路径，区分核心子库与自定义顶级分类
+        current_depth = item.data(0, QtCore.Qt.ItemDataRole.UserRole + 2)
+        if current_depth == 0:
+            rl = item.data(0, QtCore.Qt.ItemDataRole.UserRole + 3) or "materials"
+            mid = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+            root_lib = rl or mid
+            # 自定义顶级分类：文件夹名(mid)与类型(root_lib)不同，
+            # 如 id="nodetree" type="models"，路径应为 lib/nodetree/ 而非 lib/models/
+            if mid != root_lib:
+                full_path = os.path.join(lib, mid)
+            else:
+                full_path = os.path.join(lib, root_lib)
+            if os.path.isdir(full_path):
+                os.startfile(full_path)
+            return
+
+        # 非顶级分类：从树节点层级反向构建完整相对路径
         parts = []
         current = item
         root_lib = "materials"
@@ -1630,13 +1646,22 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             rl = current.data(0, QtCore.Qt.ItemDataRole.UserRole + 3)
             depth = current.data(0, QtCore.Qt.ItemDataRole.UserRole + 2)
             if depth == 0:
-                root_lib = rl or mid
+                # 自定义顶级分类：文件夹名(mid)与类型(rl)不同，用 mid 替代 root_lib
+                if rl and mid != rl:
+                    parts.append(mid)
+                    root_lib = ""
+                else:
+                    root_lib = rl or mid
                 break
             parts.append(mid)
             current = current.parent()
         parts.reverse()
 
-        full_path = os.path.join(lib, root_lib, *parts)
+        path_parts = [lib]
+        if root_lib:
+            path_parts.append(root_lib)
+        path_parts.extend(parts)
+        full_path = os.path.join(*path_parts)
         if os.path.isdir(full_path):
             os.startfile(full_path)
 
