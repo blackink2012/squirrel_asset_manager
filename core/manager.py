@@ -853,6 +853,29 @@ class MaterialManager:
                     if d == category_id:
                         return os.path.join(root, d)
 
+        # 子库目录下未找到 → 搜索库根目录下的自定义顶级分类文件夹
+        # （自定义顶级分类不在 ASSET_SUB_LIBRARIES 下，而是直接放在库根目录）
+        try:
+            root_entries = os.listdir(self._library_path)
+        except PermissionError:
+            root_entries = []
+        sub_dirs_set = set(sub_dirs)
+        for entry in root_entries:
+            if entry in sub_dirs_set or entry.startswith('.'):
+                continue
+            entry_path = os.path.join(self._library_path, entry)
+            if not os.path.isdir(entry_path):
+                continue
+            if entry in ("library.json", "favorites.json", "FolderMetadata.fdata"):
+                continue
+            if entry == category_id:
+                return entry_path
+            for root, dirs, _ in os.walk(entry_path):
+                dirs[:] = [d for d in dirs if not d.endswith('.zasset')]
+                for d in dirs:
+                    if d == category_id:
+                        return os.path.join(root, d)
+
         # 未找到 → 创建
         if auto_create:
             target_sub = sub_lib_hint or (sub_dirs[0] if sub_dirs else "materials")
