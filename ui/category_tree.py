@@ -564,17 +564,13 @@ class CategoryTreeWidget(QtWidgets.QWidget):
             type_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
             type_combo = QtWidgets.QComboBox()
             type_combo.setStyleSheet("QComboBox { background-color: #333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px; color: #e0e0e0; } QComboBox::drop-down { border: none; } QComboBox QAbstractItemView { background-color: #2a2a2a; color: #d0d0d0; selection-background-color: #2a3a5a; }")
-            # 从 config.json 读取子库列表作为下拉选项
-            try:
-                with open(_CONFIG_PATH, 'r', encoding='utf-8') as _f:
-                    _cfg = json.loads(_f.read())
-                _sub_libs = _cfg.get("sub_libraries", {})
-            except Exception:
-                _sub_libs = {
-                    "materials": "\u6750\u8d28", "models": "\u6a21\u578b", "lights": "\u706f\u5149",
-                    "textures": "\u8d34\u56fe", "scenes": "\u573a\u666f", "hdr": "HDR", "ani": "\u52a8\u6001"
-                }
-            for _key, _label in _sub_libs.items():
+            # 固定标准子库列表作为下拉选项，确保右键菜单能正确识别
+            # 不使用 config.json 的 sub_libraries，因为用户自定义的子库无法被右键菜单识别
+            _STANDARD_SUB_LIBS = {
+                "materials": "\u6750\u8d28", "models": "\u6a21\u578b", "lights": "\u706f\u5149",
+                "textures": "\u8d34\u56fe", "scenes": "\u573a\u666f", "hdr": "HDR", "ani": "\u52a8\u6001"
+            }
+            for _key, _label in _STANDARD_SUB_LIBS.items():
                 type_combo.addItem(f"{_label} ({_key})", _key)
             type_layout.addWidget(type_label)
             type_layout.addWidget(type_combo)
