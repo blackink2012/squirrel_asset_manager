@@ -34,13 +34,14 @@ class SettingsDialog(QtWidgets.QDialog):
         "last_library_path": "",
     }
 
-    def __init__(self, parent=None, current_settings=None):
+    def __init__(self, parent=None, current_settings=None, material_manager=None):
         super(SettingsDialog, self).__init__(parent)
         self.setWindowTitle("设置")
         self.setMinimumSize(960, 750)
         self.setStyleSheet("background-color: #2a2a2a;")
 
         self._settings = dict(current_settings) if current_settings else dict(self.DEFAULT_SETTINGS)
+        self._material_manager = material_manager
         self._load_config()
         self._setup_ui()
         self._populate_library_list()
@@ -729,6 +730,15 @@ class SettingsDialog(QtWidgets.QDialog):
         right = QtWidgets.QVBoxLayout()
         right.setSpacing(8)
 
+        # 读取当前分类文件夹按钮
+        sync_btn = QtWidgets.QPushButton("读取当前分类文件夹")
+        sync_btn.setStyleSheet(
+            "QPushButton { background:#4a8c4a; color:#fff; border:none; padding:6px 12px; "
+            "border-radius:4px; font-size:12px; }"
+            "QPushButton:hover { background:#5aa55a; }")
+        sync_btn.clicked.connect(self._on_sync_categories)
+        right.addWidget(sync_btn)
+
         # 子库ID
         id_row = QtWidgets.QHBoxLayout()
         id_label = QtWidgets.QLabel("子库ID:")
@@ -856,6 +866,62 @@ class SettingsDialog(QtWidgets.QDialog):
             self._sub_id_edit.clear()
             self._sub_name_edit.clear()
             self._sub_cats_edit.clear()
+
+    def _on_sync_categories(self):
+        """从当前库的实际文件夹结构同步分类到设置"""
+        if not self._material_manager:
+            QtWidgets.QMessageBox.warning(self, "提示", "无法获取资产管理器")
+            return
+        library_path = self._material_manager.get_library_path()
+        if not library_path:
+            QtWidgets.QMessageBox.warning(self, "提示", "请先加载资产库")
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self, "同步确认",
+            "将从当前资产库的实际文件夹结构读取分类，并覆盖设置中的「默认分类列表」。\n\n"
+            "此操作不会删除或修改磁盘上的任何文件夹，仅更新配置文件。\n\n"
+            "是否继续？",
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.No,
+        )
+        if reply != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+
+        self._subs_data = {}
+        self._sub_lib_list.clear()
+
+        try:
+            categories = self._material_manager.get_category_tree()
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, "提示", f"读取分类失败: {str(e)}")
+            return
+
+        for cat in categories:
+            cat_id = cat.get("id", "")
+            display = cat.get("name_cn", cat_id)
+            self._subs_data[cat_id] = {
+                "display": display,
+                "categories": [],
+            }
+
+            def collect_cats(nodes, parent_id=""):
+                for node in nodes:
+                    n_id = node.get("id", "")
+                    n_cn = node.get("name_cn", n_id)
+                    self._subs_data[cat_id]["categories"].append([n_id, n_cn])
+                    if node.get("children"):
+                        collect_cats(node["children"], n_id)
+
+            if cat.get("children"):
+                collect_cats(cat["children"])
+
+            self._sub_lib_list.addItem(f"{display} ({cat_id})")
+
+        if self._sub_lib_list.count() > 0:
+            self._sub_lib_list.setCurrentRow(0)
+
+        QtWidgets.QMessageBox.information(self, "成功", "分类已从当前资产库同步")
 
     # ── 高级配置标签页 ────────────────────────────
 
