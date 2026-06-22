@@ -536,13 +536,6 @@ class SettingsDialog(QtWidgets.QDialog):
         except Exception as e:
             print(f"[Settings] 保存 context_menu_preset.json 失败: {e}")
 
-    def _get_ctx_entry(self, atype: str) -> dict:
-        """获取指定子库的右键菜单配置，若子库未定义则继承 _default"""
-        entry = self._ctx_preset_data.get(atype)
-        if entry is None:
-            entry = self._ctx_preset_data.get("_default", {})
-        return entry
-
     def _on_ctx_type_changed(self, row):
         """切换子库类型时，保存当前勾选状态并加载新类型的配置"""
         if row < 0:
@@ -555,9 +548,9 @@ class SettingsDialog(QtWidgets.QDialog):
                 for key, cb in self._ctx_cbs.items():
                     entry[key] = cb.isChecked()
         self._ctx_type_list.setProperty("_prev_row", row)
-        # 加载新类型（未定义的子库继承 _default）
+        # 加载新类型
         atype = self._ctx_types[row]
-        entry = self._get_ctx_entry(atype)
+        entry = self._ctx_preset_data.get(atype, {})
         for key, cb in self._ctx_cbs.items():
             cb.setChecked(entry.get(key, False))
 
@@ -582,6 +575,7 @@ class SettingsDialog(QtWidgets.QDialog):
                 "除非你知道自己在改什么，否则不要修改！\n\n"
                 "以下标签页将被解锁：\n"
                 "• 导出默认值 — 每种资产类型的导出格式\n"
+                "• 右键菜单 — 各子库右键菜单项的显示/隐藏\n"
                 "• 支持格式 — 资产库可识别的文件扩展名\n"
                 "• 贴图后缀 — 导入时识别贴图通道类型的别名\n"
                 "• 常用标签 — 各子库的预置标签列表\n"
@@ -1261,7 +1255,7 @@ class SettingsDialog(QtWidgets.QDialog):
             cur_row = self._ctx_type_list.currentRow()
             if cur_row >= 0:
                 atype = self._ctx_types[cur_row]
-                entry = self._get_ctx_entry(atype)
+                entry = self._ctx_preset_data.get(atype, {})
                 for key, cb in self._ctx_cbs.items():
                     cb.setChecked(entry.get(key, False))
 
