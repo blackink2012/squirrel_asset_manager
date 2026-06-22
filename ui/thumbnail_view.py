@@ -31,9 +31,9 @@ def _load_context_menu_preset() -> dict:
 
 
 def _is_ctx_enabled(sub_lib: str, item_key: str, preset: dict) -> bool:
-    """检查指定子库的某个右键菜单项是否启用（默认 True）"""
+    """检查指定子库的某个右键菜单项是否启用（默认 False，仅预设中显式标记 true 的才启用）"""
     entry = preset.get(sub_lib, {})
-    return entry.get(item_key, True)
+    return entry.get(item_key, False)
 
 
 def _load_presets(key: str) -> list:

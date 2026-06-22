@@ -1,5 +1,5 @@
 {
-    "_comment": "右键菜单预设 — 按子库(asset_type)配置可在右键菜单中显示的项目。所有项目默认 true（显示），用户可在此文件中关闭不需要的菜单项。",
+    "_comment": "右键菜单预设 — 按子库(asset_type)配置可在右键菜单中显示的项目。仅列出该子库实际拥有的右键菜单项，不存在的项不列出（默认 false）。",
     "materials": {
         "import": true,
         "import_geometry": true,

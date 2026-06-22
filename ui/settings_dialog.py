@@ -552,7 +552,7 @@ class SettingsDialog(QtWidgets.QDialog):
         atype = self._ctx_types[row]
         entry = self._ctx_preset_data.get(atype, {})
         for key, cb in self._ctx_cbs.items():
-            cb.setChecked(entry.get(key, True))
+            cb.setChecked(entry.get(key, False))
 
     def _set_locked(self, locked: bool):
         """锁定或解锁所有非通用标签页 — 锁定可查看不可编辑"""
@@ -1256,7 +1256,7 @@ class SettingsDialog(QtWidgets.QDialog):
                 atype = self._ctx_types[cur_row]
                 entry = self._ctx_preset_data.get(atype, {})
                 for key, cb in self._ctx_cbs.items():
-                    cb.setChecked(entry.get(key, True))
+                    cb.setChecked(entry.get(key, False))
 
     def _collect_config(self) -> dict:
         """从各编辑控件收集配置并写入 self._config"""
