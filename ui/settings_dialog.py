@@ -772,6 +772,15 @@ class SettingsDialog(QtWidgets.QDialog):
 
         return w
 
+    def _populate_sub_lib_list(self):
+        """重新填充子库列表"""
+        self._sub_lib_list.clear()
+        for k in self._subs_data:
+            display = self._subs_data[k].get("display", k)
+            self._sub_lib_list.addItem(f"{display} ({k})")
+        if self._sub_lib_list.count() > 0:
+            self._sub_lib_list.setCurrentRow(0)
+
     def _on_sub_lib_changed(self, row):
         """切换子库时保存当前编辑并加载新子库数据"""
         if row < 0:
@@ -1314,6 +1323,11 @@ class SettingsDialog(QtWidgets.QDialog):
         if reply == QtWidgets.QMessageBox.Yes:
             del self._subs_data[key]
             self._populate_sub_lib_list()
+            if "sub_libraries" in self._config and key in self._config["sub_libraries"]:
+                del self._config["sub_libraries"][key]
+            if "default_sub_categories" in self._config and key in self._config["default_sub_categories"]:
+                del self._config["default_sub_categories"][key]
+            self._save_config()
 
     def _on_ok(self):
         self._on_apply()
