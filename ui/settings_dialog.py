@@ -692,14 +692,38 @@ class SettingsDialog(QtWidgets.QDialog):
         layout = QtWidgets.QHBoxLayout(w)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # 左侧：子库列表
+        # 左侧：子库列表 + 操作按钮
+        left = QtWidgets.QVBoxLayout()
+        left.setContentsMargins(0, 0, 0, 0)
+        left.setSpacing(6)
+
         self._sub_lib_list = QtWidgets.QListWidget()
         self._sub_lib_list.setFixedWidth(160)
         self._sub_lib_list.setStyleSheet(
             "QListWidget { background:#2a2a2a; border:1px solid #3a3a3a; border-radius:4px; "
             "color:#d0d0d0; font-size:12px; }"
             "QListWidget::item:selected { background:#2d4a6f; }")
-        layout.addWidget(self._sub_lib_list)
+        left.addWidget(self._sub_lib_list)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        add_btn = QtWidgets.QPushButton("+")
+        add_btn.setStyleSheet(
+            "QPushButton { background:#5294e2; color:#fff; border:none; padding:4px 8px; "
+            "border-radius:4px; font-size:12px; }"
+            "QPushButton:hover { background:#6ab0ff; }")
+        add_btn.clicked.connect(self._on_add_sub_lib)
+        btn_row.addWidget(add_btn)
+
+        del_btn = QtWidgets.QPushButton("-")
+        del_btn.setStyleSheet(
+            "QPushButton { background:#e05a5a; color:#fff; border:none; padding:4px 8px; "
+            "border-radius:4px; font-size:12px; }"
+            "QPushButton:hover { background:#ff6b6b; }")
+        del_btn.clicked.connect(self._on_delete_sub_lib)
+        btn_row.addWidget(del_btn)
+
+        left.addLayout(btn_row)
+        layout.addLayout(left)
 
         # 右侧编辑区
         right = QtWidgets.QVBoxLayout()
@@ -769,10 +793,25 @@ class SettingsDialog(QtWidgets.QDialog):
             prev_row = self._sub_lib_list.property("_prev_row")
             if prev_row is not None and 0 <= prev_row < self._sub_lib_list.count():
                 prev_key = list(self._subs_data.keys())[prev_row]
+                new_key = self._sub_id_edit.text().strip()
+                new_display = self._sub_name_edit.text().strip()
                 cats_lines = self._sub_cats_edit.toPlainText().strip()
+                # 更新分类
                 self._subs_data[prev_key]["categories"] = [
                     l.strip().split(None, 1) for l in cats_lines.split("\n") if l.strip()
                 ]
+                # 更新显示名
+                if new_display:
+                    self._subs_data[prev_key]["display"] = new_display
+                # 如果 ID 变更，重命名字典 key
+                if new_key and new_key != prev_key:
+                    if new_key in self._subs_data:
+                        QtWidgets.QMessageBox.warning(self, "提示", f"子库ID「{new_key}」已存在")
+                    else:
+                        self._subs_data[new_key] = self._subs_data.pop(prev_key)
+                        item = self._sub_lib_list.item(prev_row)
+                        if item:
+                            item.setText(f"{self._subs_data[new_key]['display']} ({new_key})")
         self._sub_lib_list.setProperty("_prev_row", row)
         # 加载新
         key = list(self._subs_data.keys())[row]
@@ -781,6 +820,42 @@ class SettingsDialog(QtWidgets.QDialog):
         self._sub_name_edit.setText(data["display"])
         cats_lines = "\n".join(f"{c[0]} {c[1]}" for c in data["categories"] if len(c) >= 2)
         self._sub_cats_edit.setPlainText(cats_lines)
+
+    def _on_add_sub_lib(self):
+        """添加新子库"""
+        new_id = f"custom_{len(self._subs_data) + 1}"
+        new_display = f"自定义{len(self._subs_data) + 1}"
+        self._subs_data[new_id] = {
+            "display": new_display,
+            "categories": [],
+        }
+        self._sub_lib_list.addItem(f"{new_display} ({new_id})")
+        self._sub_lib_list.setCurrentRow(self._sub_lib_list.count() - 1)
+
+    def _on_delete_sub_lib(self):
+        """删除当前选中的子库"""
+        row = self._sub_lib_list.currentRow()
+        if row < 0:
+            return
+        key = list(self._subs_data.keys())[row]
+        if key in ("materials", "models", "lights", "textures", "scenes", "hdr"):
+            QtWidgets.QMessageBox.warning(self, "提示", "核心子库不可删除")
+            return
+        reply = QtWidgets.QMessageBox.question(
+            self, "删除确认", f"确定要删除子库「{self._subs_data[key]['display']}」吗？",
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.No,
+        )
+        if reply != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+        del self._subs_data[key]
+        self._sub_lib_list.takeItem(row)
+        if self._sub_lib_list.count() > 0:
+            self._sub_lib_list.setCurrentRow(min(row, self._sub_lib_list.count() - 1))
+        else:
+            self._sub_id_edit.clear()
+            self._sub_name_edit.clear()
+            self._sub_cats_edit.clear()
 
     # ── 高级配置标签页 ────────────────────────────
 
@@ -1085,10 +1160,20 @@ class SettingsDialog(QtWidgets.QDialog):
         cur_row = self._sub_lib_list.currentRow()
         if cur_row >= 0:
             key = list(self._subs_data.keys())[cur_row]
+            new_key = self._sub_id_edit.text().strip()
+            new_display = self._sub_name_edit.text().strip()
             cats_lines = self._sub_cats_edit.toPlainText().strip()
+            # 更新分类
             self._subs_data[key]["categories"] = [
                 l.strip().split(None, 1) for l in cats_lines.split("\n") if l.strip()
             ]
+            # 更新显示名
+            if new_display:
+                self._subs_data[key]["display"] = new_display
+            # 如果 ID 变更，重命名字典 key
+            if new_key and new_key != key:
+                if new_key not in self._subs_data:
+                    self._subs_data[new_key] = self._subs_data.pop(key)
         new_subs = {}
         new_cats = {}
         for k, data in self._subs_data.items():
