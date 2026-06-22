@@ -1739,6 +1739,9 @@ class MaterialManager:
             children = scan_dir(full, name, name)
             # 注意：每个子节点的 material_count 已递归包含其后代，不能重复加孙子节点
             total = sum(c.get("material_count", 0) for c in children)
+            node_type = meta.get("type", name)
+            if node_type not in self.ASSET_SUB_LIBRARIES:
+                node_type = "materials"
             result.append({
                 "id": name, "name": name, "name_cn": display,
                 "icon": "", "description": "",
@@ -1746,7 +1749,7 @@ class MaterialManager:
                 "children": children,
                 "sort_order": 99,
                 "material_count": total,
-                "type": meta.get("type", name),
+                "type": node_type,
             })
 
         self._cached_tree = result
