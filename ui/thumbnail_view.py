@@ -31,10 +31,54 @@ def _load_context_menu_preset() -> dict:
 
 
 def _is_ctx_enabled(sub_lib: str, item_key: str, preset: dict) -> bool:
-    """检查指定子库的某个右键菜单项是否启用（默认 False，仅预设中显式标记 true 的才启用）。
-    若子库未在预设中定义，则继承 _default 段的配置。"""
-    entry = preset.get(sub_lib) or preset.get("_default") or {}
+    """检查指定子库的某个右键菜单项是否启用（默认 False，仅预设中显式标记 true 的才启用）"""
+    entry = preset.get(sub_lib, {})
     return entry.get(item_key, False)
+
+
+def _show_frame_mode_dialog(parent=None) -> str:
+    """弹出帧模式选择对话框，返回 'current' 或 'timeline'"""
+    dialog = QtWidgets.QDialog(parent)
+    dialog.setWindowTitle("帧模式选择")
+    dialog.setFixedSize(300, 160)
+    dialog.setStyleSheet("background-color: #2a2a2a;")
+    layout = QtWidgets.QVBoxLayout(dialog)
+    layout.setSpacing(10)
+    layout.setContentsMargins(20, 16, 20, 16)
+
+    title = QtWidgets.QLabel("选择帧范围：")
+    title.setStyleSheet("color: #d0d0d0; font-size: 14px; font-weight: bold;")
+    layout.addWidget(title)
+
+    rb_current = QtWidgets.QRadioButton("当前帧（仅截取当前帧）")
+    rb_timeline = QtWidgets.QRadioButton("序列帧（按时间轴范围截取）")
+    for rb in (rb_current, rb_timeline):
+        rb.setStyleSheet("QRadioButton { color: #d0d0d0; font-size: 13px; }")
+    rb_current.setChecked(True)
+    layout.addWidget(rb_current)
+    layout.addWidget(rb_timeline)
+
+    btn_layout = QtWidgets.QHBoxLayout()
+    btn_layout.addStretch()
+    cancel_btn = QtWidgets.QPushButton("取消")
+    cancel_btn.setStyleSheet(
+        "QPushButton { background-color: #3a3a3a; color: #a0a0a0; border: none; "
+        "padding: 6px 20px; font-size: 13px; border-radius: 4px; }"
+        "QPushButton:hover { background-color: #4a4a4a; }")
+    cancel_btn.clicked.connect(dialog.reject)
+    ok_btn = QtWidgets.QPushButton("确定")
+    ok_btn.setStyleSheet(
+        "QPushButton { background-color: #5294e2; color: #ffffff; border: none; "
+        "padding: 6px 20px; font-size: 13px; border-radius: 4px; }"
+        "QPushButton:hover { background-color: #6ab0ff; }")
+    ok_btn.clicked.connect(dialog.accept)
+    btn_layout.addWidget(cancel_btn)
+    btn_layout.addWidget(ok_btn)
+    layout.addLayout(btn_layout)
+
+    if dialog.exec() == QtWidgets.QDialog.Accepted:
+        return "timeline" if rb_timeline.isChecked() else "current"
+    return ""
 
 
 def _load_presets(key: str) -> list:
@@ -226,6 +270,8 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
     thumbnailUpdateRequested = QtCore.Signal(str)
     thumbnailCaptureRequested = QtCore.Signal(str)  # 缩略图→截取
     thumbnailImportRequested = QtCore.Signal(str)   # 缩略图→导入
+    thumbnailPlayblastRequested = QtCore.Signal(str, str)  # 缩略图→Maya拍屏 (material_id, ani_frame_mode)
+    thumbnailRenderRequested = QtCore.Signal(str, str)     # 缩略图→渲染图 (material_id, ani_frame_mode)
     updateAssetRequested = QtCore.Signal(str)        # 更新资产→传入 mid
     columnCountChanged = QtCore.Signal(int)
     thumbSizeChanged = QtCore.Signal(int)
@@ -625,12 +671,17 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         folder_action = menu.addAction("\ud83d\udcc2 \u6253\u5f00\u6587\u4ef6\u5939") if _is_ctx_enabled(sub_lib, "open_folder", ctx_preset) else None
         cap_action = None
         imp_action = None
+        playblast_action = None
+        render_action = None
         if _is_ctx_enabled(sub_lib, "update_thumbnail", ctx_preset):
-            # 更新缩略图 → 子菜单（截取 / 导入）
+            # 更新缩略图 → 子菜单（截取 / 导入 / Maya拍屏 / 渲染图）
             thumb_menu = QtWidgets.QMenu("\u66f4\u65b0\u7f29\u7565\u56fe", menu)
             thumb_menu.setStyleSheet(_get_sub_style(font_size))
             cap_action = thumb_menu.addAction("\ud83d\udcf7 \u622a\u53d6")
             imp_action = thumb_menu.addAction("\ud83d\udcc2 \u5bfc\u5165")
+            thumb_menu.addSeparator()
+            playblast_action = thumb_menu.addAction("\ud83c\udfac Maya\u62cd\u5c4f")
+            render_action = thumb_menu.addAction("\ud83d\uddbc\ufe0f \u6e32\u67d3\u56fe")
             menu.addMenu(thumb_menu)
         delete_action = menu.addAction("\u5220\u9664") if _is_ctx_enabled(sub_lib, "delete", ctx_preset) else None
 
@@ -650,6 +701,14 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             self.thumbnailCaptureRequested.emit(mat.get("id", ""))
         elif action == imp_action:
             self.thumbnailImportRequested.emit(mat.get("id", ""))
+        elif action == playblast_action:
+            ani_mode = _show_frame_mode_dialog(self)
+            if ani_mode:
+                self.thumbnailPlayblastRequested.emit(mat.get("id", ""), ani_mode)
+        elif action == render_action:
+            ani_mode = _show_frame_mode_dialog(self)
+            if ani_mode:
+                self.thumbnailRenderRequested.emit(mat.get("id", ""), ani_mode)
 
     def set_view_mode(self, mode):
         self._view_mode = mode
@@ -1813,11 +1872,16 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         edit_action = menu.addAction('编辑') if _is_ctx_enabled(sub_lib, "edit", ctx_preset) else None
         cap_action = None
         imp_thumb_action = None
+        playblast_action = None
+        render_action = None
         if _is_ctx_enabled(sub_lib, "update_thumbnail", ctx_preset):
             thumb_menu = QtWidgets.QMenu('更新缩略图', menu)
             thumb_menu.setStyleSheet(_get_sub_style(font_size))
             cap_action = thumb_menu.addAction('📷 截取')
             imp_thumb_action = thumb_menu.addAction('📂 导入')
+            thumb_menu.addSeparator()
+            playblast_action = thumb_menu.addAction('🎬 Maya拍屏')
+            render_action = thumb_menu.addAction('🖼️ 渲染图')
             menu.addMenu(thumb_menu)
         
         update_asset_action = menu.addAction('更新资产') if _is_ctx_enabled(sub_lib, "update_asset", ctx_preset) else None
@@ -1858,6 +1922,14 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             self.thumbnailCaptureRequested.emit(mat.get('id', ''))
         elif action == imp_thumb_action:
             self.thumbnailImportRequested.emit(mat.get('id', ''))
+        elif action == playblast_action:
+            ani_mode = _show_frame_mode_dialog(self)
+            if ani_mode:
+                self.thumbnailPlayblastRequested.emit(mat.get('id', ''), ani_mode)
+        elif action == render_action:
+            ani_mode = _show_frame_mode_dialog(self)
+            if ani_mode:
+                self.thumbnailRenderRequested.emit(mat.get('id', ''), ani_mode)
         elif action == update_asset_action:
             self.updateAssetRequested.emit(mid)
         elif action == delete_action:

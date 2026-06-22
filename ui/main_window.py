@@ -949,6 +949,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._thumbnail_grid.thumbnailUpdateRequested.connect(self._on_thumbnail_update)
         self._thumbnail_grid.thumbnailImportRequested.connect(self._on_preview_thumbnail_import)
         self._thumbnail_grid.thumbnailCaptureRequested.connect(self._on_preview_thumbnail_capture)
+        self._thumbnail_grid.thumbnailPlayblastRequested.connect(self._on_thumbnail_playblast)
+        self._thumbnail_grid.thumbnailRenderRequested.connect(self._on_thumbnail_render)
         self._thumbnail_grid.updateAssetRequested.connect(self._on_update_asset)
         self._thumbnail_grid.dragDroppedOnViewport.connect(self._on_drag_dropped)
         self._thumbnail_grid.previewNodeRequested.connect(self._on_preview_node)
@@ -4615,6 +4617,71 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             self._update_preview_thumbnail(mat, px)
         if not px.isNull():
             self._right_panel._update_thumb_buttons()
+
+    def _on_thumbnail_playblast(self, material_id, ani_frame_mode):
+        """右键菜单「Maya拍屏」→ 拍屏生成缩略图"""
+        from types import SimpleNamespace
+        mgr = self._active_mgr
+        mat = mgr.get_by_id(material_id)
+        if not mat or not mat.json_path:
+            return
+        asset_dir = mat.zasset_path if mat.is_zasset else os.path.dirname(mat.json_path)
+        safe_name = mat.name
+        config = SimpleNamespace(
+            ani_frame_mode=ani_frame_mode,
+            associated_objects=[],
+            export_mode="single"
+        )
+        from ..core.export_orchestrator import ExportOrchestrator
+        orch = ExportOrchestrator(mgr.get_library_path() or "")
+        result = orch._do_playblast_thumbnail(config, asset_dir, safe_name)
+        if result and os.path.isfile(result):
+            self._apply_thumbnail_from_path(mat, result)
+
+    def _on_thumbnail_render(self, material_id, ani_frame_mode):
+        """右键菜单「渲染图」→ 渲染生成缩略图"""
+        from types import SimpleNamespace
+        mgr = self._active_mgr
+        mat = mgr.get_by_id(material_id)
+        if not mat or not mat.json_path:
+            return
+        asset_dir = mat.zasset_path if mat.is_zasset else os.path.dirname(mat.json_path)
+        safe_name = mat.name
+        config = SimpleNamespace(
+            ani_frame_mode=ani_frame_mode,
+            associated_objects=[],
+            export_mode="single"
+        )
+        from ..core.export_orchestrator import ExportOrchestrator
+        orch = ExportOrchestrator(mgr.get_library_path() or "")
+        result = orch._do_render_thumbnail(config, asset_dir, safe_name)
+        if result and os.path.isfile(result):
+            self._apply_thumbnail_from_path(mat, result)
+
+    def _apply_thumbnail_from_path(self, mat, thumb_path):
+        """从文件路径加载缩略图并应用到素材和 UI"""
+        px = QtGui.QPixmap(thumb_path)
+        if px.isNull():
+            return
+        with open(thumb_path, 'rb') as f:
+            mat.thumb_bytes = f.read()
+        self._thumbnail_grid._thumb_cache.pop(mat.id, None)
+        self._thumbnail_grid._thumb_cache[mat.id] = px
+        self._update_preview_thumbnail(mat, px)
+        card = self._thumbnail_grid._card_pool.get(mat.id)
+        if card and hasattr(card, 'material_data') and isinstance(card.material_data, dict):
+            card.material_data["thumb_bytes"] = mat.thumb_bytes
+        for mdict in self._thumbnail_grid._filtered_materials:
+            if mdict.get("id") == mat.id:
+                mdict["thumb_bytes"] = mat.thumb_bytes
+                break
+        for mid in list(self._thumbnail_grid._selected_materials.keys()):
+            if mid == mat.id:
+                self._thumbnail_grid._selected_materials[mid]["thumb_bytes"] = mat.thumb_bytes
+                break
+        if self._right_panel._material and self._right_panel._material.get("id") == mat.id:
+            self._right_panel._material["thumb_bytes"] = mat.thumb_bytes
+        self._right_panel._update_thumb_buttons()
 
     def _apply_new_thumbnail(self, mat, pixmap):
         """统一的新缩略图应用逻辑：更新所有数据存储 + 即时刷新 UI"""
