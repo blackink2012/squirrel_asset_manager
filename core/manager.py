@@ -195,6 +195,22 @@ class MaterialManager:
 
         _scan_all_sub_libs()
 
+        # ── 补充扫描库根目录下的自定义顶级分类文件夹 ──
+        # 自定义顶级分类不在 ASSET_SUB_LIBRARIES 下，而是直接放在库根目录，
+        # 需单独扫描以索引其中的 .zasset 资产
+        try:
+            for entry in os.listdir(self._library_path):
+                if entry in sub_lib_dirs or entry.startswith('.'):
+                    continue
+                entry_path = os.path.join(self._library_path, entry)
+                if not os.path.isdir(entry_path):
+                    continue
+                if entry in ("library.json", "favorites.json", "FolderMetadata.fdata"):
+                    continue
+                self._scan_materials_directory(entry_path)
+        except PermissionError:
+            pass
+
         # ── 构建分类索引（使 _categories 包含所有分类） ──
         self._build_category_index()
 
