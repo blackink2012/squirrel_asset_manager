@@ -40,7 +40,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
     categoryAdded = QtCore.Signal(dict)
     topLevelCategoryAdded = QtCore.Signal(str, str, str, str)  # (cat_id, name_cn, root_lib, cat_type) — 独立路径，不与 categoryAdded 混用
     categoryDeleted = QtCore.Signal(str, str, str)  # (cat_id, root_lib, parent_id)
-    categoryEdited = QtCore.Signal(str, str, str)  # (category_id, new_name_cn, root_lib)
+    categoryEdited = QtCore.Signal(str, str, str, str)  # (category_id, new_name_cn, root_lib, new_type)
     openFolderRequested = QtCore.Signal(str)
     categoryMoved = QtCore.Signal(str, str)            # (cat_id, new_parent_id)
     materialDropOnCategory = QtCore.Signal(str, str, str)  # (material_id, category_id, root_lib)
@@ -781,7 +781,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         root_lib = item.data(0, QtCore.Qt.ItemDataRole.UserRole + 3) if item else ""
         self._populate_tree()
         print(f"[MaterialLibrary] \u7f16\u8f91\u5206\u7c7b: {cat_id} -> {new_name}")
-        self.categoryEdited.emit(cat_id, new_name, root_lib or "materials")
+        self.categoryEdited.emit(cat_id, new_name, root_lib or "materials", type_combo.currentData())
 
     def _on_delete_category(self, cat_id):
         cat, parent_cat = self._find_category(cat_id)
