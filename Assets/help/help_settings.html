@@ -47,10 +47,15 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
   <a href="#general-library" class="sub">资产库管理</a>
   <a href="#general-conflict" class="sub">同名冲突</a>
   <a href="#export-defaults">导出默认值</a>
+  <a href="#context-menu">右键菜单</a>
   <a href="#formats">支持格式</a>
   <a href="#texture-suffixes">贴图后缀</a>
   <a href="#tags">常用标签</a>
   <a href="#subs">子库与分类</a>
+  <a href="#subs-add" class="sub">添加子库</a>
+  <a href="#subs-delete" class="sub">删除子库</a>
+  <a href="#subs-sync" class="sub">同步分类</a>
+  <a href="#subs-edit" class="sub">编辑分类</a>
   <a href="#advanced">高级配置</a>
 </nav>
 
@@ -109,6 +114,40 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 <b>作用：</b>新建导出对话框时，各格式的复选框默认值会按当前资产类型读取这些预设。例如模型类资产默认勾选 FBX，材质类默认不勾选几何体。
 </div>
 
+<h2 id="context-menu">右键菜单</h2>
+
+<p>按子库类型（材质/模型/灯光/贴图/场景/HDR/动态）分别设置右键菜单中显示的项目，取消勾选即可隐藏不需要的菜单项。</p>
+
+<table>
+<tr><th>菜单项</th><th>说明</th><th>适用子库</th></tr>
+<tr><td><b>导入</b></td><td>导入资产文件到 Maya 场景</td><td>全部</td></tr>
+<tr><td><b>导入几何体</b></td><td>导入变体几何体（LOD/多版本），仅含变体数据的 .zasset 显示</td><td>全部（有条件）</td></tr>
+<tr><td><b>收藏夹</b></td><td>添加到收藏夹或从收藏夹移除</td><td>全部</td></tr>
+<tr><td><b>全选</b></td><td>选中当前视图所有资产</td><td>全部</td></tr>
+<tr><td><b>复制</b></td><td>复制资产信息到剪贴板</td><td>全部</td></tr>
+<tr><td><b>打开文件夹</b></td><td>在文件管理器中打开资产所在目录</td><td>全部</td></tr>
+<tr><td><b>移动到</b></td><td>将资产移动到其他分类</td><td>全部</td></tr>
+<tr><td><b>复制到</b></td><td>将资产复制到其他分类</td><td>全部</td></tr>
+<tr><td><b>编辑</b></td><td>打开资产编辑对话框</td><td>全部</td></tr>
+<tr><td><b>创建资产</b></td><td>从当前资产创建新的导出资产包（列表视图）</td><td>全部</td></tr>
+<tr><td><b>更新缩略图</b></td><td>重新截取或导入缩略图</td><td>全部</td></tr>
+<tr><td><b>更新资产</b></td><td>重新读取资产数据</td><td>全部</td></tr>
+<tr><td><b>删除</b></td><td>删除选中的资产</td><td>全部</td></tr>
+<tr><td><b>预览节点</b></td><td>预览材质节点或 MA 文件内容</td><td>全部</td></tr>
+<tr><td><b>AI 分析缩略图</b></td><td>用 AI 分析缩略图并生成标签</td><td>全部</td></tr>
+<tr><td><b>应用材质到选中对象</b></td><td>将材质应用到 Maya 中选中的对象</td><td>材质、贴图</td></tr>
+<tr><td><b>创建材质</b></td><td>基于贴图创建指定渲染器的材质节点</td><td>贴图</td></tr>
+<tr><td><b>导入贴图</b></td><td>从贴图资产导入贴图文件到 Maya</td><td>贴图</td></tr>
+<tr><td><b>指定贴图到材质</b></td><td>将贴图指定到 Maya 中选中的材质节点</td><td>贴图</td></tr>
+<tr><td><b>应用灯光参数</b></td><td>将灯光参数应用到 Maya 中选中的灯光</td><td>灯光</td></tr>
+<tr><td><b>创建环境光</b></td><td>基于 HDR 资产创建穹顶灯</td><td>HDR</td></tr>
+<tr><td><b>指定贴图到环境光</b></td><td>将 HDR 贴图指定到选中的穹顶灯</td><td>HDR</td></tr>
+</table>
+
+<div class="note">
+<b>默认行为：</b>每个子库只默认勾选其实际拥有的右键菜单项，不相关的项默认为关闭。用户可在此基础上自由调整，勾选的项才会在右键菜单中显示。
+</div>
+
 <h2 id="formats">支持格式</h2>
 
 <p>定义哪些文件扩展名被视为可导入的资产文件。每行一个扩展名（不含点号）。</p>
@@ -147,7 +186,7 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 
 <h2 id="subs">子库与分类</h2>
 
-<p>管理子库的 ID、显示名和默认分类列表。</p>
+<p>管理子库的 ID、显示名和默认分类列表。支持添加自定义子库、删除自定义子库、从实际文件夹同步分类。</p>
 
 <table>
 <tr><th>字段</th><th>说明</th></tr>
@@ -156,8 +195,24 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 <tr><td><b>默认分类列表</b></td><td>首次创建该子库时自动生成的分类文件夹，格式：<code>id 名称</code></td></tr>
 </table>
 
+<h3 id="subs-add">添加子库</h3>
+
+<p>右键点击左侧子库列表空白处，选择「添加子库」。新子库的 ID 格式为 <code>custom_N</code>，显示名为「自定义N」。</p>
+
+<h3 id="subs-delete">删除子库</h3>
+
+<p>右键点击自定义子库，选择「删除子库」。核心子库（材质、模型、灯光、贴图、场景、HDR、动态）不可删除。</p>
+
+<h3 id="subs-sync">同步分类</h3>
+
+<p>点击右侧编辑区上方的「读取当前分类文件夹」按钮，可将当前资产库的实际文件夹结构同步到设置中。此操作会覆盖现有的默认分类列表配置。</p>
+
+<h3 id="subs-edit">编辑分类</h3>
+
+<p>在分类树中右键点击分类，选择「编辑」可修改分类的易读名和类型。类型下拉框列出所有子库类型，确保个性化右键菜单能正确识别。</p>
+
 <div class="warn">
-<b>注意：</b>六个核心子库（materials / models / lights / textures / scenes / hdr）不可删除，修改 ID 可能导致已有数据不可用。
+<b>注意：</b>七个核心子库（materials / models / lights / textures / scenes / hdr / ani）不可删除，修改 ID 可能导致已有数据不可用。
 </div>
 
 <h2 id="advanced">高级配置</h2>
