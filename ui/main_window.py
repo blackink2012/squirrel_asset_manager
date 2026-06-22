@@ -897,8 +897,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             setattr(self, '_active_mgr', self._material_manager), self._on_category_added(cd))[-1])
         self._category_tree.topLevelCategoryAdded.connect(lambda c, n, r, t: (
             setattr(self, '_active_mgr', self._material_manager), self._on_add_top_level_category(c, n, r, t))[-1])
-        self._category_tree.categoryEdited.connect(lambda c, n, r="materials": (
-            setattr(self, '_active_mgr', self._material_manager), self._on_category_edited(c, n, r))[-1])
+        self._category_tree.categoryEdited.connect(lambda c, n, r="materials", t="": (
+            setattr(self, '_active_mgr', self._material_manager), self._on_category_edited(c, n, r, t))[-1])
         self._category_tree.categoryDeleted.connect(lambda c, r="materials", p="": (
             setattr(self, '_active_mgr', self._material_manager), self._on_category_deleted(c, r, p))[-1])
         self._category_tree.openFolderRequested.connect(lambda c: (
@@ -1549,8 +1549,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         desc_ids = self._category_tree.get_descendant_ids(cat_id)
         self._on_category_selected(cat_id, desc_ids, root_lib)
 
-    def _on_category_edited(self, cat_id, new_name_cn, root_lib="materials"):
-        """编辑易读名 → 写入 FolderMetadata"""
+    def _on_category_edited(self, cat_id, new_name_cn, root_lib="materials", new_type=""):
+        """编辑分类 → 写入 FolderMetadata"""
         if self._use_mock:
             return
         mgr = self._active_mgr
@@ -1558,6 +1558,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         if folder:
             meta = mgr._read_folder_meta(folder)
             meta["name_cn"] = new_name_cn
+            if new_type:
+                meta["type"] = new_type
             mgr._write_folder_meta(folder, meta)
             self._refresh_category_tree()
         else:
