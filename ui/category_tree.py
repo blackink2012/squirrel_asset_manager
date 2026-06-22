@@ -38,7 +38,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
     categorySelected = QtCore.Signal(str, list, str)  # (category_id_composite, descendant_ids, root_lib)
     categoriesMultiSelected = QtCore.Signal(list, list, str)  # ([cat_ids], [all_desc_ids], root_lib)
     categoryAdded = QtCore.Signal(dict)
-    topLevelCategoryAdded = QtCore.Signal(str, str, str)  # (cat_id, name_cn, root_lib) — 独立路径，不与 categoryAdded 混用
+    topLevelCategoryAdded = QtCore.Signal(str, str, str, str)  # (cat_id, name_cn, root_lib, cat_type) — 独立路径，不与 categoryAdded 混用
     categoryDeleted = QtCore.Signal(str, str, str)  # (cat_id, root_lib, parent_id)
     categoryEdited = QtCore.Signal(str, str, str)  # (category_id, new_name_cn, root_lib)
     openFolderRequested = QtCore.Signal(str)
@@ -564,13 +564,17 @@ class CategoryTreeWidget(QtWidgets.QWidget):
             type_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
             type_combo = QtWidgets.QComboBox()
             type_combo.setStyleSheet("QComboBox { background-color: #333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px; color: #e0e0e0; } QComboBox::drop-down { border: none; } QComboBox QAbstractItemView { background-color: #2a2a2a; color: #d0d0d0; selection-background-color: #2a3a5a; }")
-            # 固定标准子库列表作为下拉选项，确保右键菜单能正确识别
-            # 不使用 config.json 的 sub_libraries，因为用户自定义的子库无法被右键菜单识别
-            _STANDARD_SUB_LIBS = {
-                "materials": "\u6750\u8d28", "models": "\u6a21\u578b", "lights": "\u706f\u5149",
-                "textures": "\u8d34\u56fe", "scenes": "\u573a\u666f", "hdr": "HDR", "ani": "\u52a8\u6001"
-            }
-            for _key, _label in _STANDARD_SUB_LIBS.items():
+            # 从 config.json 读取子库列表作为下拉选项
+            try:
+                with open(_CONFIG_PATH, 'r', encoding='utf-8') as _f:
+                    _cfg = json.loads(_f.read())
+                _sub_libs = _cfg.get("sub_libraries", {})
+            except Exception:
+                _sub_libs = {
+                    "materials": "\u6750\u8d28", "models": "\u6a21\u578b", "lights": "\u706f\u5149",
+                    "textures": "\u8d34\u56fe", "scenes": "\u573a\u666f", "hdr": "HDR", "ani": "\u52a8\u6001"
+                }
+            for _key, _label in _sub_libs.items():
                 type_combo.addItem(f"{_label} ({_key})", _key)
             type_layout.addWidget(type_label)
             type_layout.addWidget(type_combo)
@@ -642,6 +646,31 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         cn_layout.addWidget(cn_input)
         layout.addLayout(cn_layout)
 
+        type_layout = QtWidgets.QHBoxLayout()
+        type_label = QtWidgets.QLabel("\u7c7b\u578b(type):")
+        type_label.setFixedWidth(80)
+        type_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
+        type_combo = QtWidgets.QComboBox()
+        type_combo.setStyleSheet("QComboBox { background-color: #333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px; color: #e0e0e0; } QComboBox::drop-down { border: none; } QComboBox QAbstractItemView { background-color: #2a2a2a; color: #d0d0d0; selection-background-color: #2a3a5a; }")
+        try:
+            with open(_CONFIG_PATH, 'r', encoding='utf-8') as _f:
+                _cfg = json.loads(_f.read())
+            _sub_libs = _cfg.get("sub_libraries", {})
+        except Exception:
+            _sub_libs = {
+                "materials": "\u6750\u8d28", "models": "\u6a21\u578b", "lights": "\u706f\u5149",
+                "textures": "\u8d34\u56fe", "scenes": "\u573a\u666f", "hdr": "HDR", "ani": "\u52a8\u6001"
+            }
+        for _key, _label in _sub_libs.items():
+            type_combo.addItem(f"{_label} ({_key})", _key)
+        if root_lib in _sub_libs:
+            idx = type_combo.findData(root_lib)
+            if idx >= 0:
+                type_combo.setCurrentIndex(idx)
+        type_layout.addWidget(type_label)
+        type_layout.addWidget(type_combo)
+        layout.addLayout(type_layout)
+
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
         cancel_btn = QtWidgets.QPushButton("\u53d6\u6d88")
@@ -659,13 +688,14 @@ class CategoryTreeWidget(QtWidgets.QWidget):
 
         name_cn = cn_input.text().strip()
         cat_id = id_input.text().strip()
+        cat_type = type_combo.currentData()
         if not cat_id:
             QtWidgets.QMessageBox.warning(self, "\u63d0\u793a", "\u6587\u4ef6\u5939\u540d\u4e0d\u80fd\u4e3a\u7a7a")
             return
         if not name_cn:
             name_cn = cat_id
 
-        self.topLevelCategoryAdded.emit(cat_id, name_cn, root_lib)
+        self.topLevelCategoryAdded.emit(cat_id, name_cn, root_lib, cat_type)
 
     def _on_edit_category(self, cat_id):
         cat, parent_cat = self._find_category(cat_id)
