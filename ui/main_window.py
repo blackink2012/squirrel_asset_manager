@@ -6262,7 +6262,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             except RuntimeError:
                 pass
 
-        dialog = SettingsDialog(self, current_settings=self._app_settings)
+        dialog = SettingsDialog(self, current_settings=self._app_settings, material_manager=self._material_manager)
         self._settings_dialog = dialog
         dialog.settingsChanged.connect(self._on_settings_changed)
         dialog.finished.connect(lambda: setattr(self, '_settings_dialog', None))
