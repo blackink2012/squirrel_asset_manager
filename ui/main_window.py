@@ -895,8 +895,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                                self._on_categories_multi_selected(ci, ai, r))[-1])
         self._category_tree.categoryAdded.connect(lambda cd: (
             setattr(self, '_active_mgr', self._material_manager), self._on_category_added(cd))[-1])
-        self._category_tree.topLevelCategoryAdded.connect(lambda c, n, r: (
-            setattr(self, '_active_mgr', self._material_manager), self._on_add_top_level_category(c, n, r))[-1])
+        self._category_tree.topLevelCategoryAdded.connect(lambda c, n, r, t: (
+            setattr(self, '_active_mgr', self._material_manager), self._on_add_top_level_category(c, n, r, t))[-1])
         self._category_tree.categoryEdited.connect(lambda c, n, r="materials": (
             setattr(self, '_active_mgr', self._material_manager), self._on_category_edited(c, n, r))[-1])
         self._category_tree.categoryDeleted.connect(lambda c, r="materials", p="": (
@@ -1526,7 +1526,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
     # ── 独立路径：右键子库根节点添加顶级分类 ────────────
 
-    def _on_add_top_level_category(self, cat_id, name_cn, root_lib):
+    def _on_add_top_level_category(self, cat_id, name_cn, root_lib, cat_type):
         """独立路径：右键子库根节点添加顶级分类，与 _on_category_added 完全隔离"""
         if self._use_mock:
             return
@@ -1540,7 +1540,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         mgr._write_folder_meta(cat_dir, {
             "id": str(uuid.uuid4()),
             "name_cn": name_cn,
-            "type": root_lib,
+            "type": cat_type,
         })
         self._refresh_category_tree()
         self._category_tree._select_by_id(cat_id)
@@ -2626,10 +2626,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._active_mgr = self._project_mgr
         self._on_category_added(cat_dict)
 
-    def _on_proj_add_top_level_category(self, cat_id, name_cn, root_lib):
+    def _on_proj_add_top_level_category(self, cat_id, name_cn, root_lib, cat_type):
         """项目库：右键子库根节点添加顶级分类 → 委托"""
         self._active_mgr = self._project_mgr
-        self._on_add_top_level_category(cat_id, name_cn, root_lib)
+        self._on_add_top_level_category(cat_id, name_cn, root_lib, cat_type)
 
     def _on_proj_category_edited(self, cat_id, new_name_cn):
         """项目库编辑分类易读名 → 委托"""
