@@ -5316,12 +5316,12 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 except Exception:
                     pass
 
-                # 原子替换
+                # 原子替换（使用 shutil.move 兼容跨盘移动）
                 tmp_rename = old_path + ".update_tmp"
                 try:
                     if os.path.exists(old_path):
                         os.replace(old_path, tmp_rename)
-                    os.replace(new_zasset, old_path)
+                    shutil.move(new_zasset, old_path)
                     if os.path.exists(tmp_rename):
                         os.remove(tmp_rename)
                 except Exception:
