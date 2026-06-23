@@ -529,6 +529,20 @@ class SettingsDialog(QtWidgets.QDialog):
         ("import_geometry", "导入几何体"),
     ]
 
+    # 双击命令的子选项定义 — 有二级菜单的命令映射其可选子项
+    _DOUBLE_CLICK_CMD_OPTIONS = {
+        "import": [
+            "ma", "mb", "fbx", "obj", "usd", "abc",
+            "ass", "vrscene", "rs", "vrmesh",
+        ],
+        "import_texture": ["全部"],
+        "create_material": [
+            "aiStandardSurface", "VRayMtl", "RedshiftMaterial",
+            "standardSurface", "lambert",
+        ],
+    }
+    # create_dome_light 的子选项在运行时从 HDR_ligt/ 目录动态扫描
+
     def _create_context_menu_tab(self):
         w = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(w)
@@ -582,6 +596,24 @@ class SettingsDialog(QtWidgets.QDialog):
         self._dc_buttons_layout.setContentsMargins(0, 0, 0, 0)
         self._dc_buttons_layout.setSpacing(6)
         right.addLayout(self._dc_buttons_layout)
+
+        # ── 双击命令子选项（下拉框，默认隐藏）──
+        self._dc_option_widget = QtWidgets.QWidget()
+        opt_layout = QtWidgets.QHBoxLayout(self._dc_option_widget)
+        opt_layout.setContentsMargins(0, 0, 0, 0)
+        opt_label = QtWidgets.QLabel("子选项: ")
+        opt_label.setStyleSheet("color:#b0b0b0;font-size:12px;")
+        self._dc_option_combo = QtWidgets.QComboBox()
+        self._dc_option_combo.setStyleSheet(
+            "QComboBox { background:#2a2a2a; color:#d0d0d0; border:1px solid #3a3a3a; "
+            "border-radius:4px; padding:4px 8px; font-size:12px; min-width:180px; }"
+            "QComboBox::drop-down { border:none; }"
+            "QComboBox QAbstractItemView { background:#2a2a2a; color:#d0d0d0; "
+            "selection-background-color:#2d4a6f; }")
+        opt_layout.addWidget(opt_label)
+        opt_layout.addWidget(self._dc_option_combo, 1)
+        self._dc_option_widget.setVisible(False)
+        right.addWidget(self._dc_option_widget)
 
         right.addStretch()
 
@@ -638,7 +670,7 @@ class SettingsDialog(QtWidgets.QDialog):
             print(f"[Settings] 保存 double_click_preset.json 失败: {e}")
 
     def _rebuild_dc_buttons(self, sub_lib: str):
-        """根据子库类型重建双击命令单选按钮"""
+        """根据子库类型重建双击命令单选按钮和子选项下拉框"""
         # 清除旧的 radio buttons
         for rb in self._dc_buttons.values():
             self._dc_button_group.removeButton(rb)
@@ -655,16 +687,80 @@ class SettingsDialog(QtWidgets.QDialog):
             rb.setStyleSheet(
                 "QRadioButton { color:#d0d0d0; font-size:13px; spacing:6px; }"
                 "QRadioButton::indicator { width:16px; height:16px; }")
+            rb.toggled.connect(lambda checked, k=key: self._on_dc_cmd_toggled(k, checked))
             self._dc_buttons_layout.addWidget(rb)
             self._dc_button_group.addButton(rb)
             self._dc_buttons[key] = rb
 
-        # 设置当前值
-        current_val = self._dc_preset_data.get(sub_lib, "none")
-        if current_val in self._dc_buttons:
-            self._dc_buttons[current_val].setChecked(True)
+        # 读取当前子库的配置
+        entry = self._dc_preset_data.get(sub_lib, {})
+        if isinstance(entry, str):
+            # 兼容旧格式：直接是命令 key
+            current_cmd = entry
+            current_opt = ""
+        else:
+            current_cmd = entry.get("cmd", "none")
+            current_opt = entry.get("option", "")
+
+        # 设置当前选中的命令
+        if current_cmd in self._dc_buttons:
+            self._dc_buttons[current_cmd].setChecked(True)
         else:
             self._dc_buttons["none"].setChecked(True)
+
+        # 重建子选项下拉框
+        self._rebuild_dc_option(current_cmd, current_opt, sub_lib)
+
+    def _rebuild_dc_option(self, cmd: str, current_opt: str, sub_lib: str = ""):
+        """根据选中的命令重建子选项下拉框"""
+        self._dc_option_combo.clear()
+        has_options = False
+
+        if cmd == "create_dome_light":
+            # 从 HDR_ligt/ 目录动态扫描 .ma 文件
+            import os
+            preset_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "Assets", "HDR_ligt")
+            if os.path.isdir(preset_dir):
+                ma_files = sorted(
+                    [f for f in os.listdir(preset_dir) if f.lower().endswith('.ma')])
+                if ma_files:
+                    for f in ma_files:
+                        self._dc_option_combo.addItem(f)
+                    has_options = True
+        elif cmd in self._DOUBLE_CLICK_CMD_OPTIONS:
+            options = self._DOUBLE_CLICK_CMD_OPTIONS[cmd]
+            for opt in options:
+                self._dc_option_combo.addItem(opt)
+            has_options = True
+
+        # 恢复已保存的子选项
+        if has_options and current_opt:
+            idx = self._dc_option_combo.findText(current_opt)
+            if idx >= 0:
+                self._dc_option_combo.setCurrentIndex(idx)
+            elif self._dc_option_combo.count() > 0:
+                # 默认选中第一个（兼容 ma 格式的默认项）
+                self._dc_option_combo.setCurrentIndex(0)
+
+        self._dc_option_widget.setVisible(has_options)
+
+    def _on_dc_cmd_toggled(self, cmd: str, checked: bool):
+        """双击命令单选按钮切换时，更新子选项下拉框"""
+        if not checked:
+            return
+        # 从当前子库获取已保存的 option
+        row = self._ctx_type_list.currentRow()
+        if row < 0:
+            return
+        atype = self._ctx_types[row]
+        entry = self._dc_preset_data.get(atype, {})
+        if isinstance(entry, str):
+            current_opt = ""
+        else:
+            current_opt = entry.get("option", "") if isinstance(entry, dict) else ""
+        self._rebuild_dc_option(cmd, current_opt, atype)
 
     def _on_ctx_type_changed(self, row):
         """切换子库类型时，保存当前勾选状态并加载新类型的配置"""
@@ -679,10 +775,7 @@ class SettingsDialog(QtWidgets.QDialog):
                 for key, cb in self._ctx_cbs.items():
                     entry[key] = cb.isChecked()
                 # 保存双击命令状态
-                for key, rb in self._dc_buttons.items():
-                    if rb.isChecked():
-                        self._dc_preset_data[prev_type] = key
-                        break
+                self._save_current_dc_to_preset(prev_type)
         self._ctx_type_list.setProperty("_prev_row", row)
         # 加载新类型
         atype = self._ctx_types[row]
@@ -692,6 +785,16 @@ class SettingsDialog(QtWidgets.QDialog):
             cb.setChecked(entry.get(key, False))
         # 加载双击命令
         self._rebuild_dc_buttons(atype)
+
+    def _save_current_dc_to_preset(self, sub_lib: str):
+        """保存当前双击命令和子选项到 _dc_preset_data"""
+        cmd = "none"
+        for key, rb in self._dc_buttons.items():
+            if rb.isChecked():
+                cmd = key
+                break
+        option = self._dc_option_combo.currentText() if self._dc_option_widget.isVisible() else ""
+        self._dc_preset_data[sub_lib] = {"cmd": cmd, "option": option}
 
     def _set_locked(self, locked: bool):
         """锁定或解锁所有非通用标签页 — 锁定可查看不可编辑"""
@@ -1428,10 +1531,7 @@ class SettingsDialog(QtWidgets.QDialog):
         cur_row = self._ctx_type_list.currentRow()
         if cur_row >= 0:
             atype = self._ctx_types[cur_row]
-            for key, rb in self._dc_buttons.items():
-                if rb.isChecked():
-                    self._dc_preset_data[atype] = key
-                    break
+            self._save_current_dc_to_preset(atype)
         self._save_double_click_preset()
 
         # 贴图别名 → 先保存当前编辑，再写回 pbr_mapping.json
