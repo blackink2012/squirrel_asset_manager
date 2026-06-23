@@ -37,24 +37,61 @@ def get_available_formats(zasset_path: str) -> List[str]:
 
     排除贴图格式（png/jpg/exr/hdr等，由右键「导入贴图」菜单单独处理）、
     以及 sicon/aicon 等非导入格式。
+
+    当 meta.json 中缺少 formats/exported_formats 字段时，扫描 .zasset 目录中的文件来推断可用格式。
     """
     from core.zasset_io import ZassetIO
-    from .format_router import TEXTURE_FORMATS, HDR_FORMATS
+    from .format_router import TEXTURE_FORMATS, HDR_FORMATS, GEOMETRY_FORMATS, PROXY_FORMATS, VOLUME_FORMATS, ZMETAL_FORMATS, ZLIGHT_FORMATS
 
     if not os.path.isdir(zasset_path):
         return []
 
     try:
         meta = ZassetIO.read_meta(zasset_path)
-        if not meta:
-            return []
         raw = meta.get("formats") or meta.get("exported_formats", []) or []
-        # 排除非导入格式 + 贴图格式（由「导入贴图」菜单单独处理）
-        # HDR 格式 (exr/hdr) 不排除，走通用导入
+        
+        if not raw:
+            raw = _detect_formats_from_files(zasset_path)
+        
         skip = {"sicon", "aicon"} | (TEXTURE_FORMATS - HDR_FORMATS)
         return [f for f in raw if f not in skip]
     except Exception:
-        return []
+        try:
+            return _detect_formats_from_files(zasset_path)
+        except Exception:
+            return []
+
+
+def _detect_formats_from_files(zasset_path: str) -> List[str]:
+    """扫描 .zasset 目录中的文件，推断可用格式列表"""
+    from core.zasset_io import ZassetIO
+    from .format_router import GEOMETRY_FORMATS, PROXY_FORMATS, VOLUME_FORMATS, ZMETAL_FORMATS, ZLIGHT_FORMATS, HDR_FORMATS
+
+    all_names = ZassetIO.list_contents(zasset_path)
+    detected = set()
+    
+    for name in all_names:
+        if name.startswith("textures/"):
+            continue
+        
+        ext = os.path.splitext(name)[1].lower().lstrip(".")
+        if not ext:
+            continue
+        
+        if ext in GEOMETRY_FORMATS:
+            detected.add(ext)
+        elif ext in PROXY_FORMATS:
+            detected.add(ext)
+        elif ext in VOLUME_FORMATS:
+            detected.add(ext)
+        elif ext in ZMETAL_FORMATS:
+            detected.add(ext)
+        elif ext in ZLIGHT_FORMATS:
+            detected.add(ext)
+        elif ext in HDR_FORMATS:
+            detected.add(ext)
+    
+    return sorted(detected)
 
 
 def import_asset(zasset_path: str, format_name: str) -> bool:
