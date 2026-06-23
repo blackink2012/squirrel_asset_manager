@@ -48,6 +48,7 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
   <a href="#general-conflict" class="sub">同名冲突</a>
   <a href="#export-defaults">导出默认值</a>
   <a href="#context-menu">右键菜单</a>
+  <a href="#double-click">双击命令</a>
   <a href="#formats">支持格式</a>
   <a href="#texture-suffixes">贴图后缀</a>
   <a href="#tags">常用标签</a>
@@ -146,6 +147,28 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13p
 
 <div class="note">
 <b>默认行为：</b>每个子库只默认勾选其实际拥有的右键菜单项，不相关的项默认为关闭。用户可在此基础上自由调整，勾选的项才会在右键菜单中显示。
+</div>
+
+<h2 id="double-click">双击命令</h2>
+
+<p>按子库类型分别设置双击缩略图时要执行的命令（单选），主要用于快速导入和创建资产。该功能位于「右键菜单」标签页下方，与右键菜单共用左侧的子库类型列表。</p>
+
+<table>
+<tr><th>命令</th><th>说明</th><th>适用子库</th></tr>
+<tr><td><b>无操作</b></td><td>双击不执行任何操作（默认）</td><td>全部</td></tr>
+<tr><td><b>导入</b></td><td>导入资产文件到 Maya 场景</td><td>全部</td></tr>
+<tr><td><b>导入几何体</b></td><td>导入变体几何体（LOD/多版本）</td><td>全部</td></tr>
+<tr><td><b>导入贴图</b></td><td>从贴图资产导入贴图文件到 Maya</td><td>贴图</td></tr>
+<tr><td><b>创建资产</b></td><td>从当前资产创建导出资产包</td><td>全部</td></tr>
+<tr><td><b>创建材质</b></td><td>基于贴图创建材质节点</td><td>贴图</td></tr>
+<tr><td><b>创建环境光</b></td><td>基于 HDR 资产创建穹顶灯</td><td>HDR</td></tr>
+<tr><td><b>应用材质到选中对象</b></td><td>将材质应用到 Maya 中选中的对象</td><td>材质、贴图</td></tr>
+<tr><td><b>指定贴图到材质</b></td><td>将贴图指定到 Maya 中选中的材质节点</td><td>贴图、HDR</td></tr>
+<tr><td><b>应用灯光参数</b></td><td>将灯光参数应用到 Maya 中选中的灯光</td><td>灯光</td></tr>
+</table>
+
+<div class="note">
+<b>数据存储：</b>双击命令配置存储在独立的 <code>double_click_preset.json</code> 文件中，与右键菜单配置互不干扰。
 </div>
 
 <h2 id="formats">支持格式</h2>
