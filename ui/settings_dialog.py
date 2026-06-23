@@ -528,13 +528,9 @@ class SettingsDialog(QtWidgets.QDialog):
             "ass", "vrscene", "rs", "vrmesh",
         ],
         "import_texture": ["全部"],
-        "create_material": [
-            "aiStandardSurface", "VRayMtl", "RedshiftMaterial",
-            "standardSurface", "lambert",
-        ],
+        # create_material 和 create_dome_light 在运行时从 config.json 和 HDR_ligt/ 动态读取
     }
-    # import_texture 固定为"导入全部"，不再需要用户选子项；保留此处便于将来的扩展
-    # create_dome_light 的子选项在运行时从 HDR_ligt/ 目录动态扫描
+    # import_texture 固定为"导入全部"
 
     def _create_context_menu_tab(self):
         w = QtWidgets.QWidget()
@@ -722,6 +718,21 @@ class SettingsDialog(QtWidgets.QDialog):
                     for f in ma_files:
                         self._dc_option_combo.addItem(f)
                     has_options = True
+        elif cmd == "create_material":
+            # 从 config.json 的 material_presets 动态读取材质类型
+            import os, json
+            cfg_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "Assets", "preset", "config.json")
+            try:
+                with open(cfg_path, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+                presets = cfg.get("material_presets", [])
+                for p in presets:
+                    self._dc_option_combo.addItem(p.get("node_type", ""))
+                has_options = True
+            except Exception:
+                pass
         elif cmd in self._DOUBLE_CLICK_CMD_OPTIONS:
             options = self._DOUBLE_CLICK_CMD_OPTIONS[cmd]
             for opt in options:
