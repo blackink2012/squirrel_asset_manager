@@ -1550,29 +1550,31 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         elif cmd == 'import':
             json_path = mat.get('json_path', '')
             if json_path:
-                fmt = option or os.path.splitext(json_path)[1].lstrip('.')
+                target_fmt = option or os.path.splitext(json_path)[1].lstrip('.')
+                # 检查指定格式是否可用，不可用时回退到第一个可用格式
+                fmt = target_fmt
+                try:
+                    from ..integration.import_executor import get_available_formats
+                    formats = get_available_formats(json_path)
+                    if formats and target_fmt not in formats:
+                        fmt = formats[0]
+                        print(f"[MaterialLibrary] \u53cc\u51fb\u5bfc\u5165: \u683c\u5f0f {target_fmt} \u4e0d\u53ef\u7528\uff0c\u56de\u9000\u5230 {fmt}")
+                except Exception:
+                    pass
                 self.assetImportRequested.emit(json_path, fmt)
-        elif cmd == 'import_geometry':
-            json_path = mat.get('json_path', '')
-            if json_path:
-                # 默认最高精度(LOD0) + 最新版本
-                self.variantGeometryImportRequested.emit(json_path, '', '')
         elif cmd == 'import_texture':
             json_path = mat.get('json_path', '')
             if json_path:
-                if option == "\u5168\u90e8":
-                    # 导入全部 — 扫描所有分辨率下的贴图
-                    all_files = []
-                    if os.path.isdir(json_path):
-                        for root, dirs, files in os.walk(json_path):
-                            for f in files:
-                                if f.lower().endswith(('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.exr', '.dds')):
-                                    rel = os.path.relpath(os.path.join(root, f), json_path)
-                                    all_files.append(rel)
-                    if all_files:
-                        self.importTexturesSharedUVRequested.emit(json_path, all_files)
-                else:
-                    self.importSingleTextureRequested.emit(json_path, option)
+                # 固定导入全部贴图
+                all_files = []
+                if os.path.isdir(json_path):
+                    for root, dirs, files in os.walk(json_path):
+                        for f in files:
+                            if f.lower().endswith(('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.exr', '.dds')):
+                                rel = os.path.relpath(os.path.join(root, f), json_path)
+                                all_files.append(rel)
+                if all_files:
+                    self.importTexturesSharedUVRequested.emit(json_path, all_files)
         elif cmd == 'create_material':
             json_path = mat.get('json_path', '')
             if json_path:

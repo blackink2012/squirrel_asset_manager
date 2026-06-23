@@ -481,24 +481,20 @@ class SettingsDialog(QtWidgets.QDialog):
         "materials": [
             ("none", "无操作"),
             ("import", "导入"),
-            ("import_geometry", "导入几何体"),
             ("apply_material", "应用材质到选中对象"),
         ],
         "models": [
             ("none", "无操作"),
             ("import", "导入"),
-            ("import_geometry", "导入几何体"),
         ],
         "lights": [
             ("none", "无操作"),
             ("import", "导入"),
-            ("import_geometry", "导入几何体"),
             ("apply_light", "应用灯光参数到选中灯光"),
         ],
         "textures": [
             ("none", "无操作"),
             ("import", "导入"),
-            ("import_geometry", "导入几何体"),
             ("import_texture", "导入贴图"),
             ("create_material", "创建材质"),
             ("apply_material", "应用材质到选中对象"),
@@ -507,26 +503,22 @@ class SettingsDialog(QtWidgets.QDialog):
         "hdr": [
             ("none", "无操作"),
             ("import", "导入"),
-            ("import_geometry", "导入几何体"),
             ("create_dome_light", "创建环境光"),
             ("assign_texture", "指定贴图"),
         ],
         "scenes": [
             ("none", "无操作"),
             ("import", "导入"),
-            ("import_geometry", "导入几何体"),
         ],
         "ani": [
             ("none", "无操作"),
             ("import", "导入"),
-            ("import_geometry", "导入几何体"),
         ],
     }
     # 自定义库通用双击命令
     _DOUBLE_CLICK_ITEMS_GENERIC = [
         ("none", "无操作"),
         ("import", "导入"),
-        ("import_geometry", "导入几何体"),
     ]
 
     # 双击命令的子选项定义 — 有二级菜单的命令映射其可选子项
@@ -541,6 +533,7 @@ class SettingsDialog(QtWidgets.QDialog):
             "standardSurface", "lambert",
         ],
     }
+    # import_texture 固定为"导入全部"，不再需要用户选子项；保留此处便于将来的扩展
     # create_dome_light 的子选项在运行时从 HDR_ligt/ 目录动态扫描
 
     def _create_context_menu_tab(self):
