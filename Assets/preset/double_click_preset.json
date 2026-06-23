@@ -1,10 +1,10 @@
 {
-    "_comment": "双击缩略图命令预设 — 按子库(asset_type)配置双击时执行的命令。值为命令 key 或 'none'（表示无操作）。",
-    "materials": "none",
-    "models": "none",
-    "lights": "none",
-    "textures": "none",
-    "scenes": "none",
-    "hdr": "none",
-    "ani": "none"
+    "_comment": "双击缩略图命令预设 — 按子库(asset_type)配置。cmd: 命令key, option: 子选项(如导入格式/材质类型等)。option 为空表示无子选项。",
+    "materials": {"cmd": "none", "option": ""},
+    "models": {"cmd": "none", "option": ""},
+    "lights": {"cmd": "none", "option": ""},
+    "textures": {"cmd": "none", "option": ""},
+    "scenes": {"cmd": "none", "option": ""},
+    "hdr": {"cmd": "none", "option": ""},
+    "ani": {"cmd": "none", "option": ""}
 }
