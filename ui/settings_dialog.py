@@ -482,20 +482,17 @@ class SettingsDialog(QtWidgets.QDialog):
             ("none", "无操作"),
             ("import", "导入"),
             ("import_geometry", "导入几何体"),
-            ("create_asset", "创建资产"),
             ("apply_material", "应用材质到选中对象"),
         ],
         "models": [
             ("none", "无操作"),
             ("import", "导入"),
             ("import_geometry", "导入几何体"),
-            ("create_asset", "创建资产"),
         ],
         "lights": [
             ("none", "无操作"),
             ("import", "导入"),
             ("import_geometry", "导入几何体"),
-            ("create_asset", "创建资产"),
             ("apply_light", "应用灯光参数到选中灯光"),
         ],
         "textures": [
@@ -503,7 +500,6 @@ class SettingsDialog(QtWidgets.QDialog):
             ("import", "导入"),
             ("import_geometry", "导入几何体"),
             ("import_texture", "导入贴图"),
-            ("create_asset", "创建资产"),
             ("create_material", "创建材质"),
             ("apply_material", "应用材质到选中对象"),
             ("assign_texture", "指定贴图到材质"),
@@ -512,7 +508,6 @@ class SettingsDialog(QtWidgets.QDialog):
             ("none", "无操作"),
             ("import", "导入"),
             ("import_geometry", "导入几何体"),
-            ("create_asset", "创建资产"),
             ("create_dome_light", "创建环境光"),
             ("assign_texture", "指定贴图"),
         ],
@@ -520,13 +515,11 @@ class SettingsDialog(QtWidgets.QDialog):
             ("none", "无操作"),
             ("import", "导入"),
             ("import_geometry", "导入几何体"),
-            ("create_asset", "创建资产"),
         ],
         "ani": [
             ("none", "无操作"),
             ("import", "导入"),
             ("import_geometry", "导入几何体"),
-            ("create_asset", "创建资产"),
         ],
     }
     # 自定义库通用双击命令
@@ -534,7 +527,6 @@ class SettingsDialog(QtWidgets.QDialog):
         ("none", "无操作"),
         ("import", "导入"),
         ("import_geometry", "导入几何体"),
-        ("create_asset", "创建资产"),
     ]
 
     def _create_context_menu_tab(self):
