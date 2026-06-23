@@ -26,6 +26,10 @@ _CONTEXT_MENU_PRESET_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "Assets", "preset", "context_menu_preset.json"
 )
+_DOUBLE_CLICK_PRESET_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "Assets", "preset", "double_click_preset.json"
+)
 
 
 class SettingsDialog(QtWidgets.QDialog):
@@ -472,6 +476,67 @@ class SettingsDialog(QtWidgets.QDialog):
         ("create_dome_light", "创建环境光"),
     ]
 
+    # 双击命令 — 各子库可选命令列表（仅导入/创建资产相关）
+    _DOUBLE_CLICK_ITEMS = {
+        "materials": [
+            ("none", "无操作"),
+            ("import", "导入"),
+            ("import_geometry", "导入几何体"),
+            ("create_asset", "创建资产"),
+            ("apply_material", "应用材质到选中对象"),
+        ],
+        "models": [
+            ("none", "无操作"),
+            ("import", "导入"),
+            ("import_geometry", "导入几何体"),
+            ("create_asset", "创建资产"),
+        ],
+        "lights": [
+            ("none", "无操作"),
+            ("import", "导入"),
+            ("import_geometry", "导入几何体"),
+            ("create_asset", "创建资产"),
+            ("apply_light", "应用灯光参数到选中灯光"),
+        ],
+        "textures": [
+            ("none", "无操作"),
+            ("import", "导入"),
+            ("import_geometry", "导入几何体"),
+            ("import_texture", "导入贴图"),
+            ("create_asset", "创建资产"),
+            ("create_material", "创建材质"),
+            ("apply_material", "应用材质到选中对象"),
+            ("assign_texture", "指定贴图到材质"),
+        ],
+        "hdr": [
+            ("none", "无操作"),
+            ("import", "导入"),
+            ("import_geometry", "导入几何体"),
+            ("create_asset", "创建资产"),
+            ("create_dome_light", "创建环境光"),
+            ("assign_texture", "指定贴图"),
+        ],
+        "scenes": [
+            ("none", "无操作"),
+            ("import", "导入"),
+            ("import_geometry", "导入几何体"),
+            ("create_asset", "创建资产"),
+        ],
+        "ani": [
+            ("none", "无操作"),
+            ("import", "导入"),
+            ("import_geometry", "导入几何体"),
+            ("create_asset", "创建资产"),
+        ],
+    }
+    # 自定义库通用双击命令
+    _DOUBLE_CLICK_ITEMS_GENERIC = [
+        ("none", "无操作"),
+        ("import", "导入"),
+        ("import_geometry", "导入几何体"),
+        ("create_asset", "创建资产"),
+    ]
+
     def _create_context_menu_tab(self):
         w = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(w)
@@ -486,14 +551,19 @@ class SettingsDialog(QtWidgets.QDialog):
             "QListWidget::item:selected { background:#2d4a6f; }")
         layout.addWidget(self._ctx_type_list)
 
-        # 右侧：菜单项勾选
-        right = QtWidgets.QVBoxLayout()
+        # 右侧：滚动区域（菜单项勾选 + 双击命令）
+        right_scroll = QtWidgets.QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
+
+        right_container = QtWidgets.QWidget()
+        right = QtWidgets.QVBoxLayout(right_container)
         right.setSpacing(8)
 
-        # 操作提示
-        tip = QtWidgets.QLabel("勾选要在右键菜单中显示的项目，取消勾选则隐藏")
-        tip.setStyleSheet("color:#707070;font-size:11px;")
-        right.addWidget(tip)
+        # ── 右键菜单区域 ──
+        ctx_tip = QtWidgets.QLabel("勾选要在右键菜单中显示的项目，取消勾选则隐藏")
+        ctx_tip.setStyleSheet("color:#707070;font-size:11px;")
+        right.addWidget(ctx_tip)
 
         self._ctx_cbs = {}
         for key, label in self._CONTEXT_MENU_ITEMS:
@@ -502,11 +572,33 @@ class SettingsDialog(QtWidgets.QDialog):
             right.addWidget(cb)
             self._ctx_cbs[key] = cb
 
+        # ── 分隔线 ──
+        sep = QtWidgets.QFrame()
+        sep.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        sep.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        sep.setStyleSheet("color:#3a3a3a;")
+        right.addWidget(sep)
+
+        # ── 双击命令区域 ──
+        dc_tip = QtWidgets.QLabel("选择双击缩略图时要执行的命令（单选）")
+        dc_tip.setStyleSheet("color:#e0a030;font-size:11px;font-weight:bold;")
+        right.addWidget(dc_tip)
+
+        self._dc_button_group = QtWidgets.QButtonGroup(self)
+        self._dc_buttons = {}  # key → QRadioButton
+        self._dc_buttons_layout = QtWidgets.QVBoxLayout()
+        self._dc_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        self._dc_buttons_layout.setSpacing(6)
+        right.addLayout(self._dc_buttons_layout)
+
         right.addStretch()
-        layout.addLayout(right, 1)
+
+        right_scroll.setWidget(right_container)
+        layout.addWidget(right_scroll, 1)
 
         # 加载数据
         self._ctx_preset_data = self._load_context_menu_preset()
+        self._dc_preset_data = self._load_double_click_preset()
         self._ctx_types = list(self._config.get("sub_libraries", {}).keys())
         if not self._ctx_types:
             self._ctx_types = ["materials", "models", "lights", "textures", "scenes", "hdr", "ani"]
@@ -536,6 +628,52 @@ class SettingsDialog(QtWidgets.QDialog):
         except Exception as e:
             print(f"[Settings] 保存 context_menu_preset.json 失败: {e}")
 
+    def _load_double_click_preset(self) -> dict:
+        """从 double_click_preset.json 加载双击命令预设"""
+        try:
+            with open(_DOUBLE_CLICK_PRESET_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[Settings] 加载 double_click_preset.json 失败: {e}")
+            return {}
+
+    def _save_double_click_preset(self):
+        """将 _dc_preset_data 写回 double_click_preset.json"""
+        try:
+            with open(_DOUBLE_CLICK_PRESET_PATH, "w", encoding="utf-8") as f:
+                json.dump(self._dc_preset_data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            print(f"[Settings] 保存 double_click_preset.json 失败: {e}")
+
+    def _rebuild_dc_buttons(self, sub_lib: str):
+        """根据子库类型重建双击命令单选按钮"""
+        # 清除旧的 radio buttons
+        for rb in self._dc_buttons.values():
+            self._dc_button_group.removeButton(rb)
+            self._dc_buttons_layout.removeWidget(rb)
+            rb.setParent(None)
+            rb.deleteLater()
+        self._dc_buttons.clear()
+
+        # 获取该子库可用的命令列表
+        items = self._DOUBLE_CLICK_ITEMS.get(sub_lib, self._DOUBLE_CLICK_ITEMS_GENERIC)
+
+        for key, label in items:
+            rb = QtWidgets.QRadioButton(label)
+            rb.setStyleSheet(
+                "QRadioButton { color:#d0d0d0; font-size:13px; spacing:6px; }"
+                "QRadioButton::indicator { width:16px; height:16px; }")
+            self._dc_buttons_layout.addWidget(rb)
+            self._dc_button_group.addButton(rb)
+            self._dc_buttons[key] = rb
+
+        # 设置当前值
+        current_val = self._dc_preset_data.get(sub_lib, "none")
+        if current_val in self._dc_buttons:
+            self._dc_buttons[current_val].setChecked(True)
+        else:
+            self._dc_buttons["none"].setChecked(True)
+
     def _on_ctx_type_changed(self, row):
         """切换子库类型时，保存当前勾选状态并加载新类型的配置"""
         if row < 0:
@@ -544,15 +682,24 @@ class SettingsDialog(QtWidgets.QDialog):
             prev_row = self._ctx_type_list.property("_prev_row")
             if prev_row is not None and 0 <= prev_row < self._ctx_type_list.count():
                 prev_type = self._ctx_types[prev_row]
+                # 保存右键菜单状态
                 entry = self._ctx_preset_data.setdefault(prev_type, {})
                 for key, cb in self._ctx_cbs.items():
                     entry[key] = cb.isChecked()
+                # 保存双击命令状态
+                for key, rb in self._dc_buttons.items():
+                    if rb.isChecked():
+                        self._dc_preset_data[prev_type] = key
+                        break
         self._ctx_type_list.setProperty("_prev_row", row)
         # 加载新类型
         atype = self._ctx_types[row]
+        # 加载右键菜单
         entry = self._ctx_preset_data.get(atype, {})
         for key, cb in self._ctx_cbs.items():
             cb.setChecked(entry.get(key, False))
+        # 加载双击命令
+        self._rebuild_dc_buttons(atype)
 
     def _set_locked(self, locked: bool):
         """锁定或解锁所有非通用标签页 — 锁定可查看不可编辑"""
@@ -1284,6 +1431,16 @@ class SettingsDialog(QtWidgets.QDialog):
             for key, cb in self._ctx_cbs.items():
                 entry[key] = cb.isChecked()
         self._save_context_menu_preset()
+
+        # 双击命令 → 保存到 double_click_preset.json
+        cur_row = self._ctx_type_list.currentRow()
+        if cur_row >= 0:
+            atype = self._ctx_types[cur_row]
+            for key, rb in self._dc_buttons.items():
+                if rb.isChecked():
+                    self._dc_preset_data[atype] = key
+                    break
+        self._save_double_click_preset()
 
         # 贴图别名 → 先保存当前编辑，再写回 pbr_mapping.json
         cur_row = self._tex_type_list.currentRow()

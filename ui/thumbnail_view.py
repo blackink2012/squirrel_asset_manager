@@ -30,6 +30,18 @@ def _load_context_menu_preset() -> dict:
         return {}
 
 
+def _load_double_click_preset() -> dict:
+    """从 double_click_preset.json 加载双击命令预设"""
+    import os, json
+    cfg_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "Assets", "preset", "double_click_preset.json")
+    try:
+        with open(cfg_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
 def _is_ctx_enabled(sub_lib: str, item_key: str, preset: dict) -> bool:
     """检查指定子库的某个右键菜单项是否启用（默认 False，仅预设中显式标记 true 的才启用）"""
     entry = preset.get(sub_lib, {})
@@ -609,9 +621,57 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
     def _on_table_double_clicked(self, index):
         mat = self._table_model.get_material(index.row())
-        if mat:
-            print(f"[MaterialLibrary] \u53cc\u51fb\u5e94\u7528: {mat.get('name_cn')}")
+        if not mat:
+            return
+        # 根据双击命令预设执行
+        sub_lib = mat.get('sub_library', '')
+        dc_preset = _load_double_click_preset()
+        cmd = dc_preset.get(sub_lib, 'none')
+        if cmd == 'none' or not cmd:
+            return
+
+        print(f"[MaterialLibrary] \u53cc\u51fb\u6267\u884c: {cmd} - {mat.get('name_cn')}")
+
+        if cmd == 'apply_material':
             self.materialApplied.emit(mat)
+        elif cmd == 'create_asset':
+            self.createAssetRequested.emit(mat)
+        elif cmd == 'import':
+            json_path = mat.get('json_path', '')
+            if json_path:
+                fmt = os.path.splitext(json_path)[1].lstrip('.')
+                self.assetImportRequested.emit(json_path, fmt)
+        elif cmd == 'import_geometry':
+            json_path = mat.get('json_path', '')
+            if json_path:
+                self.variantGeometryImportRequested.emit(json_path, '', '')
+        elif cmd == 'import_texture':
+            json_path = mat.get('json_path', '')
+            if json_path:
+                self.importSingleTextureRequested.emit(json_path, '')
+        elif cmd == 'create_material':
+            json_path = mat.get('json_path', '')
+            if json_path:
+                self.createMaterialRequested.emit('', mat, '')
+        elif cmd == 'assign_texture':
+            if sub_lib == 'hdr':
+                self.assignHdrToDomeRequested.emit(mat)
+            else:
+                self.assignTextureToMaterialRequested.emit(mat)
+        elif cmd == 'apply_light':
+            json_path = mat.get('json_path', '')
+            if json_path:
+                self.applyLightToSelectionRequested.emit(json_path)
+        elif cmd == 'create_dome_light':
+            preset_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                'Assets', 'HDR_ligt')
+            if os.path.isdir(preset_dir):
+                ma_files = sorted(
+                    [f for f in os.listdir(preset_dir) if f.lower().endswith('.ma')])
+                if ma_files:
+                    preset_path = os.path.join(preset_dir, ma_files[0])
+                    self.createDomeLightRequested.emit(preset_path, mat)
 
     def _on_table_context_menu(self, pos):
         index = self._table_view.indexAt(pos)
@@ -1371,8 +1431,8 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         card.mouseReleaseEvent = mouse_release
 
         def mouse_double(event):
-            # 取消双击应用材质
-            pass
+            if hasattr(card, 'material_data'):
+                self._on_card_double_clicked(card)
         card.mouseDoubleClickEvent = mouse_double
 
         card.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.PreventContextMenu)
@@ -1502,9 +1562,59 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                 )
 
     def _on_card_double_clicked(self, card):
-        if hasattr(card, 'material_data'):
-            print(f"[MaterialLibrary] \u53cc\u51fb\u5e94\u7528\u6750\u8d28: {card.material_data.get('name_cn')}")
-            self.materialApplied.emit(card.material_data)
+        """双击卡片时，根据双击命令预设执行对应操作"""
+        if not hasattr(card, 'material_data'):
+            return
+        mat = card.material_data
+        sub_lib = mat.get('sub_library', '')
+        dc_preset = _load_double_click_preset()
+        cmd = dc_preset.get(sub_lib, 'none')
+        if cmd == 'none' or not cmd:
+            return
+
+        print(f"[MaterialLibrary] \u53cc\u51fb\u6267\u884c: {cmd} - {mat.get('name_cn')}")
+
+        if cmd == 'apply_material':
+            self.materialApplied.emit(mat)
+        elif cmd == 'create_asset':
+            self.createAssetRequested.emit(mat)
+        elif cmd == 'import':
+            json_path = mat.get('json_path', '')
+            if json_path:
+                fmt = os.path.splitext(json_path)[1].lstrip('.')
+                self.assetImportRequested.emit(json_path, fmt)
+        elif cmd == 'import_geometry':
+            json_path = mat.get('json_path', '')
+            if json_path:
+                self.variantGeometryImportRequested.emit(json_path, '', '')
+        elif cmd == 'import_texture':
+            json_path = mat.get('json_path', '')
+            if json_path:
+                self.importSingleTextureRequested.emit(json_path, '')
+        elif cmd == 'create_material':
+            json_path = mat.get('json_path', '')
+            if json_path:
+                self.createMaterialRequested.emit('', mat, '')
+        elif cmd == 'assign_texture':
+            if sub_lib == 'hdr':
+                self.assignHdrToDomeRequested.emit(mat)
+            else:
+                self.assignTextureToMaterialRequested.emit(mat)
+        elif cmd == 'apply_light':
+            json_path = mat.get('json_path', '')
+            if json_path:
+                self.applyLightToSelectionRequested.emit(json_path)
+        elif cmd == 'create_dome_light':
+            # 读取 HDR_ligt 目录下的预设 .ma 文件列表
+            preset_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                'Assets', 'HDR_ligt')
+            if os.path.isdir(preset_dir):
+                ma_files = sorted(
+                    [f for f in os.listdir(preset_dir) if f.lower().endswith('.ma')])
+                if ma_files:
+                    preset_path = os.path.join(preset_dir, ma_files[0])
+                    self.createDomeLightRequested.emit(preset_path, mat)
 
     @staticmethod
     def _collect_node_files(json_path, variant_types=None):
