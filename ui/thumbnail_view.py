@@ -634,8 +634,6 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         if cmd == 'apply_material':
             self.materialApplied.emit(mat)
-        elif cmd == 'create_asset':
-            self.createAssetRequested.emit(mat)
         elif cmd == 'import':
             json_path = mat.get('json_path', '')
             if json_path:
@@ -1576,8 +1574,6 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         if cmd == 'apply_material':
             self.materialApplied.emit(mat)
-        elif cmd == 'create_asset':
-            self.createAssetRequested.emit(mat)
         elif cmd == 'import':
             json_path = mat.get('json_path', '')
             if json_path:
