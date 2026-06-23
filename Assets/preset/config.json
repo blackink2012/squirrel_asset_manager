@@ -7,71 +7,76 @@
         "textures": "贴图",
         "scenes": "场景",
         "hdr": "HDR",
-        "ani": "动态"
+        "ani": "动态",
+        "fgdfgdfh": "测试啊"
     },
     "default_sub_categories": {
         "materials": [
             [
-                "metal",
-                "金属"
+                "AAAcustom",
+                "自定义"
             ],
             [
                 "fabric",
                 "布料"
             ],
             [
-                "plastic",
-                "塑料"
+                "foliage",
+                "植被"
             ],
             [
                 "glass",
                 "玻璃"
             ],
             [
-                "skin",
-                "皮肤"
+                "liquid",
+                "液体"
             ],
             [
-                "wood",
-                "木材"
+                "metal",
+                "金属"
+            ],
+            [
+                "plastic",
+                "塑料"
+            ],
+            [
+                "skin",
+                "皮肤"
             ],
             [
                 "stone",
                 "石材"
             ],
             [
-                "liquid",
-                "液体"
-            ],
-            [
-                "foliage",
-                "植被"
-            ],
-            [
-                "AAAcustom",
-                "自定义"
+                "wood",
+                "木材"
             ]
         ],
         "models": [
             [
-                "character",
-                "角色"
-            ],
-            [
-                "vehicle",
-                "车辆"
-            ],
-            [
-                "weapon",
-                "武器"
+                "AAAcustom",
+                "自定义"
             ],
             [
                 "building",
                 "建筑"
             ],
             [
+                "character",
+                "角色"
+            ],
+            [
+                "electronics",
+                "电子设备"
+            ],
+            [
                 "furniture",
                 "家具"
+            ],
+            [
+                "mechanical",
+                "机械"
             ],
             [
                 "nature",
@@ -82,112 +87,132 @@
                 "道具"
             ],
             [
-                "mechanical",
-                "机械"
+                "rig",
+                "绑定文件"
             ],
             [
-                "electronics",
-                "电子设备"
+                "road",
+                "道路"
             ],
             [
-                "AAAcustom",
-                "自定义"
+                "vehicle",
+                "车辆"
+            ],
+            [
+                "weapon",
+                "武器"
             ]
         ],
         "lights": [
             [
-                "studio",
-                "影棚灯光"
+                "AAAcustom",
+                "自定义"
             ],
             [
                 "hdri",
                 "环境光(HDRI)"
             ],
             [
-                "AAAcustom",
-                "自定义"
+                "studio",
+                "影棚灯光"
             ]
         ],
         "textures": [
             [
-                "metal",
-                "金属贴图"
+                "AAAcustom",
+                "自定义贴图"
             ],
             [
                 "fabric",
                 "布料贴图"
             ],
             [
-                "plastic",
-                "塑料贴图"
+                "foliage",
+                "植被贴图"
             ],
             [
                 "glass",
                 "玻璃贴图"
             ],
             [
-                "skin",
-                "皮肤贴图"
+                "liquid",
+                "液体贴图"
             ],
             [
-                "wood",
-                "木材贴图"
+                "metal",
+                "金属贴图"
+            ],
+            [
+                "plastic",
+                "塑料贴图"
+            ],
+            [
+                "skin",
+                "皮肤贴图"
             ],
             [
                 "stone",
                 "石材贴图"
             ],
             [
-                "liquid",
-                "液体贴图"
-            ],
-            [
-                "foliage",
-                "植被贴图"
-            ],
-            [
-                "AAAcustom",
-                "自定义贴图"
+                "wood",
+                "木材贴图"
             ]
         ],
         "scenes": [
             [
-                "interior",
-                "室内"
-            ],
-            [
-                "exterior",
-                "室外"
+                "AAAcustom",
+                "自定义"
             ],
             [
                 "character",
                 "角色场景"
             ],
             [
-                "studio",
-                "影棚"
-            ],
-            [
                 "environment",
                 "环境"
+            ],
+            [
+                "exterior",
+                "室外"
+            ],
+            [
+                "interior",
+                "室内"
             ],
             [
                 "product",
                 "产品展示"
             ],
             [
-                "AAAcustom",
-                "自定义"
+                "studio",
+                "影棚"
             ]
         ],
         "hdr": [
+            [
+                "AAAcustom",
+                "自定义"
+            ],
+            [
+                "indoor",
+                "室内"
+            ],
+            [
+                "industrial",
+                "工业"
+            ],
+            [
+                "night",
+                "夜晚"
+            ],
             [
                 "outdoor",
                 "户外"
             ],
             [
-                "indoor",
-                "室内"
+                "sky",
+                "天空"
             ],
             [
                 "studio",
@@ -196,22 +221,6 @@
             [
                 "sunset",
                 "日落"
-            ],
-            [
-                "night",
-                "夜晚"
-            ],
-            [
-                "sky",
-                "天空"
-            ],
-            [
-                "industrial",
-                "工业"
-            ],
-            [
-                "AAAcustom",
-                "自定义"
             ]
         ],
         "ani": [
@@ -222,8 +231,13 @@
             [
                 "cache",
                 "代理"
+            ],
+            [
+                "moting",
+                "包装动画"
             ]
-        ]
+        ],
+        "fgdfgdfh": []
     },
     "asset_file_extensions": [
         ".zasset",
@@ -543,6 +557,17 @@
             "360全景",
             "低角度",
             "高角度"
+        ],
+        "ani": [
+            "走",
+            "跑",
+            "跳",
+            "飞翔",
+            "鸟",
+            "鱼",
+            "人物",
+            "车辆",
+            "pos"
         ]
     },
     "node_type_colors": {

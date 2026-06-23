@@ -175,5 +175,23 @@
         "ani_frame_mode": "timeline",
         "delay_ms": 2000,
         "thumb_source": "screenshot"
+    },
+    "fffffff": {
+        "zmetal": false,
+        "zmetal_merge": false,
+        "mcm": false,
+        "ma": true,
+        "mb": false,
+        "fbx": false,
+        "obj": false,
+        "usd": false,
+        "abc": false,
+        "arnold": false,
+        "vray": false,
+        "redshift": false,
+        "vrmesh": false,
+        "collect_associated": false,
+        "textures": false,
+        "material_only": false
     }
 }
