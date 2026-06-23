@@ -122,7 +122,7 @@ class MaterialDragLabel(QtWidgets.QLabel):
         super(MaterialDragLabel, self).__init__(parent)
         self._material = material
         self._movie_ref = None  # GIF 动图引用
-        self.setCursor(QtCore.Qt.CursorShape.OpenHandCursor)
+        self.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
 
     def set_movie(self, movie):
         """设置并播放 GIF 动图"""
@@ -1353,6 +1353,9 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         def mouse_press(event):
             if event.button() == QtCore.Qt.MouseButton.RightButton:
+                # 右键时先选中卡片，再弹出菜单
+                if hasattr(card, 'material_data'):
+                    self._on_card_clicked(card)
                 self._on_context_menu(event.position().toPoint(), card)
                 return
 
