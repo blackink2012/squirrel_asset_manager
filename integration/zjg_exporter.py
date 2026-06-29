@@ -201,7 +201,22 @@ def _pack_textures_and_replace(nodes_data, textures_dir, material_dir=None):
 
 
 def _collect_texture_paths_from_materials(materials):
-    """直接从Maya材质节点收集文件纹理路径（用于MA导出）"""
+    """从 Maya 材质节点收集文件纹理路径（全属性递归扫描）。
+
+    使用 texture_utils 模块的全属性递归扫描替代原来的
+    listHistory + file 节点检查，支持:
+    - 所有渲染器贴图节点（file / aiImage / RedshiftNormalMap / ...）
+    - 帧序列 / UDIM 贴图模式
+    - displacement / bump 多路径收集
+    """
+    try:
+        from squirrel_asset_manager.core.texture_utils import collect_textures_from_materials
+        return sorted(collect_textures_from_materials(list(materials)))
+    except ImportError:
+        # 回退到内联实现（非插件环境）
+        pass
+
+    # ── 内联回退：保持兼容性 ──
     texture_paths = set()
     for mat in materials:
         try:
@@ -216,8 +231,6 @@ def _collect_texture_paths_from_materials(materials):
                         pass
 
             # 额外收集 displacement 贴图
-            # displacement 节点通过 shadingEngine.displacementShader 连接，
-            # 在材质的下游，listHistory 追溯不到
             try:
                 ses = cmds.listConnections(mat + '.outColor', type='shadingEngine') or []
                 for se in ses:

@@ -1047,52 +1047,91 @@ class ExportOrchestrator:
     # ── Stage 2: 贴图收集 ────────────────────────────────────
 
     def _stage_textures(self, config: ExportConfig, asset_dir: str) -> dict:
-        """收集并复制材质关联贴图到 textures/{材质名}/{文件名}。
+        """收集并复制材质/灯光关联贴图到 textures/{材质名}/{文件名}。
+
+        使用全属性递归扫描，支持:
+        - 所有渲染器贴图节点（file / aiImage / RedshiftNormalMap / ...）
+        - 灯光贴图（Dome Light HDR / IES）
+        - 帧序列 / UDIM 贴图模式
+        - displacement / bump 多路径收集
 
         Returns:
             {原始绝对路径: textures/{材质名}/{文件名}} 路径映射，用于后续 sync
         """
-        textures_dir = os.path.join(asset_dir, "textures")
         path_map: dict = {}  # {original_abs_path: textures/{mat}/{filename}}
+        textures_dir = os.path.join(asset_dir, "textures")
 
         if not _IN_MAYA:
             return path_map
 
         try:
-            from squirrel_asset_manager.integration.zjg_exporter import (
-                _collect_texture_paths_from_materials,
+            from squirrel_asset_manager.core.texture_utils import (
+                collect_textures_from_objects,
+                collect_textures_from_materials,
+                copy_textures_to_dir,
             )
 
-            # 确定材质列表：优先从关联物体收集所有材质，补充 material_node
+            # ── 1. 从关联物体收集所有贴图（材质 + 灯光） ──
+            extra_mats = []
+            if config.material_node and cmds.objExists(config.material_node):
+                extra_mats.append(config.material_node)
+
+            all_tex_paths: set = set()
+
+            if config.associated_objects:
+                # 场景级收集：自动识别材质和灯光
+                all_tex_paths = collect_textures_from_objects(
+                    config.associated_objects,
+                    extra_materials=extra_mats,
+                )
+            elif extra_mats:
+                # 仅材质，无关联物体
+                all_tex_paths = collect_textures_from_materials(extra_mats)
+
+            if not all_tex_paths:
+                print("[StageTextures] 未发现任何贴图文件")
+                return path_map
+
+            print(f"[StageTextures] 收集到 {len(all_tex_paths)} 个贴图文件")
+
+            # ── 2. 确定材质列表用于子文件夹命名 ──
             if config.associated_objects:
                 mats = self._get_materials_from_objects(config.associated_objects)
-                if config.material_node and cmds.objExists(config.material_node) \
-                        and config.material_node not in mats:
-                    mats.append(config.material_node)
-            elif config.material_node and cmds.objExists(config.material_node):
-                mats = [config.material_node]
+                if extra_mats:
+                    for m in extra_mats:
+                        if m not in mats:
+                            mats.append(m)
             else:
-                mats = []
+                mats = extra_mats
 
-            # 按材质分别收集并复制贴图到 textures/{材质名}/
-            for mat in mats:
-                tex_paths = _collect_texture_paths_from_materials([mat])
-                if not tex_paths:
-                    continue
-                mat_dir = os.path.join(textures_dir, mat)
+            # ── 3. 按材质分组复制贴图 ──
+            if mats:
+                # 有所属材质：按材质子目录复制
+                # 使用最后一个材质名（主材质）作为子目录
+                mat_dir = os.path.join(textures_dir, mats[-1])
                 os.makedirs(mat_dir, exist_ok=True)
-                for src in tex_paths:
-                    if not os.path.isfile(src):
-                        continue
-                    dst = os.path.join(mat_dir, os.path.basename(src))
-                    if not os.path.isfile(dst) or os.path.getmtime(src) != os.path.getmtime(dst):
-                        shutil.copy2(src, dst)
-                    # 记录原始绝对路径 → 新相对路径
-                    norm_src = src.replace("\\", "/")
-                    rel = f"textures/{mat}/{os.path.basename(dst)}"
-                    path_map[norm_src] = rel
+                path_map = copy_textures_to_dir(all_tex_paths, asset_dir, mats[-1])
+                # 确保路径格式正确
+                for src_path, rel_path in list(path_map.items()):
+                    if not rel_path.startswith("textures/"):
+                        path_map[src_path] = rel_path
+            else:
+                # 仅灯光（无材质）：贴图放到 textures/ 根目录
+                path_map = copy_textures_to_dir(all_tex_paths, asset_dir)
+
+            # ── 4. 输出收集统计 ──
+            skipped = [p for p in all_tex_paths if p.replace("\\", "/") not in path_map]
+            print(
+                f"[StageTextures] 结果: 复制 {len(path_map)} / 跳过 {len(skipped)} "
+                f"/ 总计 {len(all_tex_paths)} 个贴图"
+            )
+            if skipped:
+                print(f"[StageTextures] 跳过的贴图: {skipped}")
+
         except Exception as e:
             print(f"[StageTextures] 异常: {e}")
+            import traceback
+            traceback.print_exc()
 
         return path_map
 
@@ -1279,28 +1318,27 @@ class ExportOrchestrator:
 
     @staticmethod
     def _collect_zlight_textures(shape_nodes, asset_dir, safe_name):
-        """收集灯光连接的贴图文件到 {asset_dir}/textures/{safe_name}/"""
-        import shutil
-        from squirrel_asset_manager.core.light_io import get_connected_texture_files
+        """收集灯光连接的贴图文件到 {asset_dir}/textures/{safe_name}/。
 
-        all_paths = set()
+        使用全属性递归扫描，支持 Dome Light HDR / IES / aiImage 等。
+        """
+        import shutil
+        from squirrel_asset_manager.core.texture_utils import (
+            collect_all_texture_files,
+            copy_textures_to_dir,
+        )
+
+        all_paths: set = set()
         for shp in shape_nodes:
-            paths = get_connected_texture_files(shp)
+            paths = collect_all_texture_files(shp, collect_lights=True)
             all_paths.update(paths)
 
         if not all_paths:
+            print(f"[Export::zlight] 未发现灯光贴图")
             return
 
-        tex_dir = os.path.join(asset_dir, "textures", safe_name)
-        os.makedirs(tex_dir, exist_ok=True)
-        for fp in sorted(all_paths):
-            try:
-                dst = os.path.join(tex_dir, os.path.basename(fp)).replace("\\", "/")
-                if not os.path.isfile(dst):
-                    shutil.copy2(fp, dst)
-                print(f"[Export::zlight] 贴图: {os.path.basename(fp)}")
-            except Exception as e:
-                print(f"[Export::zlight] 贴图复制失败 [{fp}]: {e}")
+        print(f"[Export::zlight] 收集到 {len(all_paths)} 个灯光贴图")
+        copy_textures_to_dir(all_paths, asset_dir, safe_name)
 
     def _stage_mcm(self, config: ExportConfig, asset_dir: str, safe_name: str) -> str:
         """导出 .mcm 材质→模型映射文件。
