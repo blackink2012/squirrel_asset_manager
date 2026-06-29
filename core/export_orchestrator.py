@@ -2398,7 +2398,11 @@ class ExportOrchestrator:
     # ── 辅助方法 ──────────────────────────────────────────────
 
     def _sync_ma_texture_paths(self, ma_path: str, path_map: dict) -> None:
-        """将 .ma 文件中的 fileTextureName 更新为 textures/{材质名}/{文件名}。
+        """将 .ma 文件中的所有贴图路径更新为 textures/{材质名}/{文件名}。
+
+        处理所有 Maya ASCII 格式中的贴图路径，包括 file 节点的
+        fileTextureName 和灯光节点的 tex0 / ai_filename 等属性。
+        使用大小写不敏感的匹配以兼容 Windows 路径差异。
 
         Args:
             ma_path: .ma 文件路径
@@ -2410,23 +2414,43 @@ class ExportOrchestrator:
             import re
             with open(ma_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            # 归一化 .ma 中所有路径的反斜杠为斜杠，确保 regex 匹配
-            content = re.sub(r'"[^"]*:[\\/][^"]*"', lambda m: m.group(0).replace("\\", "/"), content)
+
+            # 归一化 .ma 中所有路径：
+            # 1. 反斜杠 → 斜杠
+            # 2. 大小写不敏感匹配：Windows 上 C:/ 和 c:/ 是同一个文件
+            def _normalize_path_match(m):
+                return m.group(0).replace("\\", "/")
+            content = re.sub(
+                r'"[^"]*:[\\/][^"]*"',
+                _normalize_path_match,
+                content,
+            )
+
             changed = 0
             for orig_path, rel_path in path_map.items():
                 norm_path = orig_path.replace("\\", "/")
                 escaped = re.escape(norm_path)
+                # 大小写不敏感匹配（Windows 路径驱动字母可能大小写不同）
                 pattern = fr'"[^"]*{escaped}[^"]*"'
-                n = len(re.findall(pattern, content))
+                n = len(re.findall(pattern, content, flags=re.IGNORECASE))
                 if n:
-                    content = re.sub(pattern, lambda m, p=rel_path: f'"{p}"', content)
+                    content = re.sub(
+                        pattern,
+                        lambda m, p=rel_path: f'"{p}"',
+                        content,
+                        flags=re.IGNORECASE,
+                    )
                     changed += n
+                    print(f"[MaSync] {os.path.basename(orig_path)} → {rel_path}")
+
             if changed:
                 with open(ma_path, 'w', encoding='utf-8') as f:
                     f.write(content)
                 print(f"[MaSync] 已更新 {changed} 个纹理路径: {os.path.basename(ma_path)}")
         except Exception as e:
             print(f"[MaSync] 更新失败 {ma_path}: {e}")
+            import traceback
+            traceback.print_exc()
 
     @staticmethod
     def _sync_zmetal_texture_paths(zmetal_path: str, path_map: dict) -> None:
@@ -2434,6 +2458,7 @@ class ExportOrchestrator:
 
         覆盖所有节点类型的贴图属性（file 节点、Redshift 节点、灯光节点等），
         不再仅限 file 节点的 fileTextureName。
+        使用大小写不敏感的路径匹配（Windows 路径兼容）。
 
         Args:
             zmetal_path: .zmetal 文件路径
@@ -2441,6 +2466,12 @@ class ExportOrchestrator:
         """
         if not os.path.isfile(zmetal_path) or not path_map:
             return
+
+        # 构建大小写不敏感的查找表 {lower_path: (orig_path, rel_path)}
+        lookup: dict = {}
+        for orig_path, rel_path in path_map.items():
+            key = orig_path.replace("\\", "/").lower()
+            lookup[key] = (orig_path, rel_path)
 
         try:
             import json
@@ -2465,19 +2496,19 @@ class ExportOrchestrator:
                     # 处理 value 类型属性
                     if orig_type == "value":
                         old_val = str(attr_data.get("value", ""))
-                        norm_val = old_val.replace("\\", "/")
-                        if norm_val in path_map:
-                            attr_data["value"] = path_map[norm_val]
+                        norm_val = old_val.replace("\\", "/").lower()
+                        if norm_val in lookup:
+                            attr_data["value"] = lookup[norm_val][1]
                             changed += 1
-                            print(f"[ZmetalSync] {attr_name} ({node_name}): {os.path.basename(old_val)} → {os.path.basename(path_map[norm_val])}")
+                            print(f"[ZmetalSync] {attr_name} ({node_name}): {os.path.basename(old_val)} → {os.path.basename(lookup[norm_val][1])}")
 
                     # 处理 connection 类型属性（connection 也有 value 字段作为默认值）
                     elif orig_type == "connection":
                         val = attr_data.get("value")
                         if isinstance(val, str) and val.strip():
-                            norm_val = val.replace("\\", "/")
-                            if norm_val in path_map:
-                                attr_data["value"] = path_map[norm_val]
+                            norm_val = val.replace("\\", "/").lower()
+                            if norm_val in lookup:
+                                attr_data["value"] = lookup[norm_val][1]
                                 changed += 1
 
             if changed:
@@ -2488,9 +2519,9 @@ class ExportOrchestrator:
             # 同时也更新根层级的 meta 数据（如果有直接存储的路径字段）
             for key in ('hdr_path', 'ies_path', 'texture_path'):
                 if key in data and isinstance(data[key], str):
-                    norm_val = data[key].replace("\\", "/")
-                    if norm_val in path_map:
-                        data[key] = path_map[norm_val]
+                    norm_val = data[key].replace("\\", "/").lower()
+                    if norm_val in lookup:
+                        data[key] = lookup[norm_val][1]
                         changed += 1
                         with open(zmetal_path, 'w', encoding='utf-8') as f:
                             json.dump(data, f, indent=4, ensure_ascii=False)
