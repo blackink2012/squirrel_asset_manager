@@ -2430,7 +2430,10 @@ class ExportOrchestrator:
 
     @staticmethod
     def _sync_zmetal_texture_paths(zmetal_path: str, path_map: dict) -> None:
-        """将 .zmetal JSON 中的 fileTextureName 更新为 textures/{材质名}/{文件名}。
+        """将 .zmetal JSON 中各节点的贴图路径更新为 textures/{材质名}/{文件名}。
+
+        覆盖所有节点类型的贴图属性（file 节点、Redshift 节点、灯光节点等），
+        不再仅限 file 节点的 fileTextureName。
 
         Args:
             zmetal_path: .zmetal 文件路径
@@ -2445,24 +2448,57 @@ class ExportOrchestrator:
                 data = json.load(f)
 
             nodes = data.get("nodes", {})
+            if not nodes:
+                return
+
             changed = 0
             for node_name, info in nodes.items():
-                if info.get("node_type") != "file":
+                attrs = info.get("attrs", {})
+                if not attrs:
                     continue
-                ftn = info.get("attrs", {}).get("fileTextureName", {})
-                if ftn.get("type") != "value":
-                    continue
-                old_val = ftn.get("value", "").replace("\\", "/")
-                if old_val in path_map:
-                    ftn["value"] = path_map[old_val]
-                    changed += 1
+                for attr_name in attrs:
+                    attr_data = attrs[attr_name]
+                    if not isinstance(attr_data, dict):
+                        continue
+                    orig_type = attr_data.get("type", "")
+
+                    # 处理 value 类型属性
+                    if orig_type == "value":
+                        old_val = str(attr_data.get("value", ""))
+                        norm_val = old_val.replace("\\", "/")
+                        if norm_val in path_map:
+                            attr_data["value"] = path_map[norm_val]
+                            changed += 1
+                            print(f"[ZmetalSync] {attr_name} ({node_name}): {os.path.basename(old_val)} → {os.path.basename(path_map[norm_val])}")
+
+                    # 处理 connection 类型属性（connection 也有 value 字段作为默认值）
+                    elif orig_type == "connection":
+                        val = attr_data.get("value")
+                        if isinstance(val, str) and val.strip():
+                            norm_val = val.replace("\\", "/")
+                            if norm_val in path_map:
+                                attr_data["value"] = path_map[norm_val]
+                                changed += 1
 
             if changed:
                 with open(zmetal_path, 'w', encoding='utf-8') as f:
                     json.dump(data, f, indent=4, ensure_ascii=False)
-                print(f"[ZmetalSync] 已更新 {changed} 个文件节点的贴图路径")
+                print(f"[ZmetalSync] 已更新 {changed} 个贴图路径")
+
+            # 同时也更新根层级的 meta 数据（如果有直接存储的路径字段）
+            for key in ('hdr_path', 'ies_path', 'texture_path'):
+                if key in data and isinstance(data[key], str):
+                    norm_val = data[key].replace("\\", "/")
+                    if norm_val in path_map:
+                        data[key] = path_map[norm_val]
+                        changed += 1
+                        with open(zmetal_path, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, indent=4, ensure_ascii=False)
+
         except Exception as e:
             print(f"[ZmetalSync] 更新失败: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _count_materials(self, config: ExportConfig) -> int:
         """统计关联的材质数量。"""
