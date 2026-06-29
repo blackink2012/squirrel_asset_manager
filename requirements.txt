@@ -1,0 +1,23 @@
+# ── Squirrel Asset Manager 依赖清单 ──
+# 安装: pip install -r requirements.txt
+#
+# 注意: maya (Autodesk Maya Python API) 是运行前提，非 pip 包，
+#       需要先安装 Maya 2020+ (自带 Python 3 + PySide)
+# ─────────────────────────────────────
+
+# ── Qt 绑定库（根据 Maya 版本选其一）──
+# Maya 2022+ 使用 PySide6，Maya 2020-2022 使用 PySide2
+PySide6; python_version >= "3.9"
+shiboken6; python_version >= "3.9"
+# PySide2; python_version < "3.9"
+# shiboken2; python_version < "3.9"
+
+# ── 图像处理 ──
+Pillow>=10.0.0
+
+# ── AI 分析（可选，仅 AI 分析缩略图功能需要）──
+requests>=2.28.0
+
+# ── 图像格式转换工具（可选，quicktools 功能）──
+opencv-python>=4.8.0
+numpy>=1.24.0
