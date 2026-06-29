@@ -958,6 +958,89 @@ def _replace_file_texture_paths(before_file_nodes: set, tex_path_map: dict,
         except Exception:
             pass
 
+    # ── 非 file 节点的贴图路径解析 ──
+    # file 节点已处理完毕，但 RedshiftDomeLight.tex0 / aiImage.filename 等
+    # 非 file 节点的贴图属性仍可能是相对路径，需要一并解析为绝对路径
+    _resolve_non_file_texture_paths(tex_path_map, name_to_disk, before_file_nodes)
+
+
+# ── 非 file 节点的贴图路径解析 ──────────────────────────────────
+
+_NON_FILE_TEXTURE_NODE_ATTRS = {
+    'RedshiftDomeLight':      ['tex0'],
+    'RedshiftNormalMap':      ['tex0', 'tex1'],
+    'RedshiftBumpMap':        ['tex0', 'tex1', 'tex2'],
+    'RedshiftBumpBlender':    ['tex0', 'tex1', 'tex2'],
+    'RedshiftSprite':         ['tex0'],
+    'RedshiftEnvironment':    ['tex0'],
+    'RedshiftVolumeShape':    ['fn'],
+    'aiSkyDomeLight':         ['ai_filename', 'aiFilename'],
+    'aiSkyDomeLightShape':    ['ai_filename', 'aiFilename'],
+    'aiVolume':               ['filename'],
+    'aiImage':                ['filename'],
+    'aiStandIn':              ['dso'],
+    'VRayLightDomeShape':     ['domeTex'],
+}
+
+
+def _resolve_non_file_texture_paths(tex_path_map: dict, name_to_disk: dict,
+                                     before_file_nodes: set):
+    """解析非 file 节点的贴图路径（RedshiftDomeLight.tex0 等）。
+
+    在 .ma 文件导入后，file 节点的 fileTextureName 已由
+    _replace_file_texture_paths 更新。但 DomeLight / NormalMap 等节点
+    的贴图属性直接存储路径字符串（非 file 节点），需要单独处理。
+
+    扫描非 file 节点类型的所有已知贴图属性，
+    将其中的相对路径（textures/...）替换为绝对磁盘路径。
+    """
+    import maya.cmds as cmds
+    import os
+
+    for ntype, attr_names in _NON_FILE_TEXTURE_NODE_ATTRS.items():
+        try:
+            nodes = cmds.ls(type=ntype) or []
+        except Exception:
+            continue
+
+        for node in nodes:
+            for attr_name in attr_names:
+                full_attr = f"{node}.{attr_name}"
+                if not cmds.objExists(full_attr):
+                    continue
+                try:
+                    old_val = cmds.getAttr(full_attr)
+                except Exception:
+                    continue
+                if not isinstance(old_val, str) or not old_val.strip():
+                    continue
+
+                norm_val = old_val.replace("\\", "/")
+                disk_path = None
+
+                # 1. 精确全路径匹配
+                disk_path = tex_path_map.get(norm_val)
+
+                # 2. 大小写不敏感匹配
+                if not disk_path:
+                    key_lower = norm_val.lower()
+                    for k, v in tex_path_map.items():
+                        if k.replace("\\", "/").lower() == key_lower:
+                            disk_path = v
+                            break
+
+                # 3. basename 回退
+                if not disk_path:
+                    old_basename = os.path.basename(norm_val)
+                    disk_path = name_to_disk.get(old_basename)
+
+                if disk_path and disk_path != old_val:
+                    try:
+                        cmds.setAttr(full_attr, disk_path, type="string")
+                        print(f"[NonFileTexResolve] {ntype}({node}).{attr_name}: {old_val} → {disk_path}")
+                    except Exception as e:
+                        print(f"[NonFileTexResolve] 设置 {full_attr} 失败: {e}")
+
 
 def _get_texture_import_policy() -> str:
     """读取贴图导入策略设置。
@@ -980,10 +1063,12 @@ def _get_texture_import_policy() -> str:
 
 
 def _rewrite_texture_paths_in_json(nodes_data: dict, tex_path_map: dict):
-    """扫描 JSON 中所有 file 节点，将 fileTextureName 从内部路径替换为磁盘路径
+    """扫描 JSON 中所有节点的贴图路径，替换为磁盘路径。
 
-    zmetal JSON 中的 fileTextureName 已改为 textures/{材质名}/{文件名}，
+    zmetal JSON 中的贴图路径已改为 textures/{材质名}/{文件名}，
     直接用全路径匹配。
+    覆盖所有节点类型（file / RedshiftDomeLight / aiImage 等），
+    不再仅限 file 节点的 fileTextureName。
 
     回退策略：无精确匹配时，提取文件名（basename）匹配。
     """
@@ -996,25 +1081,65 @@ def _rewrite_texture_paths_in_json(nodes_data: dict, tex_path_map: dict):
         if basename not in name_to_disk:
             name_to_disk[basename] = disk_path
 
-    # 构建全路径 → 磁盘路径的映射
+    # 构建大小写不敏感查找表
+    lookup: dict = {}
+    for zip_rel, disk_path in tex_path_map.items():
+        key = zip_rel.replace("\\", "/").lower()
+        lookup[key] = disk_path
+
+    changed = 0
     for node_name, info in nodes_data.items():
-        if info.get("node_type") != "file":
-            continue
         attrs = info.get("attrs", {})
-        ftn = attrs.get("fileTextureName", {})
-        if ftn.get("type") != "value":
+        if not attrs:
             continue
-        old_val = ftn.get("value", "")
-        # 精确匹配 zmetal JSON 中已存为 textures/{材质名}/{文件名}
-        if old_val in tex_path_map:
-            ftn["value"] = tex_path_map[old_val]
-            print(f"[TextureReplace] {node_name}: {old_val} → {tex_path_map[old_val]}")
-        else:
-            # 回退：正则提取文件名匹配
-            old_basename = os.path.basename(old_val.replace("\\", "/"))
-            if old_basename in name_to_disk:
-                ftn["value"] = name_to_disk[old_basename]
-                print(f"[TextureReplace] {node_name}: {old_val} → {name_to_disk[old_basename]} (basename fallback)")
+        for attr_name in attrs:
+            attr_data = attrs[attr_name]
+            if not isinstance(attr_data, dict):
+                continue
+            orig_type = attr_data.get("type", "")
+
+            if orig_type == "value":
+                _try_replace_value(attr_data, lookup, name_to_disk)
+            elif orig_type == "connection":
+                val = attr_data.get("value")
+                if isinstance(val, str) and val.strip():
+                    old_val = str(val)
+                    norm_val = old_val.replace("\\", "/").lower()
+                    if norm_val in lookup:
+                        attr_data["value"] = lookup[norm_val]
+                        changed += 1
+
+    if changed:
+        print(f"[TextureReplace] JSON 中更新了 {changed} 个贴图路径")
+    
+    # 同时也更新根层级的 meta 数据（hdr_path / ies_path）
+    for key in ('hdr_path', 'ies_path', 'texture_path'):
+        if key in nodes_data and isinstance(nodes_data[key], str):
+            old_val = nodes_data[key]
+            norm_val = old_val.replace("\\", "/").lower()
+            if norm_val in lookup:
+                nodes_data[key] = lookup[norm_val]
+                print(f"[TextureReplace] 根层级 {key}: {old_val} → {lookup[norm_val]}")
+
+
+def _try_replace_value(attr_data: dict, lookup: dict, name_to_disk: dict):
+    """在单个属性值中尝试替换贴图路径。"""
+    import os
+    old_val = str(attr_data.get("value", ""))
+    norm_val = old_val.replace("\\", "/").lower()
+
+    # 1. 精确匹配（大小写不敏感）
+    if norm_val in lookup:
+        attr_data["value"] = lookup[norm_val]
+        print(f"[TextureReplace] {os.path.basename(old_val)} → {os.path.basename(lookup[norm_val])}")
+        return
+
+    # 2. 回退：basename 匹配
+    old_basename = os.path.basename(norm_val)
+    if old_basename in name_to_disk:
+        attr_data["value"] = name_to_disk[old_basename]
+        print(f"[TextureReplace] {os.path.basename(old_val)} → {os.path.basename(name_to_disk[old_basename])} (basename)")
+        return
 
 
 def _find_zmetal_in_zip(all_names: list) -> Optional[str]:
