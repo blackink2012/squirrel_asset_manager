@@ -286,19 +286,20 @@ def _summarize_visited_types(visited: Set[str]) -> str:
 def _get_all_connectable_attrs(node: str) -> List[str]:
     """获取节点上所有可能有连接的属性列表（去重复合子属性）。
 
-    注意：不使用 writable=True，因为已连接的属性在 Maya 中
-    被视为不可写入，会被 writable 过滤器排除。
-    改用 scalar=True 获取所有标量属性，确保不漏掉任何连接。
+    注意：
+    - 不使用 writable=True：已连接的属性被 Maya 视为不可写入，会被排除
+    - 不使用 scalar=True：复合属性（如 baseColor）是 compound 类型，会被排除
+    改用无过滤的 listAttr 获取全部属性，再手动过滤。
     """
     all_attrs: List[str] = []
-    # 标准属性（非隐藏、非 UDA 的标量属性）
+    # 标准属性（含 compound、含非 writable 属性）
     try:
-        all_attrs.extend(cmds.listAttr(node, scalar=True) or [])
+        all_attrs.extend(cmds.listAttr(node) or [])
     except Exception:
         pass
     # 隐藏属性
     try:
-        all_attrs.extend(cmds.listAttr(node, scalar=True, hidden=True) or [])
+        all_attrs.extend(cmds.listAttr(node, hidden=True) or [])
     except Exception:
         pass
     # 用户自定义属性
@@ -306,12 +307,6 @@ def _get_all_connectable_attrs(node: str) -> List[str]:
         all_attrs.extend(cmds.listAttr(node, userDefined=True) or [])
     except Exception:
         pass
-    # 兜底：如果以上都为空，尝试不带任何 flag 获取
-    if not all_attrs:
-        try:
-            all_attrs.extend(cmds.listAttr(node) or [])
-        except Exception:
-            pass
 
     # 去重并过滤
     seen: Set[str] = set()
