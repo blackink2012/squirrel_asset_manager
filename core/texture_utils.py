@@ -135,7 +135,8 @@ def _resolve_texture_frame_pattern(path: str) -> List[str]:
         - name.####.exr    → 展开为所有匹配帧
         - name.%04d.exr    → 同上
         - name.<UDIM>.exr  → 展开为所有 UDIM tile
-        - name.1001.exr    → 单帧（直接返回）
+        - name.1001.exr    → 检测是否为序列首帧，若是则展开全部帧
+        - name.exr         → 单帧（直接返回）
 
     Returns:
         [文件绝对路径列表]，不带帧模式的空路径返回空列表
@@ -143,12 +144,9 @@ def _resolve_texture_frame_pattern(path: str) -> List[str]:
     if not path:
         return []
 
-    # 单帧：直接检查
     normalized = os.path.normpath(path)
-    if os.path.isfile(normalized):
-        return [normalized]
 
-    # 帧序列模式 (#### / %04d / %4d)
+    # ── 帧序列模式 (#### / %04d / %4d) ──
     for token in ('####', '%04d', '%4d'):
         if token in path:
             pattern = path.replace(token, '*')
@@ -157,7 +155,7 @@ def _resolve_texture_frame_pattern(path: str) -> List[str]:
                 _dbg(f"帧序列展开 [{token}]: {path} → {len(matches)} 帧")
                 return matches
 
-    # UDIM 模式 (<UDIM>)
+    # ── UDIM 模式 (<UDIM>) ──
     if '<UDIM>' in path or '<udim>' in path:
         udim_pattern = path.replace('<UDIM>', '*').replace('<udim>', '*')
         matches = sorted(glob.glob(udim_pattern))
@@ -165,7 +163,7 @@ def _resolve_texture_frame_pattern(path: str) -> List[str]:
             _dbg(f"UDIM 展开: {path} → {len(matches)} tile")
             return matches
 
-    # 父目录存在时的 # 通配展开
+    # ── 父目录存在时的 # 通配展开 ──
     parent = os.path.dirname(path)
     if os.path.isdir(parent) and '#' in path:
         wild = re.sub(r'#+', '*', os.path.basename(path))
@@ -174,9 +172,70 @@ def _resolve_texture_frame_pattern(path: str) -> List[str]:
             _dbg(f"井号展开: {path} → {len(matches)} 文件")
             return matches
 
-    # 无法解析：返回原路径（由调用方判断）
+    # ── 单帧检测 + 序列展开 ──
+    # 关键：即使 os.path.isfile 返回 True（如 texture.1001.exr），
+    # 也要检测是否为帧序列的第一帧。Maya 中序列贴图的 fileTextureName
+    # 通常存储首帧路径（如 texture.1001.exr），useFrameExtension=True。
+    if os.path.isfile(normalized):
+        expanded = _try_expand_numeric_sequence(normalized)
+        if expanded:
+            _dbg(f"序列展开: {os.path.basename(normalized)} → {len(expanded)} 帧")
+            return expanded
+        return [normalized]
+
+    # 无法解析：返回空列表
     _dbg(f"无法解析帧模式: {path}")
     return []
+
+
+def _try_expand_numeric_sequence(filepath: str) -> List[str]:
+    """检测文件是否为帧序列的一部分，若是则展开全部帧。
+
+    例如: texture.1001.exr → 扫描同目录下所有 texture.*.exr，
+    如果存在 texture.1002.exr 等，返回全部帧路径。
+
+    Args:
+        filepath: 单个文件的绝对路径（如 texture.1001.exr）
+
+    Returns:
+        所有帧的路径列表（含自身），若不是序列则返回空列表
+    """
+    import glob as _glob
+    dirname = os.path.dirname(filepath)
+    basename = os.path.basename(filepath)
+    
+    # 匹配文件名中的数字序列：name.1001.ext 或 name_1001.ext 等
+    # 模式: 前缀 + 连续数字 + 后缀（扩展名）
+    m = re.search(r'^(.*?)(\d+)(\.[^.]+)$', basename)
+    if not m:
+        return []
+    
+    prefix = m.group(1)   # "texture."
+    digits = m.group(2)   # "1001"
+    ext = m.group(3)      # ".exr"
+    padding = len(digits)
+    
+    # 扫描同目录下匹配模式的所有文件
+    pattern = os.path.join(dirname, f"{prefix}*{ext}")
+    candidates = sorted(_glob.glob(pattern))
+    
+    if len(candidates) <= 1:
+        # 只有自身一个文件，不是序列
+        return []
+    
+    # 验证：提取所有候选文件中的数字并检查连续性
+    frame_files = []
+    for f in candidates:
+        m2 = re.search(r'^(.*?)(\d+)(\.[^.]+)$', os.path.basename(f))
+        if m2 and m2.group(3).lower() == ext.lower() and m2.group(1) == prefix:
+            # 数字长度与原始匹配（相同 padding）
+            if len(m2.group(2)) == padding:
+                frame_files.append(os.path.normpath(f))
+    
+    if len(frame_files) <= 1:
+        return []
+    
+    return sorted(frame_files)
 
 
 # ═══════════════════════════════════════════════════════════════
