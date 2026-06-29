@@ -15,7 +15,6 @@
 """
 
 import os
-import glob
 import re
 import shutil
 from typing import Dict, List, Optional, Set, Tuple
@@ -128,6 +127,35 @@ _LIGHT_FILE_ATTR_PATTERNS: Tuple[str, ...] = (
 # 帧序列 / UDIM 解析
 # ═══════════════════════════════════════════════════════════════
 
+# 目录级缓存：避免逐文件 glob.glob 在 NAS/网络存储上的性能问题
+# 同目录下多个贴图共享一次 os.listdir() 结果
+_dir_listing_cache: Dict[str, List[str]] = {}
+
+
+def _cached_dir_list(dirpath: str) -> List[str]:
+    """获取目录文件列表（带缓存），避免重复 os.listdir / glob。"""
+    key = os.path.normpath(dirpath).lower()
+    if key in _dir_listing_cache:
+        return _dir_listing_cache[key]
+    try:
+        files = os.listdir(dirpath)
+    except Exception:
+        files = []
+    _dir_listing_cache[key] = files
+    return files
+
+
+def _cached_glob(pattern: str) -> List[str]:
+    """glob.glob 替代，使用缓存的目录列表在内存中匹配。"""
+    import fnmatch
+    dirname = os.path.dirname(pattern)
+    if not dirname:
+        dirname = '.'
+    file_pattern = os.path.basename(pattern)
+    all_files = _cached_dir_list(dirname)
+    matches = sorted(f for f in all_files if fnmatch.fnmatch(f, file_pattern))
+    return [os.path.join(dirname, f) for f in matches]
+
 def _resolve_texture_frame_pattern(path: str) -> List[str]:
     """解析帧序列 / UDIM 模式为实际文件列表。
 
@@ -150,7 +178,7 @@ def _resolve_texture_frame_pattern(path: str) -> List[str]:
     for token in ('####', '%04d', '%4d'):
         if token in path:
             pattern = path.replace(token, '*')
-            matches = sorted(glob.glob(pattern))
+            matches = sorted(_cached_glob(pattern))
             if matches:
                 _dbg(f"帧序列展开 [{token}]: {path} → {len(matches)} 帧")
                 return matches
@@ -158,7 +186,7 @@ def _resolve_texture_frame_pattern(path: str) -> List[str]:
     # ── UDIM 模式 (<UDIM>) ──
     if '<UDIM>' in path or '<udim>' in path:
         udim_pattern = path.replace('<UDIM>', '*').replace('<udim>', '*')
-        matches = sorted(glob.glob(udim_pattern))
+        matches = sorted(_cached_glob(udim_pattern))
         if matches:
             _dbg(f"UDIM 展开: {path} → {len(matches)} tile")
             return matches
@@ -167,7 +195,7 @@ def _resolve_texture_frame_pattern(path: str) -> List[str]:
     parent = os.path.dirname(path)
     if os.path.isdir(parent) and '#' in path:
         wild = re.sub(r'#+', '*', os.path.basename(path))
-        matches = sorted(glob.glob(os.path.join(parent, wild)))
+        matches = sorted(_cached_glob(os.path.join(parent, wild)))
         if matches:
             _dbg(f"井号展开: {path} → {len(matches)} 文件")
             return matches
@@ -200,7 +228,6 @@ def _try_expand_numeric_sequence(filepath: str) -> List[str]:
     Returns:
         所有帧的路径列表（含自身），若不是序列则返回空列表
     """
-    import glob as _glob
     dirname = os.path.dirname(filepath)
     basename = os.path.basename(filepath)
     
@@ -217,7 +244,7 @@ def _try_expand_numeric_sequence(filepath: str) -> List[str]:
     
     # 扫描同目录下匹配模式的所有文件
     pattern = os.path.join(dirname, f"{prefix}*{ext}")
-    candidates = sorted(_glob.glob(pattern))
+    candidates = sorted(_cached_glob(pattern))
     
     if len(candidates) <= 1:
         # 只有自身一个文件，不是序列

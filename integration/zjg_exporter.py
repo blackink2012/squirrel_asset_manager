@@ -1212,27 +1212,18 @@ def _get_materials_from_selection(selection):
 # ========== 全频雷达版：序列化/反序列化函数 ==========
 
 def _get_processable_attrs(node):
-    """【终极全频段扫描】"""
+    """【终极全频段扫描】——仅一次 listAttr(every=True)"""
     all_attrs = set()
     node_type = cmds.nodeType(node)
 
-    try:
-        all_attrs.update(cmds.listAttr(node) or [])
-    except Exception: pass
-    try:
-        all_attrs.update(cmds.listAttr(node, hidden=True) or [])
-    except Exception: pass
-    try:
-        all_attrs.update(cmds.listAttr(node, writable=True) or [])
-    except Exception: pass
-    try:
-        all_attrs.update(cmds.listAttr(node, userDefined=True) or [])
-    except Exception: pass
+    # every=True 已包含全部属性（标准/隐藏/不可写/动态）
     try:
         all_attrs.update(cmds.listAttr(node, every=True) or [])
-    except Exception: pass
+    except Exception:
+        pass
 
-    pbr_attrs = [
+    # PBR 属性兜底：从 every=True 结果中筛选，无需逐个 objExists
+    pbr_attrs = {
         'baseColor', 'metallic', 'roughness', 'specularIOR', 'specularStrength',
         'emissiveColor', 'opacity', 'normal', 'displacement',
         'baseColorTexture', 'metallicTexture', 'roughnessTexture', 'specularTexture',
@@ -1240,12 +1231,14 @@ def _get_processable_attrs(node):
         'color', 'transparency', 'incandescence', 'ambientColor',
         'diffuse', 'specular', 'specularColor', 'glossiness',
         'reflectivity', 'reflectionColor', 'refraction', 'refractionColor',
-    ]
-
-    for attr in pbr_attrs:
-        full_attr = f"{node}.{attr}"
-        if cmds.objExists(full_attr):
-            all_attrs.add(attr)
+    }
+    # every=True 返回所有子属性名称，复合属性名可能不在列表中
+    # 通过检查子属性来推断父属性存在
+    for pbr_name in pbr_attrs:
+        for suffix in ('R', 'G', 'B', 'A'):
+            if pbr_name + suffix in all_attrs:
+                all_attrs.add(pbr_name)
+                break
 
     filtered = set()
     for attr in all_attrs:
@@ -1254,10 +1247,9 @@ def _get_processable_attrs(node):
         is_child = False
         if len(attr) >= 2 and attr[-1] in COMPOUND_CHILD_ENDS:
             parent = attr[:-1]
-            if cmds.objExists(f"{node}.{parent}"):
+            if parent not in SKIP_ATTRS and not parent.startswith('out') and '.' not in parent:
+                filtered.add(parent)
                 is_child = True
-                if parent not in SKIP_ATTRS and not parent.startswith('out') and '.' not in parent:
-                    filtered.add(parent)
         if not is_child:
             filtered.add(attr)
 
@@ -1313,43 +1305,52 @@ def _serialize_node(node, nodes_dict):
         return
     attrs_data = {}
 
+    # ── 一次性获取所有上游连接（替代逐属性 listConnections）──
+    # listConnections(connections=True, plugs=True) 返回 (src_plug, dst_plug) 对
+    # 一次 API 调用替代 N 次（N = 属性数，通常 30~100）
+    conn_map = {}  # {dest_parent_attr: (source_node, source_attr)}
+    try:
+        all_conns = cmds.listConnections(
+            node, source=True, destination=True,
+            connections=True, plugs=True,
+        ) or []
+        for src_plug, dst_plug in all_conns:
+            try:
+                src_node, src_attr = src_plug.rsplit('.', 1)
+                _, dst_attr = dst_plug.rsplit('.', 1)
+            except Exception:
+                continue
+            # 复合属性子通道（R/G/B/A/X/Y/Z）→ 映射到父属性
+            if len(dst_attr) >= 2 and dst_attr[-1] in COMPOUND_CHILD_ENDS:
+                parent = dst_attr[:-1]
+                if parent not in conn_map:
+                    conn_map[parent] = (src_node, src_attr)
+            else:
+                if dst_attr not in conn_map:
+                    conn_map[dst_attr] = (src_node, src_attr)
+    except Exception:
+        pass
+
+    # ── 遍历属性：连接信息从 conn_map 查找，不需要逐个 listConnections ──
     for attr in _get_processable_attrs(node):
-        full_attr = f"{node}.{attr}"
-        try:
-            incoming = cmds.listConnections(full_attr, source=True, destination=False, plugs=True)
-        except Exception:
-            incoming = None
+        val = None
         try:
             val = _get_attr_value(node, attr)
         except Exception:
-            val = None
+            pass
 
-        if not incoming:
-            # 复合属性的连接可能在子属性上（如 input2X / i2x 等）
-            for suffix in COMPOUND_CHILD_ENDS:
-                child_attr = full_attr + suffix
-                if cmds.objExists(child_attr):
-                    try:
-                        conns = cmds.listConnections(child_attr, source=True, destination=False, plugs=True)
-                    except Exception:
-                        conns = None
-                    if conns:
-                        incoming = conns
-                        break
-
-        if incoming:
-            src_plug = incoming[0]
-            try:
-                src_node, src_attr = src_plug.split('.', 1)
-            except Exception:
-                continue
+        if attr in conn_map:
+            src_node, src_attr = conn_map[attr]
             _serialize_node(src_node, nodes_dict)
-            attrs_data[attr] = {'type': 'connection', 'source_node': src_node, 'source_attr': src_attr}
+            attrs_data[attr] = {
+                'type': 'connection',
+                'source_node': src_node,
+                'source_attr': src_attr,
+            }
             if val is not None:
                 attrs_data[attr]['value'] = val
-        else:
-            if val is not None:
-                attrs_data[attr] = {'type': 'value', 'value': val}
+        elif val is not None:
+            attrs_data[attr] = {'type': 'value', 'value': val}
 
     nodes_dict[node] = {'node_type': node_type, 'attrs': attrs_data}
 
