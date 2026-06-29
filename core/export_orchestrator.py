@@ -294,17 +294,32 @@ class ExportOrchestrator:
         zasset_path = os.path.join(self._base_dir, f"{safe_name}.zasset")
         staging_dir = tempfile.mkdtemp(prefix=f"{safe_name}_")
 
+        # ── 性能计时代码 ──
+        import time as _perf_time
+        _t0 = _perf_time.time()
+        _t_last = _t0
+        def _perf_tick(label: str):
+            nonlocal _t_last
+            import time as _pt
+            now = _pt.time()
+            elapsed = now - _t_last
+            total = now - _t0
+            print(f"[Perf] {label}: {elapsed:.2f}s (累计 {total:.1f}s)")
+            _t_last = now
+
         try:
             # 跟踪实际导出的格式
             exported_formats: List[str] = []
 
             # Stage 1: 元数据 meta.json（始终）→ staging_dir
             meta_path = self._stage_meta(config, staging_dir, safe_name, exported_formats)
+            _perf_tick("Stage 1 (meta.json)")
 
             # Stage 2: 贴图收集（按配置）→ staging_dir/textures/
             tex_path_map = {}
             if config.export_textures:
                 tex_path_map = self._stage_textures(config, staging_dir)
+            _perf_tick("Stage 2 (纹理收集)" if config.export_textures else "Stage 2 (纹理-跳过)")
             # 将 texture_map 写入 meta.json（原始路径→内部路径，用于导入精确匹配）
             if tex_path_map and os.path.isfile(meta_path):
                 import json as _json
@@ -333,6 +348,7 @@ class ExportOrchestrator:
                     mcm_path = self._stage_mcm(config, staging_dir, safe_name)
                     if mcm_path:
                         exported_formats.append("mcm")
+            _perf_tick("Stage 3 (材质预设)")
 
             # 兜底扫描 staging_dir 中遗漏的 .mcm/.zmetal
             for _root, _dirs, _files in os.walk(staging_dir):
@@ -354,11 +370,13 @@ class ExportOrchestrator:
                 for gf in geom_files:
                     if gf.lower().endswith(".ma"):
                         self._sync_ma_texture_paths(gf, tex_path_map)
+            _perf_tick("Stage 4 (几何体)")
 
             # Stage 4c: 收集关联缓存/代理/引用 → staging_dir/associated/
             print(f"[Export] collect_associated={config.collect_associated}, material_only={config.export_material_only}")
             if config.collect_associated and not config.export_material_only:
                 self._stage_collected_files(config, staging_dir)
+            _perf_tick("Stage 4c (关联文件)")
 
             # Stage 5: 缩略图（始终 / 可占位）
             if skip_thumbnail:
@@ -369,6 +387,7 @@ class ExportOrchestrator:
                 exported_formats.append("aicon")
             else:
                 exported_formats.append("sicon")  # 缩略图视为已导出
+            _perf_tick("Stage 5 (缩略图)")
 
             # Stage 6: 代理（按配置，仅非 material_only 模式）
             if not config.export_material_only:
@@ -377,6 +396,7 @@ class ExportOrchestrator:
                 for pf in config.proxy_formats:
                     ext = ProxyFormatRegistry.get(pf)
                     exported_formats.append(ext.extension.lstrip(".") if ext else pf)
+            _perf_tick("Stage 6 (代理)")
 
             # 构建 ani 字段（时间轴/关键帧模式导出的动画格式列表）
             exported_ani = []
@@ -422,12 +442,14 @@ class ExportOrchestrator:
             except ImportError:
                 from core.zasset_builder import ZassetBuilder
             ZassetBuilder.build(zasset_path, files_dict, meta)
+            _perf_tick("ZassetBuilder.build()")
 
             if os.path.isdir(zasset_path):
                 result.success = True
                 result.files = [zasset_path]
                 if thumb_path:
                     result.thumbnail_path = zasset_path  # 缩略图在 .zasset 内部
+            _perf_tick("导出完成")
 
         except Exception as e:
             result.success = False
