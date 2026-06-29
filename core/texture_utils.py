@@ -476,46 +476,22 @@ def collect_all_texture_files(
                             f"{os.path.basename(p)} ← {ntype}({node}) [属性值]"
                         )
 
-        # ── 3. 扫描所有属性连接，递归上行 ──
-        connectable = _get_all_connectable_attrs(node)
-        if _DEBUG and depth == 0:
-            _dbg(f"遍历节点 [{ntype}] {node}: {len(connectable)} 个可连接属性")
-
-        for attr in connectable:
-            full_attr = f"{node}.{attr}"
-            if not cmds.objExists(full_attr):
-                continue
-
-            # 先检查父属性连接
-            found_connection = False
-            try:
-                conns = cmds.listConnections(
-                    full_attr, source=True, destination=False
-                )
-                if conns:
-                    for src in conns:
+        # ── 3. 一次性获取所有上游连接，递归上行 ──
+        # 原来对每个属性逐个调用 listConnections（每个节点 100~400 次 Maya API 调用）
+        # 现在仅 1 次 listConnections(node, source=True) 获取全部上游源节点
+        try:
+            all_sources = cmds.listConnections(
+                node, source=True, destination=False
+            )
+            if all_sources:
+                # 去重：同一个源节点可能连到多个属性
+                seen_sources: Set[str] = set()
+                for src in all_sources:
+                    if src not in seen_sources:
+                        seen_sources.add(src)
                         _traverse(src, depth + 1)
-                    found_connection = True
-            except Exception:
-                pass
-
-            # 如果没有在父属性上找到连接，尝试子属性（复合属性的 R/G/B/A/X/Y/Z 通道）
-            # 这是关键：Maya 中 texture → material.baseColor 的连接实际是
-            # 连接在 material.baseColorR / G / B 子属性上，
-            # 而 listConnections 在父属性上可能返回 None
-            if not found_connection:
-                for suffix in COMPOUND_CHILD_ENDS:
-                    child_attr = f"{full_attr}{suffix}"
-                    if cmds.objExists(child_attr):
-                        try:
-                            conns = cmds.listConnections(
-                                child_attr, source=True, destination=False
-                            )
-                            if conns:
-                                for src in conns:
-                                    _traverse(src, depth + 1)
-                        except Exception:
-                            pass
+        except Exception:
+            pass
 
         # ── 4. 特殊：shadingEngine → displacementShader ──
         if ntype == 'shadingEngine':
