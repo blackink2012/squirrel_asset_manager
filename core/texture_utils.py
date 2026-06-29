@@ -269,21 +269,49 @@ def _scan_light_shape_file_attrs(shape_node: str) -> List[str]:
 _MAX_RECURSE_DEPTH = 200
 
 
+def _summarize_visited_types(visited: Set[str]) -> str:
+    """汇总已遍历节点的类型分布（调试用）。"""
+    from collections import Counter
+    type_counts = Counter()
+    for node in visited:
+        try:
+            if cmds.objExists(node):
+                type_counts[cmds.nodeType(node)] += 1
+        except Exception:
+            pass
+    items = [f"{t}x{c}" for t, c in type_counts.most_common(8)]
+    return ", ".join(items) if items else "(empty)"
+
+
 def _get_all_connectable_attrs(node: str) -> List[str]:
-    """获取节点上所有可能有连接的属性列表（去重复合子属性）。"""
+    """获取节点上所有可能有连接的属性列表（去重复合子属性）。
+
+    注意：不使用 writable=True，因为已连接的属性在 Maya 中
+    被视为不可写入，会被 writable 过滤器排除。
+    改用 scalar=True 获取所有标量属性，确保不漏掉任何连接。
+    """
     all_attrs: List[str] = []
+    # 标准属性（非隐藏、非 UDA 的标量属性）
     try:
-        all_attrs.extend(cmds.listAttr(node, writable=True) or [])
+        all_attrs.extend(cmds.listAttr(node, scalar=True) or [])
     except Exception:
         pass
+    # 隐藏属性
     try:
-        all_attrs.extend(cmds.listAttr(node, hidden=True) or [])
+        all_attrs.extend(cmds.listAttr(node, scalar=True, hidden=True) or [])
     except Exception:
         pass
+    # 用户自定义属性
     try:
         all_attrs.extend(cmds.listAttr(node, userDefined=True) or [])
     except Exception:
         pass
+    # 兜底：如果以上都为空，尝试不带任何 flag 获取
+    if not all_attrs:
+        try:
+            all_attrs.extend(cmds.listAttr(node) or [])
+        except Exception:
+            pass
 
     # 去重并过滤
     seen: Set[str] = set()
@@ -292,6 +320,10 @@ def _get_all_connectable_attrs(node: str) -> List[str]:
         # 跳过系统属性
         if attr in SKIP_ATTRS:
             continue
+        # 跳过已知的内部属性
+        if attr.startswith('__') or attr.startswith('_'):
+            if attr not in ('_nodeState',):
+                continue
         # 跳过输出属性
         if attr.startswith('out') or attr.startswith('output'):
             continue
@@ -300,6 +332,12 @@ def _get_all_connectable_attrs(node: str) -> List[str]:
             continue
         # 跳过复合属性的子属性（R/G/B/X/Y/Z 结尾）
         if len(attr) >= 2 and attr[-1] in COMPOUND_CHILD_ENDS:
+            parent_attr = attr[:-1]
+            if parent_attr not in SKIP_ATTRS:
+                seen.add(parent_attr)
+            continue
+        # 跳过子属性 A(Alpha) — 如果是单独的 Alpha 通道子属性
+        if len(attr) >= 2 and attr[-1] == 'A':
             parent_attr = attr[:-1]
             if parent_attr not in SKIP_ATTRS:
                 seen.add(parent_attr)
@@ -338,11 +376,16 @@ def collect_all_texture_files(
     visited: Set[str] = set()
     texture_paths: Set[str] = set()
     _collected_from: List[str] = []  # 调试用
+    _failed_checks: List[str] = []   # 调试用：检查过但无连接的属性
 
     def _traverse(node: str, depth: int = 0):
         if depth > _MAX_RECURSE_DEPTH:
+            _dbg(f"  达到最大递归深度 {_MAX_RECURSE_DEPTH}，停止")
             return
-        if node in visited or not cmds.objExists(node):
+        if node in visited:
+            return
+        if not cmds.objExists(node):
+            _dbg(f"  节点不存在: {node}")
             return
         visited.add(node)
 
@@ -350,6 +393,10 @@ def collect_all_texture_files(
             ntype = cmds.nodeType(node)
         except Exception:
             return
+
+        if _DEBUG:
+            indent = "  " * min(depth, 6)
+            _dbg(f"{indent}[depth={depth}] 进入: {ntype}({node})")
 
         # ── 1. 提取当前节点的文件路径 ──
         path = _extract_file_path(node, ntype)
@@ -377,10 +424,16 @@ def collect_all_texture_files(
 
         # ── 3. 扫描所有属性连接，递归上行 ──
         connectable = _get_all_connectable_attrs(node)
+        if _DEBUG and depth == 0:
+            _dbg(f"遍历节点 [{ntype}] {node}: {len(connectable)} 个可连接属性")
+
         for attr in connectable:
             full_attr = f"{node}.{attr}"
             if not cmds.objExists(full_attr):
                 continue
+
+            # 先检查父属性连接
+            found_connection = False
             try:
                 conns = cmds.listConnections(
                     full_attr, source=True, destination=False
@@ -388,8 +441,15 @@ def collect_all_texture_files(
                 if conns:
                     for src in conns:
                         _traverse(src, depth + 1)
+                    found_connection = True
             except Exception:
-                # 复合属性：尝试子属性连接
+                pass
+
+            # 如果没有在父属性上找到连接，尝试子属性（复合属性的 R/G/B/A/X/Y/Z 通道）
+            # 这是关键：Maya 中 texture → material.baseColor 的连接实际是
+            # 连接在 material.baseColorR / G / B 子属性上，
+            # 而 listConnections 在父属性上可能返回 None
+            if not found_connection:
                 for suffix in COMPOUND_CHILD_ENDS:
                     child_attr = f"{full_attr}{suffix}"
                     if cmds.objExists(child_attr):
@@ -418,12 +478,17 @@ def collect_all_texture_files(
 
     # ── 遍历所有根节点 ──
     for root in root_nodes:
+        if _DEBUG:
+            _dbg(f"--- 从根节点开始扫描: {root} ---")
         _traverse(root)
 
-    if _DEBUG and texture_paths:
-        _dbg(f"收集到 {len(texture_paths)} 个贴图文件:")
+    if _DEBUG:
+        _dbg(f"扫描完成: 遍历了 {len(visited)} 个节点，收集到 {len(texture_paths)} 个贴图文件")
+        if not texture_paths and visited:
+            _dbg(f"警告: 遍历了 {len(visited)} 个节点但未找到贴图！")
+            _dbg(f"  已遍历的节点类型: {_summarize_visited_types(visited)}")
         for entry in _collected_from:
-            _dbg(f"  {entry}")
+            _dbg(f"  ✓ {entry}")
 
     return texture_paths
 
@@ -542,6 +607,16 @@ def collect_textures_from_objects(
                 all_materials.add(m)
 
     # 扫描所有材质
+    if _DEBUG:
+        _dbg(
+            f"从 {len(objects)} 个物体发现: "
+            f"{len(all_materials)} 个材质, {len(all_lights)} 个灯光"
+        )
+        if all_materials:
+            _dbg(f"  材质: {sorted(all_materials)[:20]}")
+        if all_lights:
+            _dbg(f"  灯光: {sorted(all_lights)[:20]}")
+
     for mat in sorted(all_materials):
         if not cmds.objExists(mat):
             continue
