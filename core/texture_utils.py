@@ -607,16 +607,16 @@ def collect_textures_from_objects(
         if not cmds.objExists(obj):
             continue
 
-        # 收集所有 shape 节点
-        shapes: List[str] = []
+        # 收集所有 shape 节点（batch：一次 cmds.ls 替代逐后代 listRelatives(shapes)）
         descendants = cmds.listRelatives(
             obj, allDescendents=True, fullPath=True
         ) or []
-        for d in descendants:
-            s = cmds.listRelatives(d, shapes=True, fullPath=True) or []
-            shapes.extend(s)
+        # batch filter: cmds.ls 可以一次调用来过滤 shape 节点
+        shapes = cmds.ls(descendants, shapes=True, long=True) or []
         obj_shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
-        shapes.extend(obj_shapes)
+        for s in obj_shapes:
+            if s not in shapes:
+                shapes.append(s)
 
         for shape in shapes:
             if not cmds.objExists(shape):
