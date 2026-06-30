@@ -361,17 +361,29 @@ class ExportOrchestrator:
             # Stage 4: 几何体（按配置）
             # material_only 模式下 ma/mb（Maya 原生格式）仍可导出材质节点；
             # fbx/obj/usd/glb 由 _stage_geometry 内部过滤跳过
+
+            # ── 4a: 临时改写场景中的贴图路径为相对路径 ──
+            # 导出 .ma 后从文件恢复，避免对 1.77GB 文件做逐行 regex
+            restore_list = []
+            if tex_path_map:
+                restore_list = self._patch_scene_texture_paths(tex_path_map)
+
             geom_files = self._stage_geometry(config, staging_dir, safe_name)
             for gf in geom_files:
                 ext = os.path.splitext(gf)[1].lstrip(".")
                 if ext not in exported_formats:
                     exported_formats.append(ext)
             _perf_tick("Stage 4a (cmds.file导出)")
-            # Stage 4b: 同步 .ma 文件内的贴图路径 → textures/{材质名}/{文件名}
+
+            # ── 4b: 恢复场景中的贴图路径 ──
+            if restore_list:
+                self._restore_scene_texture_paths(restore_list)
+
+            # .zmetal 同步仍需要（小文件，快速）
             if tex_path_map:
                 for gf in geom_files:
-                    if gf.lower().endswith(".ma"):
-                        self._sync_ma_texture_paths(gf, tex_path_map)
+                    if gf.lower().endswith(".zmetal"):
+                        self._sync_zmetal_texture_paths(gf, tex_path_map)
             _perf_tick("Stage 4b (sync贴图路径)")
 
             # Stage 4c: 收集关联缓存/代理/引用 → staging_dir/associated/
@@ -2491,6 +2503,111 @@ class ExportOrchestrator:
             print(f"[MaSync] 更新失败 {ma_path}: {e}")
             import traceback
             traceback.print_exc()
+
+    @staticmethod
+    def _patch_scene_texture_paths(path_map: dict) -> list:
+        """临时将 Maya 场景中的贴图路径改写为相对路径。
+
+        导出 .ma 时 Maya 会直接写入相对路径，导出后用 _restore 恢复原始值。
+        避免对 1.77GB .ma 文件做逐行 regex。
+
+        Returns:
+            [(node, attr_name, original_value), ...] 恢复列表
+        """
+        restore_list: list = []
+        if not _IN_MAYA or not path_map:
+            return restore_list
+
+        _t = time.time()
+
+        # 构建 O(1) 查找表: {normalized_lower_original: relative_path}
+        lookup = {}
+        for orig, rel in path_map.items():
+            key = orig.replace("\\", "/").lower()
+            lookup[key] = rel.replace("\\", "/")
+
+        # ── 扫描所有 file 节点 ──
+        try:
+            for fn in cmds.ls(type="file") or []:
+                try:
+                    ftn = cmds.getAttr(fn + ".fileTextureName") or ""
+                    if not ftn:
+                        continue
+                    key = ftn.replace("\\", "/").lower()
+                    if key in lookup:
+                        restore_list.append((fn, "fileTextureName", ftn))
+                        cmds.setAttr(fn + ".fileTextureName", lookup[key], type="string")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # ── 扫描 Redshift 灯光 / 贴图节点 ──
+        _redshift_attrs = {
+            "RedshiftDomeLight": ["tex0"],
+            "RedshiftNormalMap": ["tex0", "tex1"],
+            "RedshiftBumpMap": ["tex0", "tex1", "tex2"],
+            "RedshiftSprite": ["tex0"],
+            "RedshiftEnvironment": ["tex0"],
+            "RedshiftVolumeShape": ["fn"],
+        }
+        for node_type, attrs in _redshift_attrs.items():
+            try:
+                for node in cmds.ls(type=node_type) or []:
+                    for attr in attrs:
+                        try:
+                            val = cmds.getAttr(f"{node}.{attr}") or ""
+                            if not val:
+                                continue
+                            key = val.replace("\\", "/").lower()
+                            if key in lookup:
+                                restore_list.append((node, attr, val))
+                                cmds.setAttr(f"{node}.{attr}", lookup[key], type="string")
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        # ── 扫描 Arnold 节点 ──
+        _arnold_attrs = {
+            "aiSkyDomeLight": ["ai_filename", "aiFilename"],
+            "aiImage": ["filename"],
+            "aiVolume": ["filename"],
+            "aiStandIn": ["dso"],
+        }
+        for node_type, attrs in _arnold_attrs.items():
+            try:
+                for node in cmds.ls(type=node_type) or []:
+                    for attr in attrs:
+                        try:
+                            val = cmds.getAttr(f"{node}.{attr}") or ""
+                            if not val:
+                                continue
+                            key = val.replace("\\", "/").lower()
+                            if key in lookup:
+                                restore_list.append((node, attr, val))
+                                cmds.setAttr(f"{node}.{attr}", lookup[key], type="string")
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        if restore_list:
+            print(f"[ScenePatch] 已改写 {len(restore_list)} 个场景贴图路径 (耗时 {time.time() - _t:.2f}s)")
+        return restore_list
+
+    @staticmethod
+    def _restore_scene_texture_paths(restore_list: list) -> None:
+        """恢复 _patch_scene_texture_paths 临时改写的贴图路径。"""
+        if not _IN_MAYA or not restore_list:
+            return
+        _t = time.time()
+        for node, attr, original_val in restore_list:
+            try:
+                cmds.setAttr(f"{node}.{attr}", original_val, type="string")
+            except Exception:
+                pass
+        print(f"[ScenePatch] 已恢复 {len(restore_list)} 个场景贴图路径 (耗时 {time.time() - _t:.2f}s)")
 
     @staticmethod
     def _sync_zmetal_texture_paths(zmetal_path: str, path_map: dict) -> None:
