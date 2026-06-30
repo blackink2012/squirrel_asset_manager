@@ -201,22 +201,27 @@ def add_reference(zasset_path: str, format_name: str) -> bool:
             ns = f"{asset_name}_{counter}"
             counter += 1
 
-        # 提取到项目持久目录（Maya Reference 需要持久文件路径）
+        # 提取到持久路径（根据依赖导入策略）
+        # asset_directory / source_directory → .zasset 目录直指
+        # copy_to_project → 工程 references/ 目录
+        dep_policy = _get_dependency_import_policy()
         if format_name in ("ma", "mb"):
-            ref_dir = _get_dependency_references_target_dir(asset_name, asset_id)
-            os.makedirs(ref_dir, exist_ok=True)
-            ref_file_path = os.path.join(ref_dir, f"{asset_name}.{format_name}")
-            internal_file = internal_matches[0]
-            file_data = ZassetIO.read_file(zasset_path, internal_file)
-            with open(ref_file_path, 'wb') as f:
-                f.write(file_data)
-            _own_file = True
+            if dep_policy in ("asset_directory", "source_directory"):
+                # 直接指向 .zasset 内的文件（不复制）
+                ref_file_path = os.path.join(zasset_path, internal_matches[0]).replace("\\", "/")
+            else:
+                ref_dir = _get_dependency_references_target_dir(asset_name, asset_id)
+                os.makedirs(ref_dir, exist_ok=True)
+                ref_file_path = os.path.join(ref_dir, f"{asset_name}.{format_name}")
+                internal_file = internal_matches[0]
+                file_data = ZassetIO.read_file(zasset_path, internal_file)
+                with open(ref_file_path, 'wb') as f:
+                    f.write(file_data)
         else:
             from .import_extractor import ImportExtractor
             ext = ImportExtractor(zasset_path, format_name)
             ext.__enter__()
             ref_file_path = ext.extracted_path
-            _own_file = False
             if not ref_file_path or not os.path.isfile(ref_file_path):
                 print(f"[Reference] 提取失败: {format_name} @ {zasset_path}")
                 ext.__exit__(None, None, None)
