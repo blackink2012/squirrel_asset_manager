@@ -54,8 +54,65 @@ def _get_file_path(attr_value) -> Optional[str]:
 
 class AssetCollector:
 
-    @staticmethod
-    def collect_all(associated_objects: List[str]) -> Dict[str, Dict[str, str]]:
+    # DAG 扫描缓存：避免每种代理类型各扫描一次
+    _dag_cache: Dict[str, Dict] = {}
+
+    @classmethod
+    def _get_scene_cache(cls, obj: str) -> dict:
+        """获取对象的场景缓存（descendants / shapes / related_nodes）。
+
+        一次 listRelatives(allDescendents=True) 的结果缓存复用，
+        避免 Alembic/GPU/VDB/aiStandIn/VRayProxy 等各扫一次。
+        """
+        key = obj
+        cached = cls._dag_cache.get(key)
+        if cached:
+            _dbg(f"  [缓存命中] {obj}")
+            return cached
+
+        _dbg(f"  [缓存构建] {obj}")
+        descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
+        all_shapes = []
+        all_shapes_set = set()
+        for d in descendants:
+            sub = cmds.listRelatives(d, shapes=True, fullPath=True) or []
+            for s in sub:
+                if s not in all_shapes_set:
+                    all_shapes_set.add(s)
+                    all_shapes.append(s)
+        obj_shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
+        for s in obj_shapes:
+            if s not in all_shapes_set:
+                all_shapes_set.add(s)
+                all_shapes.append(s)
+
+        # 构建关联节点集
+        related = set()
+        related.add(obj)
+        related.add(obj.split('|')[-1])
+        for s in all_shapes:
+            related.add(s)
+            related.add(s.split('|')[-1])
+        for d in descendants:
+            related.add(d)
+            related.add(d.split('|')[-1])
+
+        cache = {
+            'descendants': descendants,
+            'all_shapes': all_shapes,
+            'all_shapes_set': all_shapes_set,
+            'related_nodes': related,
+        }
+        cls._dag_cache[key] = cache
+        return cache
+
+    @classmethod
+    def _clear_dag_cache(cls):
+        """清除 DAG 缓存（导出完成后调用）。"""
+        cls._dag_cache.clear()
+
+    @classmethod
+    def collect_all(cls, associated_objects: List[str]) -> Dict[str, Dict[str, str]]:
         result = {
             "caches": {},
             "proxies": {},
@@ -66,14 +123,15 @@ class AssetCollector:
             return result
 
         _dbg(f"开始收集，关联对象 {len(associated_objects)} 个: {associated_objects}")
-        result["caches"] = AssetCollector.collect_cache_files(associated_objects)
-        result["proxies"] = AssetCollector.collect_proxy_files(associated_objects)
-        result["references"] = AssetCollector.collect_reference_files(associated_objects)
+        result["caches"] = cls.collect_cache_files(associated_objects)
+        result["proxies"] = cls.collect_proxy_files(associated_objects)
+        result["references"] = cls.collect_reference_files(associated_objects)
         _dbg(f"收集完成: 缓存={len(result['caches'])}, 代理={len(result['proxies'])}, 引用={len(result['references'])}")
+        cls._clear_dag_cache()
         return result
 
-    @staticmethod
-    def collect_cache_files(associated_objects: List[str]) -> Dict[str, str]:
+    @classmethod
+    def collect_cache_files(cls, associated_objects: List[str]) -> Dict[str, str]:
         node_to_path: Dict[str, str] = {}
         if not _IN_MAYA:
             return node_to_path
@@ -83,39 +141,38 @@ class AssetCollector:
                 _dbg(f"跳过不存在的对象: {obj}")
                 continue
             _dbg(f"--- 检查对象: {obj} ---")
-            AssetCollector._collect_alembic(obj, node_to_path)
-            AssetCollector._collect_gpu_cache(obj, node_to_path)
-            AssetCollector._collect_ncache(obj, node_to_path)
-            AssetCollector._collect_vdb_volume(obj, node_to_path)
+            cls._collect_alembic(obj, node_to_path)
+            cls._collect_gpu_cache(obj, node_to_path)
+            cls._collect_ncache(obj, node_to_path)
+            cls._collect_vdb_volume(obj, node_to_path)
 
         return node_to_path
 
-    @staticmethod
-    def _collect_vdb_volume(obj: str, result: Dict[str, str]):
-        AssetCollector._collect_or_scene_scan(obj, 'VRayVolumeGrid',
+    @classmethod
+    def _collect_vdb_volume(cls, obj: str, result: Dict[str, str]):
+        cls._collect_or_scene_scan(obj, 'VRayVolumeGrid',
             ('ipth', 'ipthr', 'f', 'fn', 'filename', 'fileName', 'filePath'), result)
-        AssetCollector._collect_or_scene_scan(obj, 'aiVolume',
+        cls._collect_or_scene_scan(obj, 'aiVolume',
             ('filename', 'fileName', 'f', 'fn', 'filePath'), result)
-        AssetCollector._collect_or_scene_scan(obj, 'RedshiftVolumeShape',
+        cls._collect_or_scene_scan(obj, 'RedshiftVolumeShape',
             ('fn', 'filename', 'fileName', 'f', 'filePath'), result)
 
-    @staticmethod
-    def _get_all_shapes(obj: str) -> List[str]:
-        shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
-        descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
-        for d in descendants:
-            sub_shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
-            for s in sub_shapes:
-                if s not in shapes:
-                    shapes.append(s)
-        return shapes
+    @classmethod
+    def _get_all_shapes(cls, obj: str) -> List[str]:
+        """获取对象下所有 shape 节点（使用缓存）。"""
+        return cls._get_scene_cache(obj)['all_shapes']
 
-    @staticmethod
-    def _collect_alembic(obj: str, result: Dict[str, str]):
+    @classmethod
+    def _get_all_related_nodes(cls, obj: str) -> set:
+        """获取对象的所有关联节点（使用缓存）。"""
+        return cls._get_scene_cache(obj)['related_nodes']
+
+    @classmethod
+    def _collect_alembic(cls, obj: str, result: Dict[str, str]):
         try:
-            descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
-            descendants.append(obj)
-            _dbg(f"  Alembic: DAG 扫描 {len(descendants)} 个节点 (含自身)")
+            cache = cls._get_scene_cache(obj)
+            descendants = list(cache['descendants']) + [obj]
+            _dbg(f"  Alembic: DAG 扫描 {len(descendants)} 个节点 (缓存)")
 
             seen = set()
             found_shapes = []
@@ -186,11 +243,11 @@ class AssetCollector:
             import traceback
             traceback.print_exc()
 
-    @staticmethod
-    def _collect_gpu_cache(obj: str, result: Dict[str, str]):
+    @classmethod
+    def _collect_gpu_cache(cls, obj: str, result: Dict[str, str]):
         try:
-            descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
-            descendants.append(obj)
+            cache = cls._get_scene_cache(obj)
+            descendants = list(cache['descendants']) + [obj]
             seen = set()
             for d in descendants:
                 shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
@@ -233,8 +290,8 @@ class AssetCollector:
         except Exception as e:
             _dbg(f"  nCache 收集异常 ({obj}): {e}")
 
-    @staticmethod
-    def collect_proxy_files(associated_objects: List[str]) -> Dict[str, str]:
+    @classmethod
+    def collect_proxy_files(cls, associated_objects: List[str]) -> Dict[str, str]:
         node_to_path: Dict[str, str] = {}
         if not _IN_MAYA:
             return node_to_path
@@ -243,35 +300,35 @@ class AssetCollector:
             if not cmds.objExists(obj):
                 continue
             _dbg(f"  代理收集: 检查 {obj}")
-            AssetCollector._collect_arnold_standin(obj, node_to_path)
-            AssetCollector._collect_vray_proxy(obj, node_to_path)
-            AssetCollector._collect_redshift_proxy(obj, node_to_path)
-            AssetCollector._collect_usd_proxy(obj, node_to_path)
+            cls._collect_arnold_standin(obj, node_to_path)
+            cls._collect_vray_proxy(obj, node_to_path)
+            cls._collect_redshift_proxy(obj, node_to_path)
+            cls._collect_usd_proxy(obj, node_to_path)
 
         return node_to_path
 
-    @staticmethod
-    def _collect_usd_proxy(obj: str, result: Dict[str, str]):
-        AssetCollector._collect_or_scene_scan(obj, 'mayaUsdProxyShape',
+    @classmethod
+    def _collect_usd_proxy(cls, obj: str, result: Dict[str, str]):
+        cls._collect_or_scene_scan(obj, 'mayaUsdProxyShape',
             ('fp', 'f', 'filePath', 'fileName', 'filename'), result)
 
-    @staticmethod
-    def _collect_arnold_standin(obj: str, result: Dict[str, str]):
-        AssetCollector._collect_or_scene_scan(obj, 'aiStandIn',
+    @classmethod
+    def _collect_arnold_standin(cls, obj: str, result: Dict[str, str]):
+        cls._collect_or_scene_scan(obj, 'aiStandIn',
             ('dso', 'filename', 'fileName', 'cacheFileName'), result)
 
-    @staticmethod
-    def _collect_vray_proxy(obj: str, result: Dict[str, str]):
-        AssetCollector._collect_or_scene_scan(obj, 'VRayProxy',
+    @classmethod
+    def _collect_vray_proxy(cls, obj: str, result: Dict[str, str]):
+        cls._collect_or_scene_scan(obj, 'VRayProxy',
             ('fileName', 'filename', 'dso', 'cacheFileName'), result)
-        AssetCollector._collect_or_scene_scan(obj, 'VRayMesh',
+        cls._collect_or_scene_scan(obj, 'VRayMesh',
             ('fn', 'fn2', 'f', 'fileName', 'filename', 'cacheFileName'), result)
-        AssetCollector._collect_or_scene_scan(obj, 'VRayScene',
+        cls._collect_or_scene_scan(obj, 'VRayScene',
             ('fPath', 'fpath', 'f', 'fn', 'fileName', 'filename'), result)
 
-    @staticmethod
-    def _collect_redshift_proxy(obj: str, result: Dict[str, str]):
-        AssetCollector._collect_or_scene_scan(obj, 'RedshiftProxyMesh',
+    @classmethod
+    def _collect_redshift_proxy(cls, obj: str, result: Dict[str, str]):
+        cls._collect_or_scene_scan(obj, 'RedshiftProxyMesh',
             ('fn', 'f', 'fileName', 'filename', 'cacheFileName', 'cacheName',
              'exoFile', 'rsProxyFile', 'proxyFile'), result)
         for p_node in list(result.keys()):
@@ -313,10 +370,10 @@ class AssetCollector:
             return path
         return os.path.join(d, f"{prefix}{'#' * padding}.{ext}").replace('\\', '/')
 
-    @staticmethod
-    def _collect_or_scene_scan(obj: str, node_type: str, attrs: tuple, result: Dict[str, str]):
+    @classmethod
+    def _collect_or_scene_scan(cls, obj: str, node_type: str, attrs: tuple, result: Dict[str, str]):
         old_len = len(result)
-        AssetCollector._collect_by_shape_type(obj, node_type, attrs, result)
+        cls._collect_by_shape_type(obj, node_type, attrs, result)
         found = len(result) - old_len
         _dbg(f"    [{node_type}] DAG 扫描找到 {found} 个")
         if found > 0:
@@ -326,7 +383,7 @@ class AssetCollector:
         all_nodes = cmds.ls(type=node_type)
         _dbg(f"      场景共 {len(all_nodes)} 个 {node_type}")
 
-        related = AssetCollector._get_all_related_nodes(obj)
+        related = cls._get_all_related_nodes(obj)
         _dbg(f"      关联节点集 ({len(related)} 个): {sorted(related)[:10]}{'...' if len(related)>10 else ''}")
 
         for p_node in all_nodes:
@@ -353,39 +410,19 @@ class AssetCollector:
                         result[p_node] = path
                         break
 
-    @staticmethod
-    def _get_all_related_nodes(obj: str) -> set:
-        related = set()
-        if not cmds.objExists(obj):
-            return related
-        related.add(obj)
-        related.add(obj.split('|')[-1])
-        shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
-        for s in shapes:
-            related.add(s)
-            related.add(s.split('|')[-1])
-        descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
-        for d in descendants:
-            related.add(d)
-            related.add(d.split('|')[-1])
-            d_shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
-            for s in d_shapes:
-                related.add(s)
-                related.add(s.split('|')[-1])
-        return related
-
-    @staticmethod
-    def _collect_by_shape_type(obj: str, node_type: str, attrs: tuple, result: Dict[str, str]):
+    @classmethod
+    def _collect_by_shape_type(cls, obj: str, node_type: str, attrs: tuple, result: Dict[str, str]):
         try:
-            descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
-            descendants.append(obj)
-            _dbg(f"    [{node_type}] DAG 扫描 {len(descendants)} 个节点")
+            cache = cls._get_scene_cache(obj)
+            descendants = list(cache['descendants']) + [obj]
+            _dbg(f"    [{node_type}] DAG 扫描 {len(descendants)} 个节点 (缓存)")
 
             seen = set()
-            all_shapes = AssetCollector._get_all_shapes(obj)
-            _dbg(f"    [{node_type}] 对象下共 {len(all_shapes)} 个 shape")
-            shape_types = sorted(set(cmds.nodeType(s) for s in all_shapes))
-            _dbg(f"    [{node_type}] shape 类型: {shape_types}")
+            all_shapes = cache['all_shapes']
+            if DEBUG:
+                shape_types = sorted(set(cmds.nodeType(s) for s in all_shapes if cmds.objExists(s)))
+                _dbg(f"    [{node_type}] 对象下共 {len(all_shapes)} 个 shape")
+                _dbg(f"    [{node_type}] shape 类型: {shape_types}")
 
             for d in descendants:
                 shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
