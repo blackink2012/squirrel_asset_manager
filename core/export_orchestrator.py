@@ -1071,11 +1071,8 @@ class ExportOrchestrator:
     def _stage_textures(self, config: ExportConfig, asset_dir: str) -> dict:
         """收集并复制材质/灯光关联贴图到 textures/{材质名}/{文件名}。
 
-        使用全属性递归扫描，支持:
-        - 所有渲染器贴图节点（file / aiImage / RedshiftNormalMap / ...）
-        - 灯光贴图（Dome Light HDR / IES）
-        - 帧序列 / UDIM 贴图模式
-        - displacement / bump 多路径收集
+        材质贴图使用 listHistory（快速），灯光贴图使用全属性递归扫描。
+        支持 Dome Light HDR / IES / 帧序列 / UDIM。
 
         Returns:
             {原始绝对路径: textures/{材质名}/{文件名}} 路径映射，用于后续 sync
@@ -1087,28 +1084,45 @@ class ExportOrchestrator:
             return path_map
 
         try:
+            from squirrel_asset_manager.integration.zjg_exporter import (
+                _collect_texture_paths_from_materials,
+            )
             from squirrel_asset_manager.core.texture_utils import (
-                collect_textures_from_objects,
-                collect_textures_from_materials,
+                collect_all_texture_files,
                 copy_textures_to_dir,
             )
 
-            # ── 1. 从关联物体收集所有贴图（材质 + 灯光） ──
-            extra_mats = []
-            if config.material_node and cmds.objExists(config.material_node):
-                extra_mats.append(config.material_node)
+            # ── 1. 材质贴图（listHistory，快速）───
+            if config.associated_objects:
+                mats = self._get_materials_from_objects(config.associated_objects)
+                if config.material_node and cmds.objExists(config.material_node) \
+                        and config.material_node not in mats:
+                    mats.append(config.material_node)
+            elif config.material_node and cmds.objExists(config.material_node):
+                mats = [config.material_node]
+            else:
+                mats = []
 
             all_tex_paths: set = set()
+            for mat in mats:
+                tex_paths = _collect_texture_paths_from_materials([mat])
+                all_tex_paths.update(tex_paths)
 
+            # ── 2. 灯光贴图（递归扫描，处理 DomeLight.tex0 等）───
             if config.associated_objects:
-                # 场景级收集：自动识别材质和灯光
-                all_tex_paths = collect_textures_from_objects(
-                    config.associated_objects,
-                    extra_materials=extra_mats,
-                )
-            elif extra_mats:
-                # 仅材质，无关联物体
-                all_tex_paths = collect_textures_from_materials(extra_mats)
+                for obj in config.associated_objects:
+                    if not cmds.objExists(obj):
+                        continue
+                    descendants = cmds.listRelatives(obj, allDescendents=True, fullPath=True) or []
+                    for d in descendants:
+                        shapes = cmds.listRelatives(d, shapes=True, fullPath=True) or []
+                        for shp in shapes:
+                            try:
+                                if cmds.getClassification(cmds.nodeType(shp), satisfies="light"):
+                                    light_tex = collect_all_texture_files(shp, collect_lights=True)
+                                    all_tex_paths.update(light_tex)
+                            except Exception:
+                                pass
 
             if not all_tex_paths:
                 print("[StageTextures] 未发现任何贴图文件")
@@ -1116,39 +1130,19 @@ class ExportOrchestrator:
 
             print(f"[StageTextures] 收集到 {len(all_tex_paths)} 个贴图文件")
 
-            # ── 2. 确定材质列表用于子文件夹命名 ──
-            if config.associated_objects:
-                mats = self._get_materials_from_objects(config.associated_objects)
-                if extra_mats:
-                    for m in extra_mats:
-                        if m not in mats:
-                            mats.append(m)
-            else:
-                mats = extra_mats
-
-            # ── 3. 按材质分组复制贴图 ──
+            # ── 3. 复制贴图 ──
             if mats:
-                # 有所属材质：按材质子目录复制
-                # 使用最后一个材质名（主材质）作为子目录
                 mat_dir = os.path.join(textures_dir, mats[-1])
                 os.makedirs(mat_dir, exist_ok=True)
                 path_map = copy_textures_to_dir(all_tex_paths, asset_dir, mats[-1])
-                # 确保路径格式正确
-                for src_path, rel_path in list(path_map.items()):
-                    if not rel_path.startswith("textures/"):
-                        path_map[src_path] = rel_path
             else:
-                # 仅灯光（无材质）：贴图放到 textures/ 根目录
                 path_map = copy_textures_to_dir(all_tex_paths, asset_dir)
 
-            # ── 4. 输出收集统计 ──
             skipped = [p for p in all_tex_paths if p.replace("\\", "/") not in path_map]
             print(
                 f"[StageTextures] 结果: 复制 {len(path_map)} / 跳过 {len(skipped)} "
                 f"/ 总计 {len(all_tex_paths)} 个贴图"
             )
-            if skipped:
-                print(f"[StageTextures] 跳过的贴图: {skipped}")
 
         except Exception as e:
             print(f"[StageTextures] 异常: {e}")
