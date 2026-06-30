@@ -201,21 +201,23 @@ def add_reference(zasset_path: str, format_name: str) -> bool:
             ns = f"{asset_name}_{counter}"
             counter += 1
 
-        # 提取或写入临时文件
+        # 提取到项目持久目录（Maya Reference 需要持久文件路径）
         if format_name in ("ma", "mb"):
+            ref_dir = _get_dependency_references_target_dir(asset_name, asset_id)
+            os.makedirs(ref_dir, exist_ok=True)
+            ref_file_path = os.path.join(ref_dir, f"{asset_name}.{format_name}")
             internal_file = internal_matches[0]
             file_data = ZassetIO.read_file(zasset_path, internal_file)
-            fd, tmp_path = tempfile.mkstemp(suffix=dot_ext)
-            with os.fdopen(fd, 'wb') as f:
+            with open(ref_file_path, 'wb') as f:
                 f.write(file_data)
-            _own_tmp = True
+            _own_file = True
         else:
             from .import_extractor import ImportExtractor
             ext = ImportExtractor(zasset_path, format_name)
             ext.__enter__()
-            tmp_path = ext.extracted_path
-            _own_tmp = False
-            if not tmp_path or not os.path.isfile(tmp_path):
+            ref_file_path = ext.extracted_path
+            _own_file = False
+            if not ref_file_path or not os.path.isfile(ref_file_path):
                 print(f"[Reference] 提取失败: {format_name} @ {zasset_path}")
                 ext.__exit__(None, None, None)
                 return False
@@ -227,14 +229,14 @@ def add_reference(zasset_path: str, format_name: str) -> bool:
 
             # 创建引用
             created_refs = cmds.file(
-                tmp_path,
+                ref_file_path,
                 reference=True,
                 namespace=ns,
                 ignoreVersion=True,
                 preserveReferences=True,
             )
 
-            print(f"[Reference] 引用创建成功: {os.path.basename(tmp_path)} → namespace={ns}")
+            print(f"[Reference] 引用创建成功: {ref_file_path} → namespace={ns}")
 
             # 贴图路径重定向（仅 ma/mb）
             if format_name in ("ma", "mb"):
@@ -268,32 +270,13 @@ def add_reference(zasset_path: str, format_name: str) -> bool:
                 # 重定向依赖引用路径
                 _redirect_dependency_paths(zasset_path, asset_name, asset_id)
 
-            # 清理临时文件（仅 ma/mb 模式）
-            if _own_tmp and os.path.isfile(tmp_path):
-                try:
-                    os.unlink(tmp_path)
-                except Exception:
-                    pass
-
             return True
 
         except Exception as e:
             print(f"[Reference] 引用失败: {e}")
             import traceback
             traceback.print_exc()
-            if _own_tmp and os.path.isfile(tmp_path):
-                try:
-                    os.unlink(tmp_path)
-                except Exception:
-                    pass
             return False
-
-        finally:
-            if not _own_tmp:
-                try:
-                    ext.__exit__(None, None, None)
-                except Exception:
-                    pass
 
     except Exception as e:
         print(f"[Reference] 添加引用异常: {e}")
