@@ -26,6 +26,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import time
 import uuid
 import shutil
 import tempfile
@@ -365,12 +366,13 @@ class ExportOrchestrator:
                 ext = os.path.splitext(gf)[1].lstrip(".")
                 if ext not in exported_formats:
                     exported_formats.append(ext)
+            _perf_tick("Stage 4a (cmds.file导出)")
             # Stage 4b: 同步 .ma 文件内的贴图路径 → textures/{材质名}/{文件名}
             if tex_path_map:
                 for gf in geom_files:
                     if gf.lower().endswith(".ma"):
                         self._sync_ma_texture_paths(gf, tex_path_map)
-            _perf_tick("Stage 4 (几何体)")
+            _perf_tick("Stage 4b (sync贴图路径)")
 
             # Stage 4c: 收集关联缓存/代理/引用 → staging_dir/associated/
             print(f"[Export] collect_associated={config.collect_associated}, material_only={config.export_material_only}")
@@ -1491,6 +1493,7 @@ class ExportOrchestrator:
                 # noExpand=True：避免 Outliner 展开 1246 节点导致卡死
                 cmds.select(export_objs, replace=True, noExpand=True)
 
+                _t_fmt = time.time()
                 if fmt_key == "usd":
                     anim_mode = config.ani_frame_mode if not config.export_material_only else "current"
                     if anim_mode in ("timeline", "keyframe"):
@@ -1520,8 +1523,12 @@ class ExportOrchestrator:
                     cmds.file(geom_path, exportSelected=True, type=maya_type, force=True,
                               preserveReferences=True)
 
+                _elapsed = time.time() - _t_fmt
+                _size_mb = 0
                 if os.path.isfile(geom_path):
+                    _size_mb = os.path.getsize(geom_path) / (1024 * 1024)
                     files.append(geom_path)
+                print(f"[Perf]   {fmt_key} 导出: {_elapsed:.1f}s, 文件大小: {_size_mb:.1f}MB")
             except Exception as e:
                 print(f"[Export] {fmt_key} 导出失败: {e}")
 
@@ -2428,6 +2435,7 @@ class ExportOrchestrator:
             return
         try:
             import re
+            _t_sync = time.time()
             with open(ma_path, 'r', encoding='utf-8') as f:
                 content = f.read()
 
@@ -2462,7 +2470,8 @@ class ExportOrchestrator:
             if changed:
                 with open(ma_path, 'w', encoding='utf-8') as f:
                     f.write(content)
-                print(f"[MaSync] 已更新 {changed} 个纹理路径: {os.path.basename(ma_path)}")
+                _sync_elapsed = time.time() - _t_sync
+                print(f"[MaSync] 已更新 {changed} 个纹理路径: {os.path.basename(ma_path)} (耗时 {_sync_elapsed:.1f}s)")
         except Exception as e:
             print(f"[MaSync] 更新失败 {ma_path}: {e}")
             import traceback
