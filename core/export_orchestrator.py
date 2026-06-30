@@ -2423,9 +2423,8 @@ class ExportOrchestrator:
     def _sync_ma_texture_paths(self, ma_path: str, path_map: dict) -> None:
         """将 .ma 文件中的所有贴图路径更新为 textures/{材质名}/{文件名}。
 
-        处理所有 Maya ASCII 格式中的贴图路径，包括 file 节点的
-        fileTextureName 和灯光节点的 tex0 / ai_filename 等属性。
-        使用大小写不敏感的匹配以兼容 Windows 路径差异。
+        行级流式处理：逐行读取、匹配、替换，避免将整个文件加载到内存。
+        支持 file / Redshift / Arnold / 灯光等所有节点类型的贴图属性。
 
         Args:
             ma_path: .ma 文件路径
@@ -2433,45 +2432,61 @@ class ExportOrchestrator:
         """
         if not os.path.isfile(ma_path) or not path_map:
             return
+
+        _ma_size_mb = os.path.getsize(ma_path) / (1024 * 1024)
+        _t_sync = time.time()
+
+        # 构建快速查找表: {lower_filename: [(orig_normalized, rel_normalized), ...]}
+        # 先用文件名快速过滤，只有行中包含该文件名时才做精确匹配
+        by_basename: dict = {}
+        for orig, rel in path_map.items():
+            norm_orig = orig.replace("\\", "/")
+            norm_rel = rel.replace("\\", "/")
+            bn = os.path.basename(orig).lower()
+            by_basename.setdefault(bn, []).append((norm_orig, norm_rel))
+
+        temp_path = ma_path + ".tmp"
+        changed_count = 0
+        import re as _re
+
         try:
-            import re
-            _t_sync = time.time()
-            with open(ma_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+            with open(ma_path, "r", encoding="utf-8", errors="replace") as fin:
+                with open(temp_path, "w", encoding="utf-8") as fout:
+                    for line in fin:
+                        line_lower = line.lower()
+                        line_modified = False
 
-            # 归一化 .ma 中所有路径：
-            # 1. 反斜杠 → 斜杠
-            # 2. 大小写不敏感匹配：Windows 上 C:/ 和 c:/ 是同一个文件
-            def _normalize_path_match(m):
-                return m.group(0).replace("\\", "/")
-            content = re.sub(
-                r'"[^"]*:[\\/][^"]*"',
-                _normalize_path_match,
-                content,
-            )
+                        # 快速过滤：检查行中是否包含任何贴图文件名
+                        for bn, candidates in by_basename.items():
+                            if bn not in line_lower:
+                                continue
+                            for orig_full, rel_path in candidates:
+                                # 在引号内精确匹配（.ma 文件中路径总是在双引号内）
+                                if orig_full.lower() in line_lower:
+                                    # 替换行中所有出现的该原始路径（大小写不敏感）
+                                    pattern = _re.escape(orig_full)
+                                    line = _re.sub(pattern, rel_path, line, flags=_re.IGNORECASE)
+                                    line_modified = True
+                                    changed_count += 1
+                            if line_modified:
+                                break
 
-            changed = 0
-            for orig_path, rel_path in path_map.items():
-                norm_path = orig_path.replace("\\", "/")
-                escaped = re.escape(norm_path)
-                # 大小写不敏感匹配（Windows 路径驱动字母可能大小写不同）
-                pattern = fr'"[^"]*{escaped}[^"]*"'
-                n = len(re.findall(pattern, content, flags=re.IGNORECASE))
-                if n:
-                    content = re.sub(
-                        pattern,
-                        lambda m, p=rel_path: f'"{p}"',
-                        content,
-                        flags=re.IGNORECASE,
-                    )
-                    changed += n
-                    print(f"[MaSync] {os.path.basename(orig_path)} → {rel_path}")
+                        fout.write(line)
 
-            if changed:
-                with open(ma_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
-                _sync_elapsed = time.time() - _t_sync
-                print(f"[MaSync] 已更新 {changed} 个纹理路径: {os.path.basename(ma_path)} (耗时 {_sync_elapsed:.1f}s)")
+            if changed_count:
+                os.replace(temp_path, ma_path)
+                print(
+                    f"[MaSync] 已更新 {changed_count} 个纹理路径: "
+                    f"{os.path.basename(ma_path)} ({_ma_size_mb:.0f}MB, "
+                    f"耗时 {time.time() - _t_sync:.1f}s)"
+                )
+            else:
+                os.remove(temp_path)
+                print(
+                    f"[MaSync] 无需更新: {os.path.basename(ma_path)} "
+                    f"({_ma_size_mb:.0f}MB, 耗时 {time.time() - _t_sync:.1f}s)"
+                )
+
         except Exception as e:
             print(f"[MaSync] 更新失败 {ma_path}: {e}")
             import traceback
