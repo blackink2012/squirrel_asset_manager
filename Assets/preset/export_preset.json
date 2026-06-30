@@ -111,7 +111,7 @@
         "thumb_source": "screenshot"
     },
     "scenes": {
-        "zmetal": true,
+        "zmetal": false,
         "zmetal_merge": true,
         "mcm": false,
         "mcm_min_count": 2,
