@@ -3,260 +3,129 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MaterialManagementPro 使用帮助</title>
+<title>Squirrel Asset Manager — 使用帮助</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-  background: #ffffff; color: #222; line-height: 1.8;
-  display: flex; justify-content: center;
-}
-.wrapper { display: flex; max-width: 1080px; width: 100%; }
-.sidebar {
-  width: 220px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
-  background: #f5f5f5; padding: 24px 16px; flex-shrink: 0;
-  border-right: 1px solid #ddd;
-}
-.sidebar h2 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; border: none; padding: 0; }
-.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; }
-.sidebar a:hover { background: #e0e0e0; color: #000; text-decoration: none; }
-.sidebar a.sub { padding-left: 20px; font-size: 12px; }
-.content { flex: 1; padding: 24px 40px; max-width: 800px; min-width: 0; }
-h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
-h2 { font-size: 20px; color: #e67e22; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
-h3 { font-size: 17px; color: #2980b9; margin: 20px 0 8px; }
-p { margin: 8px 0; }
-ul, ol { margin: 8px 0 8px 24px; }
-li { margin: 4px 0; }
-code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
-pre { background: #f8f8f8; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0; border: 1px solid #e0e0e0; }
-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
-th { background: #f0f0f0; color: #e67e22; font-size: 13px; }
-td { background: #fff; font-size: 13px; }
-img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #ddd; }
-.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
-.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
-.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
-.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; }
-.badge-red { background: #fdecea; color: #e74c3c; }
-.badge-orange { background: #fef5e7; color: #e67e22; }
-.badge-blue { background: #eaf2f8; color: #2980b9; }
-.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 13px; }
+  :root {
+    --bg: #1e1e2e;
+    --card: #282840;
+    --text: #cdd6f4;
+    --muted: #a6adc8;
+    --accent: #89b4fa;
+    --border: #45475a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background:var(--bg); color:var(--text); line-height:1.7; padding:32px 24px 80px }
+  .wrap { max-width:860px; margin:0 auto }
+  h1 { font-size:28px; color:var(--accent); border-bottom:2px solid var(--border); padding-bottom:12px; margin-bottom:28px }
+  h2 { font-size:20px; color:#f5c2e7; margin:36px 0 12px }
+  h3 { font-size:16px; color:var(--accent); margin:24px 0 8px }
+  p, li { margin:6px 0; color:var(--muted) }
+  ul { padding-left:22px }
+  code { background:#313244; padding:1px 6px; border-radius:4px; font-size:13px; color:#f9e2af }
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px }
+  th, td { border:1px solid var(--border); padding:8px 12px; text-align:left }
+  th { background:#313244; color:var(--accent); font-weight:600 }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px 24px; margin:16px 0 }
+  .badge { display:inline-block; background:#a6e3a1; color:#1e1e2e; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:700; margin-left:6px }
+  .note { background:#1e1e2e; border-left:4px solid #f9e2af; padding:12px 16px; margin:12px 0; border-radius:0 6px 6px 0; color:var(--muted) }
+  .warn { border-left-color:#f38ba8 }
+  a { color:var(--accent) }
 </style>
 </head>
 <body>
+<div class="wrap">
 
-<div class="wrapper">
+<h1>🐿 Squirrel Asset Manager 使用帮助</h1>
 
-<nav class="sidebar">
-  <h2>目录</h2>
-  <a href="#overview">1. 插件整体结构</a>
-  <a href="#export">2. 导出资产</a>
-  <a href="#export-modes" class="sub">2.1 三种导出模式</a>
-  <a href="#export-thumb" class="sub">2.2 三种缩略图来源</a>
-  <a href="#export-formats" class="sub">2.3 支持的导出格式</a>
-  <a href="#export-collect" class="sub">2.4 收集关联文件</a>
-  <a href="#export-timeline" class="sub">2.5 时间轴动画导出</a>
-  <a href="#import">3. 导入资产</a>
-  <a href="#import-external" class="sub">3.1 从外部文件导入</a>
-  <a href="#import-scene" class="sub">3.2 从库导入到场景</a>
-  <a href="#import-mcm" class="sub">3.3 MCM 材质匹配</a>
-  <a href="#import-manage" class="sub">3.4 资产管理操作</a>
-  <a href="#ai">4. AI 智能分析</a>
-  <a href="#faq">5. 常见问题与避坑指南</a>
-</nav>
+<h2>1. 右键菜单操作</h2>
 
-<div class="content">
+<div class="card">
+<h3>📥 导入</h3>
+<p>将资产的几何体文件导入到 Maya 当前场景（节点合并到场景中，不保留引用关系）。<br>
+支持的格式：<code>ma</code> <code>mb</code> <code>fbx</code> <code>abc</code> <code>usd</code> <code>obj</code> <code>glb</code></p>
 
-<h1>MaterialManagementPro 使用帮助</h1>
-
-<img src="base_UI.png" alt="插件主界面">
-
-<h2 id="overview">1. 插件整体结构</h2>
-
-<p>MaterialManagementPro 是 Maya 2025 的材质与资产管理插件，插件文件夹名为 <code>squirrel_asset_manager</code>。</p>
-
-<h3>双库架构</h3>
+<h3>🔗 添加引用 <span class="badge">新功能</span></h3>
+<p>将资产的几何体文件以 <strong>Maya Reference</strong> 方式引用到当前场景。与导入的区别：</p>
 <table>
-<tr><th>标签页</th><th>用途</th><th>存储位置</th></tr>
-<tr><td><b>Category 库</b></td><td>长期积累的分类素材库，按类别整理</td><td>系统级目录 <code>AssetLibrary/category_library/</code></td></tr>
-<tr><td><b>Project 库</b></td><td>当前项目专属资产，按项目隔离</td><td>项目内 <code>AssetLibrary/project_library/</code></td></tr>
-</table>
-<p>两个库<b>完全独立</b>，资产不能跨库拖拽或复制。</p>
-
-<h3>六大子库</h3>
-<p>每个库下包含 6 个子库：<b>材质、模型、贴图、灯光、场景、HDR</b>。每个子库可自定义分类层级。</p>
-
-<h3>资产格式</h3>
-<p>所有资产统一为 <code>.zasset</code> 文件夹格式，内含元数据（<code>meta.json</code>）、缩略图（<code>thumb.sicon</code> / <code>thumb.mp4</code>）、材质数据（<code>node.zmetal</code>）、灯光数据（<code>node.zlight</code>）、几何体（<code>node.ma/fbx/abc...</code>）、贴图（<code>textures/</code> 目录）和可选的关联文件（<code>associated/</code>）。一个文件夹即一个完整资产。</p>
-
-<h2 id="export">2. 导出资产</h2>
-<p>导出是将 Maya 场景中的材质、模型或物体打包为 <code>.zasset</code> 资产的过程。点击 <b>"导出资产"</b> 按钮打开导出对话框（详细格式说明见对话框中的 "?" 帮助）。</p>
-
-<h3 id="export-modes">2.1 三种导出模式</h3>
-<table>
-<tr><th>模式</th><th>适用场景</th><th>行为</th></tr>
-<tr><td><span class="badge badge-blue">单资产</span></td><td>选 1 个或多个物体合并为 1 个资产</td><td>弹出对话框 → 指定名称/分类 → 交互截图 → 导出。不自动隐藏未选中物体，由用户手动隔离视图</td></tr>
-<tr><td><span class="badge badge-orange">全自动</span></td><td>选 N 个物体每个独立为资产</td><td>首资产交互取景 → 后续自动复用截图区间 → 全部导出。自动独显+框显模型</td></tr>
-<tr><td><span class="badge badge-red">半自动</span></td><td>选 N 个物体每个独立导出</td><td>每个资产弹出截图 UI → 手动确认 → 下一个。自动独显+框显模型</td></tr>
+  <tr><th></th><th>导入</th><th>添加引用</th></tr>
+  <tr><td>方式</td><td><code>cmds.file(i=True)</code></td><td><code>cmds.file(reference=True)</code></td></tr>
+  <tr><td>场景关系</td><td>节点合并到场景</td><td>创建引用节点，源文件独立</td></tr>
+  <tr><td>命名空间</td><td>无</td><td>自动创建（资产名）</td></tr>
+  <tr><td>引用编辑器</td><td>不可见</td><td>可在 Reference Editor 中管理</td></tr>
+  <tr><td>支持的格式</td><td>全部</td><td><code>ma</code> <code>mb</code> <code>fbx</code> <code>abc</code> <code>usd</code> <code>obj</code></td></tr>
 </table>
 
-<div class="note"><b>单资产模式：</b>不会自动隐藏未选中物体。如需隔离视图请手动操作（按 Shift+I 独显），截图后再用 Ctrl+Shift+H 恢复。</div>
-
-<h3 id="export-thumb">2.2 三种缩略图来源</h3>
-<table>
-<tr><th>来源</th><th>速度</th><th>质量</th><th>适合</th></tr>
-<tr><td><span class="badge badge-blue">截屏工具</span></td><td>最快</td><td>视口截图</td><td>模型、贴图等大多数资产</td></tr>
-<tr><td><span class="badge badge-orange">Maya 拍屏</span></td><td>较快</td><td>视口 playblast</td><td>需要动画预览的资产</td></tr>
-<tr><td><span class="badge badge-red">渲染图</span></td><td>最慢</td><td>Arnold 渲染</td><td>高质量材质/场景</td></tr>
-</table>
-<div class="note"><b>时间轴：</b>拍屏/渲染图 + 时间轴 → MP4 动图。缩略图在所有资产导出后统一生成，不中断几何体导出。</div>
-
-<h3 id="export-formats">2.3 支持的导出格式</h3>
-<table>
-<tr><th>类别</th><th>格式</th><th>说明</th></tr>
-<tr><td>几何体</td><td>ma / mb / fbx / obj / usd</td><td>标准建模格式，.ma/.mb 导出时引用保持不被烘焙</td></tr>
-<tr><td>缓存</td><td>abc (Alembic)</td><td>动画缓存，支持时间轴和关键帧范围</td></tr>
-<tr><td>代理</td><td>ass / rs / vrscene / vrmesh</td><td>Arnold / Redshift / V-Ray 渲染器代理格式</td></tr>
-<tr><td>节点</td><td>.zmetal / .zlight / .mcm</td><td>材质节点预设 + 灯光预设 + 材质映射（拓扑匹配）</td></tr>
-<tr><td>贴图</td><td>textures/</td><td>默认勾选，将材质关联贴图打包到资产内。取消则不打包</td></tr>
-</table>
-
-<h3 id="export-collect">2.4 收集关联文件</h3>
-<p>导出对话框右侧顶部新增<b>「收集关联文件」</b>分区，勾选后自动扫描选中物体的关联节点并复制到 <code>associated/</code> 目录：</p>
-
-<table>
-<tr><th>类别</th><th>支持的节点</th><th>收集内容</th></tr>
-<tr><td>缓存</td><td>AlembicNode / gpuCache / cacheFile / VRayVolumeGrid / aiVolume / RedshiftVolumeShape</td><td>.abc .gpu .mc .vdb 体积缓存</td></tr>
-<tr><td>代理</td><td>aiStandIn / VRayProxy / VRayMesh / VRayScene / RedshiftProxyMesh / mayaUsdProxyShape</td><td>.ass .vrmesh .vrscene .rs .usd 文件</td></tr>
-<tr><td>引用</td><td>Maya reference 节点</td><td>.ma/.mb 引用源文件（仅收集选中对象所属引用）</td></tr>
-</table>
-
-<div class="note"><b>帧序列：</b>RedshiftProxyMesh（<code>####</code> 格式）和 VRayVolumeGrid（<code>#</code> 格式）自动识别帧序列并逐帧全量复制。</div>
-
-<div class="note"><b>收集 vs 导出：</b>收集关联文件是<b>拷贝</b>磁盘上已有的文件，速度极快；导出的 abc/ass/rs/vrscene 是<b>重新烘焙</b>生成。两者可以同时勾选。</div>
-
-<h3 id="export-timeline">2.5 时间轴动画导出</h3>
-<p>三种帧范围：<b>当前帧</b>（静帧）、<b>时间轴</b>（播放范围）、<b>关键帧</b>（物体关键帧范围）。时间轴/关键帧对 abc/usd/ass/rs/vrmesh 生效。渲染图 + 时间轴逐帧合成 MP4（⚠️ 可能耗时数分钟，Maya 暂时无响应属正常）。</p>
-
-<h2 id="import">3. 导入资产</h2>
-
-<img src="input_UI.png" alt="导入界面">
-
-<h3 id="import-external">3.1 从外部文件导入</h3>
-<div class="step">
-<ol>
-<li>工具栏 <b>"导入" → "从文件导入"</b>（或 "从文件夹导入"）</li>
-<li>选择 Maya 文件或贴图文件，自动创建 <code>.zasset</code> 添加到当前分类</li>
-<li>导入文件夹时按名称自动分组，每组对应一个 .zasset</li>
-</ol>
+<div class="note">
+  <strong>使用说明：</strong><br>
+  • 右键资产卡片 → <strong>添加引用</strong><br>
+  • 若 .zasset 中包含多种格式，可选择目标格式<br>
+  • 引用路径遵循 <strong>依赖导入策略</strong>（设置→常规→依赖文件导入策略）：<br>
+  &nbsp;&nbsp;&nbsp;— <em>当前资产目录</em>：引用直指 .zasset 内文件（无需复制）<br>
+  &nbsp;&nbsp;&nbsp;— <em>复制到工程目录</em>：文件复制到 <code>references/squirrel_asset/</code> 目录<br>
+  • 嵌套引用（reference 内部关联的其他引用）自动重定向
+</div>
 </div>
 
-<h3 id="import-scene">3.2 从库导入到场景</h3>
-<p>右键资产弹出菜单：</p>
-<table>
-<tr><th>菜单项</th><th>效果</th></tr>
-<tr><td><b>导入到场景</b></td><td>自动选择最合适的格式导入</td></tr>
-<tr><td><b>导入 → .zmetal</b></td><td>重建完整着色网络（节点、属性、连接、贴图）。材质名保持原名</td></tr>
-<tr><td><b>导入灯光 → 选择渲染器</b></td><td>从 .zlight 重建灯光节点网络（含贴图/IES/HDR），支持 Arnold / V-Ray / Redshift / Maya 原生四选导入</td></tr>
-<tr><td><b>导入 → .mcm</b></td><td>导入材质 + 自动匹配赋予选中物体（见 3.3）</td></tr>
-<tr><td><b>导入 → .ma/.fbx/.obj/...</b></td><td>按指定格式导入几何体</td></tr>
-<tr><td><b>导入 → .ass/.rs/.vrscene/.vrmesh</b></td><td>创建渲染器代理引用节点</td></tr>
-<tr><td><b>导入几何体</b></td><td>（有变体的资产）按 LOD 精度/版本导入几何体</td></tr>
-<tr><td><b>🔍 预览节点</b></td><td>在场景中预览 .zmetal 或 .ma 节点内容</td></tr>
-</table>
-
-<div class="note"><b>.zmetal 原理：</b>记录 Maya 材质网络的完整信息。导入时在场景中重建整个着色网络。原始 Maya 文件不存在也能还原材质。</div>
-
-<div class="note"><b>.zlight 原理：</b>渲染器无关的灯光预设格式。记录灯光通用参数（颜色/强度/曝光/色温等）+ 完整上游节点网络（贴图/IES/棋盘格等），导入时选择目标渲染器自动创建对应灯光类型。同一份 .zlight 可跨 Arnold/V-Ray/Redshift/Maya 原生使用。</div>
-
-<h3 id="import-mcm">3.3 MCM 材质匹配</h3>
-<p><b>.mcm</b> 记录物体拓扑特征（<b>顶点数、面数、边数</b>），导入时通过三维特征精确匹配，自动赋予材质。</p>
-
-<div class="step">
-<b>典型场景：</b>abc/obj 等格式不包含材质数据。导入后物体无材质 → 选中物体 → 右键 <b>"导入 → .mcm"</b><br>
-<ol>
-<li>先导入 .zmetal（重建材质网络）</li>
-<li>计算选中物体顶点/面/边数</li>
-<li>在 .mcm 中查找三维特征精确匹配的原物体</li>
-<li>将材质自动赋予选中物体（含面级分配）</li>
-</ol>
-</div>
-
-<div class="note"><b>前提：</b>必须在 Maya 中选中目标物体。顶点/面/边数必须与原模型完全相同（无三角化、合点等）。资产导出时必须勾选 .mcm 复选框。</div>
-
-<h3 id="import-manage">3.4 资产管理操作</h3>
+<h2>2. 资产导出</h2>
+<p>选中 Maya 物体 → 导出为 <code>.zasset</code> 格式。支持：</p>
 <ul>
-<li><b>复制/粘贴：</b>跨分类粘贴。必须通过插件菜单</li>
-<li><b>重命名：</b>右侧属性面板修改后回车。不要直接改 .zasset 文件夹名</li>
-<li><b>删除：</b>二次确认</li>
-<li><b>导出 .zasset：</b>复制到指定文件夹用于跨库迁移或备份</li>
-<li><b>更新资产：</b>修改模型后右键"更新资产"可追加 LOD、创建新版本或完全替换</li>
-<li><b>🧠 AI 分析缩略图：</b>右键 → AI 分析缩略图，自动识别资产类型/名称/分类/标签</li>
+  <li>几何体：<code>ma</code> <code>mb</code> <code>fbx</code> <code>abc</code> <code>usd</code> <code>obj</code></li>
+  <li>材质预设：<code>.zmetal</code>（合并模式可合并所有关联材质）</li>
+  <li>灯光预设：<code>.zlight</code></li>
+  <li>贴图自动收集：支持 file 节点、RedshiftDomeLight HDR、序列帧、UDIM</li>
+  <li>关联文件自动收集：Alembic 缓存、GPU Cache、VDB、代理文件、引用文件</li>
+  <li>缩略图自动生成</li>
 </ul>
 
-<div class="warn"><b>⚠️ 禁止：</b>手动复制/移动/重命名 .zasset 文件夹。插件用数据库管理，手动操作导致资产不可见。</div>
-
-<h2 id="ai">4. AI 智能分析</h2>
-<p>基于 Ollama 本地视觉模型（qwen3-vl:8b），对资产缩略图进行智能分析，自动生成：</p>
+<h2>3. 资产导入</h2>
+<p>双击或右键导入资产到 Maya。支持：</p>
 <ul>
-<li><b>易读名</b> — 资产的中文友好名称</li>
-<li><b>建议分类</b> — 根据图像内容推荐子分类</li>
-<li><b>标签</b> — 材质/颜色/用途等关键词标签</li>
-<li><b>注释</b> — 简短描述</li>
+  <li>几何体导入 / 变体导入（版本 + LOD）</li>
+  <li>材质导入（.zmetal → 重建 shading 网络）</li>
+  <li>贴图导入（单张贴图 / 共享UV批量导入）</li>
+  <li>灯光导入（支持 Arnold / V-Ray / Redshift / Maya 原生）</li>
+  <li>HDR 环境光创建</li>
+  <li>贴图路径自动重定向（copy_to_project / asset_directory / source_directory）</li>
 </ul>
 
-<div class="step">
-<b>操作方式：</b>
-<ol>
-<li>选中资产 → 工具栏 <b>"🤖 AI 工具"</b> → 选择模型/语言/审核选项 → 开始分析</li>
-<li>或右键资产缩略图 → <b>"🧠 AI 分析缩略图"</b></li>
-<li>分析完成后弹出结果窗口，可编辑审查</li>
-<li>勾选 <b>"移动到分析出的分类"</b>（默认勾选）：应用时自动将资产移动到 AI 建议的分类目录</li>
-<li>点击 <b>"应用"</b> 写入元数据/移动资产</li>
-</ol>
+<h2>4. 分类专属功能</h2>
+<table>
+  <tr><th>子库</th><th>专属右键功能</th></tr>
+  <tr><td>材质</td><td>应用材质到选中对象 / 创建材质</td></tr>
+  <tr><td>贴图</td><td>创建材质 / 导入贴图 / 指定贴图到材质</td></tr>
+  <tr><td>灯光</td><td>应用灯光参数到选中灯光 / 以指定渲染器导入</td></tr>
+  <tr><td>HDR</td><td>创建环境光（Dome Light）/ 指定 HDR 到选中灯光</td></tr>
+  <tr><td>模型 / 场景 / 动画</td><td>导入几何体 / 变体导入</td></tr>
+</table>
+
+<h2>5. 设置说明</h2>
+<p>点击工具栏 ⚙ 按钮打开设置面板，包含：</p>
+<ul>
+  <li><strong>常规</strong>：字体大小、默认视图、名称冲突处理、贴图导入策略、依赖文件导入策略</li>
+  <li><strong>导出默认值</strong>：按资产类型配置导出的几何体格式</li>
+  <li><strong>右键菜单</strong>：自定义各子库右键菜单项（含"添加引用"开关）</li>
+  <li><strong>支持格式 / 贴图后缀 / 常用标签 / 子库与分类</strong></li>
+</ul>
+
+<div class="card">
+<h3>依赖文件导入策略</h3>
+<p>控制引用和关联文件的路径解析方式：</p>
+<table>
+  <tr><th>策略</th><th>效果</th></tr>
+  <tr><td><code>asset_directory</code></td><td>直接指向 .zasset 目录（不复制文件）</td></tr>
+  <tr><td><code>copy_to_project</code></td><td>复制到工程 <code>cache/</code> / <code>references/</code> 目录</td></tr>
+  <tr><td><code>source_directory</code></td><td>保持原始路径（按 .zasset 打包时的原路径）</td></tr>
+</table>
 </div>
 
-<div class="note"><b>前置：</b>需安装 <a href="https://ollama.com">Ollama</a> 并拉取模型 <code>ollama pull qwen3-vl:8b</code>。支持中文/英文分析。</div>
+<h2>6. 快捷键</h2>
+<ul>
+  <li><strong>双击资产</strong>：执行双击命令（可在设置中配置，默认导入）</li>
+  <li><strong>Ctrl+F</strong>：聚焦搜索框</li>
+  <li><strong>Ctrl+A</strong>：全选</li>
+  <li><strong>Delete</strong>：删除选中资产</li>
+</ul>
 
-<h2 id="faq">5. 常见问题</h2>
-
-<h3>❌ 手动复制 .zasset 文件夹</h3>
-<p>复制的资产在插件中不显示。<b>正确：</b>右键 → 复制 → 粘贴。</p>
-
-<h3>❌ 直接重命名 .zasset</h3>
-<p>资产消失。<b>正确：</b>属性面板修改名称后回车。</p>
-
-<h3>❌ 删除插件文件夹</h3>
-<p>分类下资产集体消失。<b>正确：</b>插件内逐个删除。</p>
-
-<h3>❌ 跨库拖拽</h3>
-<p>Category 和 Project 独立。<b>正确：</b>导出 .zasset → 目标库导入。</p>
-
-<h3>❌ 时间轴 + 渲染图后 Maya 卡死</h3>
-<p>正常渲染过程，等待完成。急用选拍屏。</p>
-
-<h3>❌ 导入 abc/obj 无材质</h3>
-<p>选中物体 → 右键 → <b>导入 → .mcm</b>（资产须含 .mcm）。</p>
-
-<h3>❌ MCM 匹配失败</h3>
-<p>顶点/面/边数与原模型不一致（可能三角化/合点过）。确保拓扑完全一致。</p>
-
-<h3>❌ 导入后贴图路径错误</h3>
-<p>重新导出该资产（贴图自动重定向到项目 sourceimages 目录）。</p>
-
-<h3>❌ 导出的 .ma 文件巨大</h3>
-<p>正常。引用对象在导出时保持引用关系（<code>preserveReferences</code>），不会烘焙到文件。如需烘焙引用内容，在 Maya 中先导入引用（File → Import Reference）。</p>
-
-<h3>❌「收集关联文件」没收集到代理</h3>
-<p>确保物体确实连接了缓存/代理节点。V-Ray 需对应 VRayMesh/VRayScene 节点，Redshift 需 RedshiftProxyMesh，USD 需 mayaUsdProxyShape。</p>
-
-<div class="footer">
-MaterialManagementPro v2.0 — Maya 2025 材质/资产管理插件
 </div>
-
-</div><!-- content -->
-</div><!-- wrapper -->
 </body>
 </html>
