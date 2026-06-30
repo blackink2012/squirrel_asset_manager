@@ -293,6 +293,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
     pasteRequested = QtCore.Signal()
     importRequested = QtCore.Signal(str)  # "folder" or "files"
     assetImportRequested = QtCore.Signal(str, str)  # (zasset_path, format_name)
+    addReferenceRequested = QtCore.Signal(str, str)  # (zasset_path, format_name) 添加引用
     variantGeometryImportRequested = QtCore.Signal(str, str, str)  # (zasset_path, version, lod)
     variantMaterialImportRequested = QtCore.Signal(str, str)  # (zasset_path, version)
     variantVersionDeleteRequested = QtCore.Signal(str, str)  # (zasset_path, version_id)
@@ -703,6 +704,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             playblast_action = thumb_menu.addAction("\ud83c\udfac Maya\u62cd\u5c4f")
             render_action = thumb_menu.addAction("\ud83d\uddbc\ufe0f \u6e32\u67d3\u56fe")
             menu.addMenu(thumb_menu)
+        ref_table_action = menu.addAction("\U0001f517 \u6dfb\u52a0\u5f15\u7528") if _is_ctx_enabled(sub_lib, "add_reference", ctx_preset) else None
         delete_action = menu.addAction("\u5220\u9664") if _is_ctx_enabled(sub_lib, "delete", ctx_preset) else None
 
         action = menu.exec(self._table_view.viewport().mapToGlobal(pos))
@@ -729,6 +731,19 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             ani_mode = _show_frame_mode_dialog(self)
             if ani_mode:
                 self.thumbnailRenderRequested.emit(mat.get("id", ""), ani_mode)
+        elif action == ref_table_action:
+            json_path = mat.get("json_path", "")
+            if json_path:
+                try:
+                    from ..integration.import_executor import get_available_formats
+                    _ref_formats = {"ma", "mb", "fbx", "abc", "usd", "obj"}
+                    avail = get_available_formats(json_path)
+                    ref_fmts = [f for f in avail if f in _ref_formats]
+                    fmt = ref_fmts[0] if ref_fmts else ""
+                except Exception:
+                    fmt = ""
+                if fmt:
+                    self.addReferenceRequested.emit(json_path, fmt)
 
     def set_view_mode(self, mode):
         self._view_mode = mode
@@ -1713,6 +1728,28 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             else:
                 import_action = menu.addAction('\U0001f4e5 \u5bfc\u5165')
 
+        # ── 添加引用（reference 模式，与导入并列）──
+        reference_actions = {}
+        if _is_ctx_enabled(sub_lib, "add_reference", ctx_preset) and json_path.endswith('.zasset'):
+            _ref_formats = {"ma", "mb", "fbx", "abc", "usd", "obj"}
+            try:
+                from ..integration.import_executor import get_available_formats
+                avail = get_available_formats(json_path)
+                ref_format_list = [f for f in avail if f in _ref_formats]
+            except Exception:
+                ref_format_list = []
+            if ref_format_list:
+                if len(ref_format_list) == 1:
+                    a = menu.addAction('\U0001f517 \u6dfb\u52a0\u5f15\u7528')
+                    reference_actions[a] = ref_format_list[0]
+                else:
+                    ref_sub = QtWidgets.QMenu('\U0001f517 \u6dfb\u52a0\u5f15\u7528', menu)
+                    ref_sub.setStyleSheet(_get_sub_style(font_size))
+                    for fmt in ref_format_list:
+                        a = ref_sub.addAction(f'  {fmt}')
+                        reference_actions[a] = fmt
+                    menu.addMenu(ref_sub)
+
         # ── 变体几何体导入 ──
         variant_types = mat.get('variant_types', [])
         variant_actions = {}
@@ -2053,6 +2090,18 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             else:
                 for p in paths:
                     self.assetImportRequested.emit(p, fmt)
+        elif action in reference_actions:
+            fmt = reference_actions[action]
+            paths = set()
+            if self._selected_materials:
+                for m in self._selected_materials.values():
+                    p = m.get("json_path", "")
+                    if p:
+                        paths.add(p)
+            if json_path:
+                paths.add(json_path)
+            for p in paths:
+                self.addReferenceRequested.emit(p, fmt)
         elif action == import_action and json_path:
             fmt = formats[0] if json_path.endswith('.zasset') else os.path.splitext(json_path)[1].lstrip('.')
             # 收集所有选中+右键卡片路径

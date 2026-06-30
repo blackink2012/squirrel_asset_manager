@@ -455,6 +455,7 @@ class SettingsDialog(QtWidgets.QDialog):
     _CONTEXT_MENU_ITEMS = [
         ("import", "导入"),
         ("import_geometry", "导入几何体"),
+        ("add_reference", "添加引用"),
         ("favorites", "收藏夹"),
         ("select_all", "全选"),
         ("duplicate", "复制"),
