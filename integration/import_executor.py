@@ -148,6 +148,160 @@ def import_asset(zasset_path: str, format_name: str) -> bool:
         return False
 
 
+# ═══════════════════════════════════════════════════════════════
+# 添加引用（Reference）
+# ═══════════════════════════════════════════════════════════════
+
+def add_reference(zasset_path: str, format_name: str) -> bool:
+    """将 .zasset 内的几何体文件以 Maya Reference 方式引用到场景。
+
+    Args:
+        zasset_path: .zasset 文件夹路径
+        format_name: 格式名（ma/mb/fbx/abc/usd/obj）
+
+    Returns:
+        成功返回 True
+    """
+    import json, tempfile
+    from core.zasset_io import ZassetIO
+
+    try:
+        import maya.cmds as cmds
+    except ImportError:
+        print("[Reference] 未在 Maya 环境中运行")
+        return False
+
+    if not os.path.isdir(zasset_path):
+        print(f"[Reference] .zasset 不存在: {zasset_path}")
+        return False
+
+    try:
+        meta = ZassetIO.read_meta(zasset_path)
+        asset_name = os.path.splitext(os.path.basename(zasset_path))[0]
+        asset_id = ""
+        if meta:
+            asset_name = meta.get("name") or meta.get("name_cn") or asset_name
+            asset_id = meta.get("id", "")
+        texture_map = meta.get("texture_map", {}) if isinstance(meta, dict) else {}
+
+        # 查找几何体文件
+        all_names = ZassetIO.list_contents(zasset_path)
+        dot_ext = f".{format_name}"
+        internal_matches = [n for n in all_names
+                            if not n.startswith("textures/") and not n.endswith("/")
+                            and n.lower().endswith(dot_ext)]
+        if not internal_matches:
+            print(f"[Reference] .zasset 不含 .{format_name} 文件")
+            return False
+
+        # 确保命名空间唯一
+        ns = asset_name
+        counter = 1
+        while cmds.namespace(exists=ns):
+            ns = f"{asset_name}_{counter}"
+            counter += 1
+
+        # 提取或写入临时文件
+        if format_name in ("ma", "mb"):
+            internal_file = internal_matches[0]
+            file_data = ZassetIO.read_file(zasset_path, internal_file)
+            fd, tmp_path = tempfile.mkstemp(suffix=dot_ext)
+            with os.fdopen(fd, 'wb') as f:
+                f.write(file_data)
+            _own_tmp = True
+        else:
+            from .import_extractor import ImportExtractor
+            ext = ImportExtractor(zasset_path, format_name)
+            ext.__enter__()
+            tmp_path = ext.extracted_path
+            _own_tmp = False
+            if not tmp_path or not os.path.isfile(tmp_path):
+                print(f"[Reference] 提取失败: {format_name} @ {zasset_path}")
+                ext.__exit__(None, None, None)
+                return False
+
+        try:
+            # 记录导入前的 file 节点（用于后续路径替换，仅 ma/mb）
+            if format_name in ("ma", "mb"):
+                before_file_nodes = set(cmds.ls(type="file") or [])
+
+            # 创建引用
+            created_refs = cmds.file(
+                tmp_path,
+                reference=True,
+                namespace=ns,
+                ignoreVersion=True,
+                preserveReferences=True,
+            )
+
+            print(f"[Reference] 引用创建成功: {os.path.basename(tmp_path)} → namespace={ns}")
+
+            # 贴图路径重定向（仅 ma/mb）
+            if format_name in ("ma", "mb"):
+                tex_policy = _get_texture_import_policy()
+                if tex_policy != "source_directory":
+                    # 构建贴图路径映射
+                    tex_path_map = {}
+                    tex_files = [n for n in all_names if n.startswith("textures/") and not n.endswith("/")]
+                    if tex_files and tex_policy == "copy_to_project":
+                        target_dir = _get_texture_target_dir(asset_name, asset_id)
+                        os.makedirs(target_dir, exist_ok=True)
+                        for name in tex_files:
+                            rel_path = name[len("textures/"):]
+                            target_path = os.path.join(target_dir, rel_path).replace("\\", "/")
+                            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                            data = ZassetIO.read_file(zasset_path, name)
+                            if os.path.isfile(target_path):
+                                if os.path.getsize(target_path) == len(data):
+                                    tex_path_map[name] = target_path
+                                    continue
+                            with open(target_path, 'wb') as f:
+                                f.write(data)
+                            tex_path_map[name] = target_path
+                    elif tex_files and tex_policy == "asset_directory":
+                        zasset_abs = os.path.abspath(zasset_path).replace("\\", "/")
+                        for name in tex_files:
+                            rel = name[len("textures/"):]
+                            tex_path_map[name] = f"{zasset_abs}/textures/{rel}"
+                    _replace_file_texture_paths(before_file_nodes, tex_path_map, texture_map)
+
+                # 重定向依赖引用路径
+                _redirect_dependency_paths(zasset_path, asset_name, asset_id)
+
+            # 清理临时文件（仅 ma/mb 模式）
+            if _own_tmp and os.path.isfile(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
+
+            return True
+
+        except Exception as e:
+            print(f"[Reference] 引用失败: {e}")
+            import traceback
+            traceback.print_exc()
+            if _own_tmp and os.path.isfile(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
+            return False
+
+        finally:
+            if not _own_tmp:
+                try:
+                    ext.__exit__(None, None, None)
+                except Exception:
+                    pass
+
+    except Exception as e:
+        print(f"[Reference] 添加引用异常: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def _import_ma_with_texture_rewrite(zasset_path: str, format_name: str) -> bool:
     """导入 ma/mb 格式，自动替换贴图路径到工程 sourceimages/"""
     import json, tempfile

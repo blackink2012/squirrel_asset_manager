@@ -925,6 +925,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._thumbnail_grid.clipboardChanged.connect(self._on_clipboard_changed)
         self._thumbnail_grid.importRequested.connect(self._on_grid_import)
         self._thumbnail_grid.assetImportRequested.connect(self._on_asset_import_into_maya)
+        self._thumbnail_grid.addReferenceRequested.connect(self._on_add_reference)
         self._thumbnail_grid.variantGeometryImportRequested.connect(self._on_variant_geometry_import)
         self._thumbnail_grid.variantMaterialImportRequested.connect(self._on_variant_material_import)
         self._thumbnail_grid.variantVersionDeleteRequested.connect(self._on_variant_version_delete)
@@ -3108,6 +3109,12 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         from ..integration.import_executor import import_asset
         print(f"[Import] 导入到场景: {os.path.basename(zasset_path)} / {format_name}")
         import_asset(zasset_path, format_name)
+
+    def _on_add_reference(self, zasset_path, format_name):
+        """右键 → 添加引用 → 将资产以 Reference 方式引用到 Maya 场景"""
+        from ..integration.import_executor import add_reference
+        print(f"[Reference] 添加引用: {os.path.basename(zasset_path)} / {format_name}")
+        add_reference(zasset_path, format_name)
 
     def _on_variant_geometry_import(self, zasset_path, version, lod):
         """右键 → 导入几何体 → 导入指定变体到 Maya 场景"""
