@@ -1464,104 +1464,134 @@ class ExportOrchestrator:
         if not _IN_MAYA:
             return files
 
-        for fmt_key, maya_type in self.GEOMETRY_FORMAT_MAP.items():
-            field_name = f"export_{fmt_key}"
-            if not getattr(config, field_name, False):
-                continue
+        # 暂停 Maya UI 刷新，避免 select() 触发 Outliner/ChannelBox/HyperShade 等
+        # 大规模场景下这些 UI 回调可耗时数十分钟
+        try:
+            cmds.refresh(suspend=True)
+        except Exception:
+            pass
 
-            # material_only 模式：仅 ma/mb（Maya 原生格式）可导出材质节点
-            if config.export_material_only and fmt_key not in ("ma", "mb"):
-                continue
+        # 保存当前选择以便恢复
+        _prev_sel = []
+        try:
+            _prev_sel = cmds.ls(selection=True, long=False) or []
+        except Exception:
+            pass
 
-            try:
-                geom_path = os.path.join(asset_dir, f"{safe_name}.{fmt_key}")
+        try:
+            export_objs = self._resolve_export_objects(config)
+            if not export_objs:
+                print(f"[Export] 跳过几何体导出：无关联物体")
+                return files
 
-                # material_only 模式：仅导出材质节点本身，不导出关联 DAG 物体
-                if config.export_material_only:
-                    if config.merge_zmetal:
-                        # 合并模式：导出全部材质到 ma/mb
-                        mats = self._get_materials_from_objects(config.associated_objects)
-                        if config.material_node and cmds.objExists(config.material_node) \
-                                and config.material_node not in mats:
-                            mats.append(config.material_node)
-                        export_objs = mats
-                    else:
-                        export_objs = [config.material_node] if (
-                            _IN_MAYA and config.material_node and cmds.objExists(config.material_node)
-                        ) else []
-                else:
-                    export_objs = self._resolve_export_objects(config)
-                if not export_objs:
-                    print(f"[Export] 跳过 {fmt_key} 导出：无关联物体且未找到材质关联物体")
+            for fmt_key, maya_type in self.GEOMETRY_FORMAT_MAP.items():
+                field_name = f"export_{fmt_key}"
+                if not getattr(config, field_name, False):
                     continue
 
-                cmds.select(export_objs, replace=True)
+                # material_only 模式：仅 ma/mb（Maya 原生格式）可导出材质节点
+                if config.export_material_only and fmt_key not in ("ma", "mb"):
+                    continue
 
-                if fmt_key == "usd":
-                    anim_mode = config.ani_frame_mode if not config.export_material_only else "current"
-                    if anim_mode in ("timeline", "keyframe"):
-                        if anim_mode == "keyframe":
+                try:
+                    geom_path = os.path.join(asset_dir, f"{safe_name}.{fmt_key}")
+
+                    # material_only 模式：仅导出材质节点本身，不导出关联 DAG 物体
+                    if config.export_material_only:
+                        if config.merge_zmetal:
+                            mats = self._get_materials_from_objects(config.associated_objects)
+                            if config.material_node and cmds.objExists(config.material_node) \
+                                    and config.material_node not in mats:
+                                mats.append(config.material_node)
+                            export_objs = mats
+                        else:
+                            export_objs = [config.material_node] if (
+                                _IN_MAYA and config.material_node and cmds.objExists(config.material_node)
+                            ) else []
+
+                    # noExpand=True：不展开层级选择，避免 Maya 计算全部后代节点
+                    cmds.select(export_objs, replace=True, noExpand=True)
+
+                    if fmt_key == "usd":
+                        anim_mode = config.ani_frame_mode if not config.export_material_only else "current"
+                        if anim_mode in ("timeline", "keyframe"):
+                            if anim_mode == "keyframe":
+                                kf_start, kf_end = ExportOrchestrator.get_keyframe_range(config.associated_objects or [])
+                                if kf_start < kf_end:
+                                    min_t, max_t = kf_start, kf_end
+                                else:
+                                    min_t = max_t = int(cmds.currentTime(q=True))
+                            else:
+                                min_t = int(cmds.playbackOptions(q=True, minTime=True))
+                                max_t = int(cmds.playbackOptions(q=True, maxTime=True))
+                            cmds.mayaUSDExport(
+                                file=geom_path,
+                                frameRange=(min_t, max_t),
+                                selection=True,
+                                eulerFilter=True,
+                                exportUVs=1,
+                                defaultUSDFormat="ascii",
+                            )
+                        else:
+                            cmds.file(geom_path, exportSelected=True,
+                                      type=maya_type, force=True,
+                                      options="exportUVs=1;exportDisplayColor=1;exportMaterial=1;exportVisibility=1")
+                    else:
+                        # 非 USD 格式：通过 cmds.file 导出
+                        cmds.file(geom_path, exportSelected=True, type=maya_type, force=True,
+                                  preserveReferences=True)
+
+                    if os.path.isfile(geom_path):
+                        files.append(geom_path)
+                except Exception as e:
+                    print(f"[Export] {fmt_key} 导出失败: {e}")
+
+            # ── 缓存格式（Alembic .abc） ──
+            if config.export_abc and not config.export_material_only:
+                try:
+                    abc_path = os.path.join(asset_dir, f"{safe_name}.abc")
+                    export_objs = self._resolve_export_objects(config)
+                    if export_objs:
+                        if config.ani_frame_mode == "timeline":
+                            min_t = cmds.playbackOptions(q=True, minTime=True)
+                            max_t = cmds.playbackOptions(q=True, maxTime=True)
+                            fr = f"{int(min_t)} {int(max_t)}"
+                        elif config.ani_frame_mode == "keyframe":
                             kf_start, kf_end = ExportOrchestrator.get_keyframe_range(config.associated_objects or [])
                             if kf_start < kf_end:
-                                min_t, max_t = kf_start, kf_end
+                                fr = f"{kf_start} {kf_end}"
                             else:
-                                min_t = max_t = int(cmds.currentTime(q=True))
-                        else:
-                            min_t = int(cmds.playbackOptions(q=True, minTime=True))
-                            max_t = int(cmds.playbackOptions(q=True, maxTime=True))
-                        cmds.mayaUSDExport(
-                            file=geom_path,
-                            frameRange=(min_t, max_t),
-                            selection=True,
-                            eulerFilter=True,
-                            exportUVs=1,
-                            defaultUSDFormat="ascii",
-                        )
-                    else:
-                        cmds.file(geom_path, exportSelected=True,
-                                  type=maya_type, force=True,
-                                  options="exportUVs=1;exportDisplayColor=1;exportMaterial=1;exportVisibility=1")
-                else:
-                    # 非 USD 格式：通过 cmds.file 导出，preserveReferences 保持引用不被烘焙
-                    cmds.file(geom_path, exportSelected=True, type=maya_type, force=True,
-                              preserveReferences=True)
-
-                if os.path.isfile(geom_path):
-                    files.append(geom_path)
-            except Exception as e:
-                print(f"[Export] {fmt_key} 导出失败: {e}")
-
-        # ── 缓存格式（Alembic .abc） ──
-        if config.export_abc and not config.export_material_only:
-            try:
-                abc_path = os.path.join(asset_dir, f"{safe_name}.abc")
-                export_objs = self._resolve_export_objects(config)
-                if export_objs:
-                    if config.ani_frame_mode == "timeline":
-                        min_t = cmds.playbackOptions(q=True, minTime=True)
-                        max_t = cmds.playbackOptions(q=True, maxTime=True)
-                        fr = f"{int(min_t)} {int(max_t)}"
-                    elif config.ani_frame_mode == "keyframe":
-                        kf_start, kf_end = ExportOrchestrator.get_keyframe_range(config.associated_objects or [])
-                        if kf_start < kf_end:
-                            fr = f"{kf_start} {kf_end}"
+                                cur = cmds.currentTime(q=True)
+                                fr = f"{int(cur)} {int(cur)}"
                         else:
                             cur = cmds.currentTime(q=True)
                             fr = f"{int(cur)} {int(cur)}"
-                    else:
-                        cur = cmds.currentTime(q=True)
-                        fr = f"{int(cur)} {int(cur)}"
-                    roots = " ".join(f"-root {o}" for o in export_objs)
-                    job = (f"-frameRange {fr} -uvWrite -writeVisibility "
-                           f"-dataFormat ogawa {roots} -file {abc_path}")
-                    print(f"[Export] AbcExport: {job}")
-                    cmds.AbcExport(j=job)
-                    if os.path.isfile(abc_path) and os.path.getsize(abc_path) > 0:
-                        files.append(abc_path)
-                    else:
-                        print(f"[Export] AbcExport 文件为空或不存在: {abc_path}")
-            except Exception as e:
-                print(f"[Export] abc 导出失败: {e}")
+                        roots = " ".join(f"-root {o}" for o in export_objs)
+                        job = (f"-frameRange {fr} -uvWrite -writeVisibility "
+                               f"-dataFormat ogawa {roots} -file {abc_path}")
+                        print(f"[Export] AbcExport: {job}")
+                        cmds.AbcExport(j=job)
+                        if os.path.isfile(abc_path) and os.path.getsize(abc_path) > 0:
+                            files.append(abc_path)
+                        else:
+                            print(f"[Export] AbcExport 文件为空或不存在: {abc_path}")
+                except Exception as e:
+                    print(f"[Export] abc 导出失败: {e}")
+
+        finally:
+            # 恢复 UI 刷新
+            try:
+                cmds.refresh(suspend=False)
+            except Exception:
+                pass
+            # 恢复原始选择
+            try:
+                if _prev_sel:
+                    cmds.select(_prev_sel, replace=True, noExpand=True)
+                else:
+                    cmds.select(clear=True)
+            except Exception:
+                pass
 
         return files
 
