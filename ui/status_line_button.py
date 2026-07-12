@@ -69,35 +69,41 @@ def add_status_line_button():
         command_code = _get_command_code()
         icon_path = _get_icon_path()
 
-        # 匹配 Maya 状态行原生按钮高度的图标尺寸（默认 32px）
-        parent_height = status_line_widget.height()
-        if parent_height <= 0:
-            parent_height = status_line_widget.minimumHeight()
-        if parent_height <= 0:
-            parent_height = 34
-        icon_sz = max(parent_height - 6, 24)
+        def _create_button():
+            global _status_line_button
 
-        button = QtWidgets.QToolButton()
-        button.setAutoRaise(True)
-        button.setToolTip("松鼠资产管理器")
-        button.setMinimumSize(icon_sz, icon_sz)
-        button.setIconSize(QtCore.QSize(icon_sz, icon_sz))
+            # 延迟到布局完成后再取实际高度
+            parent_height = status_line_widget.height()
+            if parent_height <= 0:
+                parent_height = status_line_widget.minimumHeight()
+            if parent_height <= 0:
+                parent_height = 40  # Maya 状态行默认高度
+            icon_sz = max(parent_height - 6, 32)
 
-        if icon_path and os.path.exists(icon_path):
-            button.setIcon(QtGui.QIcon(icon_path))
-        else:
-            button.setText("SQ")
+            button = QtWidgets.QToolButton()
+            button.setAutoRaise(True)
+            button.setToolTip("松鼠资产管理器")
+            button.setMinimumSize(icon_sz, icon_sz)
+            button.setIconSize(QtCore.QSize(icon_sz, icon_sz))
 
-        def _on_click(_checked=False):
-            exec(command_code, {"__name__": "__main__"})
+            if icon_path and os.path.exists(icon_path):
+                button.setIcon(QtGui.QIcon(icon_path))
+            else:
+                button.setText("SQ")
 
-        button.clicked.connect(_on_click)
+            def _on_click(_checked=False):
+                exec(command_code, {"__name__": "__main__"})
 
-        layout = status_line_widget.layout()
-        if layout:
-            layout.addWidget(button)
-            _status_line_button = button
-            print("[松鼠资产管理器] 状态行按钮已添加")
+            button.clicked.connect(_on_click)
+
+            layout = status_line_widget.layout()
+            if layout:
+                layout.addWidget(button)
+                _status_line_button = button
+                print("[松鼠资产管理器] 状态行按钮已添加")
+
+        # 延迟 500ms 确保 Maya 状态行布局完成
+        QtCore.QTimer.singleShot(500, _create_button)
 
     except Exception as e:
         print(f"[松鼠资产管理器] 添加状态行按钮失败: {e}")
