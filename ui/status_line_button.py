@@ -78,12 +78,11 @@ def add_status_line_button():
                 parent_height = status_line_widget.minimumHeight()
             if parent_height <= 0:
                 parent_height = 40  # Maya 状态行默认高度
-            icon_sz = max(parent_height - 2, 38)
+            icon_sz = max(parent_height, 36)
 
             button = QtWidgets.QToolButton()
             button.setAutoRaise(True)
             button.setToolTip("松鼠资产管理器")
-            button.setMinimumSize(icon_sz, icon_sz)
             button.setIconSize(QtCore.QSize(icon_sz, icon_sz))
 
             if icon_path and os.path.exists(icon_path):
