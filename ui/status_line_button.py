@@ -49,10 +49,10 @@ def add_status_line_button():
                 return
 
         try:
-            from PySide6 import QtWidgets, QtGui
+            from PySide6 import QtWidgets, QtGui, QtCore
         except ImportError:
             try:
-                from PySide2 import QtWidgets, QtGui
+                from PySide2 import QtWidgets, QtGui, QtCore
             except ImportError:
                 print("[松鼠资产管理器] 无法导入 PySide，跳过状态行按钮")
                 return
@@ -69,14 +69,22 @@ def add_status_line_button():
         command_code = _get_command_code()
         icon_path = _get_icon_path()
 
-        button = QtWidgets.QPushButton()
-        button.setFixedSize(28, 20)
+        # 匹配 Maya 状态行原生按钮高度的图标尺寸（默认 32px）
+        parent_height = status_line_widget.height()
+        if parent_height <= 0:
+            parent_height = status_line_widget.minimumHeight()
+        if parent_height <= 0:
+            parent_height = 34
+        icon_sz = max(parent_height - 6, 24)
+
+        button = QtWidgets.QToolButton()
+        button.setAutoRaise(True)
         button.setToolTip("松鼠资产管理器")
-        button.setFlat(True)
+        button.setMinimumSize(icon_sz, icon_sz)
+        button.setIconSize(QtCore.QSize(icon_sz, icon_sz))
 
         if icon_path and os.path.exists(icon_path):
             button.setIcon(QtGui.QIcon(icon_path))
-            button.setIconSize(button.size())
         else:
             button.setText("SQ")
 
