@@ -51,64 +51,61 @@ def uninstall_from_maya():
     except Exception as e:
         return False, str(e)
 
-def _add_status_line_button(command_code, icon_path):
-    """在状态行添加临时快捷按钮（Maya重启后消失）"""
+def _write_user_setup(maya_script_dir):
+    """写入 userSetup.py，使状态行按钮在 Maya 重启后自动加载。"""
+    user_setup_path = os.path.join(maya_script_dir, "userSetup.py")
+
+    startup_code = '''
+# === 松鼠资产管理器 - 状态行按钮（请勿删除此行） ===
+import maya.cmds as _sq_cmds
+_sq_cmds.evalDeferred("from squirrel_asset_manager.ui.status_line_button import add_status_line_button; add_status_line_button()")
+# === 松鼠资产管理器 END ===
+'''
+
+    sentinel = "# === 松鼠资产管理器 - 状态行按钮（请勿删除此行） ==="
+
+    if os.path.exists(user_setup_path):
+        try:
+            with open(user_setup_path, "r", encoding="utf-8") as f:
+                existing = f.read()
+        except Exception:
+            existing = ""
+
+        if sentinel in existing:
+            print("[松鼠资产管理器] userSetup.py 已包含启动代码，跳过")
+            return True
+
+        with open(user_setup_path, "a", encoding="utf-8") as f:
+            f.write("\n" + startup_code + "\n")
+        print("[松鼠资产管理器] 已追加启动代码到 userSetup.py")
+    else:
+        try:
+            with open(user_setup_path, "w", encoding="utf-8") as f:
+                f.write("# -*- coding: utf-8 -*-\n" + startup_code + "\n")
+        except Exception:
+            # 如果写入失败（如权限），回退到 scripts 目录
+            user_setup_path = os.path.join(maya_script_dir, "userSetup_squirrel.py")
+            with open(user_setup_path, "w", encoding="utf-8") as f:
+                f.write("# -*- coding: utf-8 -*-\n" + startup_code + "\n")
+            print(f"[松鼠资产管理器] 已创建独立启动脚本: {user_setup_path}")
+            return True
+
+        print("[松鼠资产管理器] 已创建 userSetup.py")
+
+    return True
+
+
+def _install_status_line_button(target_dir):
+    """安装时立即添加状态行按钮（本次会话生效）。"""
     try:
-        import maya.OpenMayaUI as omui
-
-        # 兼容 PySide2 / PySide6
-        try:
-            import shiboken6
-            wrap_instance = shiboken6.wrapInstance
-        except ImportError:
-            try:
-                import shiboken2
-                wrap_instance = shiboken2.wrapInstance
-            except ImportError:
-                print("[松鼠资产管理器] 无法导入 shiboken，跳过状态行按钮")
-                return
-
-        try:
-            from PySide6 import QtWidgets, QtGui
-        except ImportError:
-            try:
-                from PySide2 import QtWidgets, QtGui
-            except ImportError:
-                print("[松鼠资产管理器] 无法导入 PySide，跳过状态行按钮")
-                return
-
-        status_line_name = mel.eval('string $tempStr = $gStatusLine')
-        status_line_ptr = omui.MQtUtil.findControl(status_line_name)
-
-        if not status_line_ptr:
-            print("[松鼠资产管理器] 无法找到状态行")
-            return
-
-        status_line_widget = wrap_instance(int(status_line_ptr), QtWidgets.QWidget)
-
-        button = QtWidgets.QPushButton()
-        button.setFixedSize(28, 20)
-        button.setToolTip("松鼠资产管理器")
-        button.setFlat(True)
-
-        if icon_path and os.path.exists(icon_path):
-            button.setIcon(QtGui.QIcon(icon_path))
-            button.setIconSize(button.size())
-        else:
-            button.setText("SQ")
-
-        def _on_click(_checked=False):
-            exec(command_code, {"__name__": "__main__"})
-
-        button.clicked.connect(_on_click)
-
-        layout = status_line_widget.layout()
-        if layout:
-            layout.addWidget(button)
-            print("[松鼠资产管理器] 状态行按钮已添加")
-
+        # 从已安装目录导入模块
+        if target_dir not in sys.path:
+            sys.path.insert(0, target_dir)
+        from squirrel_asset_manager.ui.status_line_button import add_status_line_button
+        add_status_line_button()
     except Exception as e:
-        print(f"[松鼠资产管理器] 添加状态行按钮失败: {e}")
+        print(f"[松鼠资产管理器] 安装时添加状态行按钮失败: {e}")
+
 
 
 def onMayaDroppedPythonFile(*args, **kwargs):
@@ -132,6 +129,8 @@ except Exception as e:
 
         success, pref_dir, squirrel_tool_dir = copy_files_to_maya()
 
+        maya_script_dir = get_maya_script_dir()
+
         if success:
             message_text = f"\u5b89\u88c5\u6210\u529f\uff01\n\n\u811a\u672c\u76ee\u5f55: {squirrel_tool_dir}"
         else:
@@ -149,8 +148,11 @@ except Exception as e:
             sourceType="python"
         )
 
-        # 添加状态行临时快捷按钮
-        _add_status_line_button(command_code, icon_path)
+        # 写入 userSetup.py 使状态行按钮永久生效
+        _write_user_setup(maya_script_dir)
+
+        # 当前会话立即添加状态行按钮
+        _install_status_line_button(squirrel_tool_dir)
 
         cmds.confirmDialog(
             title="\u6210\u529f",
