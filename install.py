@@ -51,6 +51,66 @@ def uninstall_from_maya():
     except Exception as e:
         return False, str(e)
 
+def _add_status_line_button(command_code, icon_path):
+    """在状态行添加临时快捷按钮（Maya重启后消失）"""
+    try:
+        import maya.OpenMayaUI as omui
+
+        # 兼容 PySide2 / PySide6
+        try:
+            import shiboken6
+            wrap_instance = shiboken6.wrapInstance
+        except ImportError:
+            try:
+                import shiboken2
+                wrap_instance = shiboken2.wrapInstance
+            except ImportError:
+                print("[松鼠资产管理器] 无法导入 shiboken，跳过状态行按钮")
+                return
+
+        try:
+            from PySide6 import QtWidgets, QtGui
+        except ImportError:
+            try:
+                from PySide2 import QtWidgets, QtGui
+            except ImportError:
+                print("[松鼠资产管理器] 无法导入 PySide，跳过状态行按钮")
+                return
+
+        status_line_name = mel.eval('string $tempStr = $gStatusLine')
+        status_line_ptr = omui.MQtUtil.findControl(status_line_name)
+
+        if not status_line_ptr:
+            print("[松鼠资产管理器] 无法找到状态行")
+            return
+
+        status_line_widget = wrap_instance(int(status_line_ptr), QtWidgets.QWidget)
+
+        button = QtWidgets.QPushButton()
+        button.setFixedSize(28, 20)
+        button.setToolTip("松鼠资产管理器")
+        button.setFlat(True)
+
+        if icon_path and os.path.exists(icon_path):
+            button.setIcon(QtGui.QIcon(icon_path))
+            button.setIconSize(button.size())
+        else:
+            button.setText("SQ")
+
+        def _on_click(_checked=False):
+            exec(command_code, {"__name__": "__main__"})
+
+        button.clicked.connect(_on_click)
+
+        layout = status_line_widget.layout()
+        if layout:
+            layout.addWidget(button)
+            print("[松鼠资产管理器] 状态行按钮已添加")
+
+    except Exception as e:
+        print(f"[松鼠资产管理器] 添加状态行按钮失败: {e}")
+
+
 def onMayaDroppedPythonFile(*args, **kwargs):
     try:
         shelfTopLevel = mel.eval("$temp = $gShelfTopLevel")
@@ -88,6 +148,9 @@ except Exception as e:
             image1=icon_path,
             sourceType="python"
         )
+
+        # 添加状态行临时快捷按钮
+        _add_status_line_button(command_code, icon_path)
 
         cmds.confirmDialog(
             title="\u6210\u529f",
