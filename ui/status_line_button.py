@@ -78,7 +78,7 @@ def add_status_line_button():
                 parent_height = status_line_widget.minimumHeight()
             if parent_height <= 0:
                 parent_height = 40  # Maya 状态行默认高度
-            icon_sz = max(parent_height - 6, 32)
+            icon_sz = max(parent_height - 2, 38)
 
             button = QtWidgets.QToolButton()
             button.setAutoRaise(True)
