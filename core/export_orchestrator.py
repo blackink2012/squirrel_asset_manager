@@ -1373,6 +1373,9 @@ class ExportOrchestrator:
     def _stage_mcm(self, config: ExportConfig, asset_dir: str, safe_name: str) -> str:
         """导出 .mcm 材质→模型映射文件。
 
+        只记录导出范围内的模型数据，避免导出整个场景中所有分配了
+        该材质的物体（防止大量重复数据）。
+
         Returns:
             .mcm 文件路径，失败返回空字符串
         """
@@ -1385,6 +1388,23 @@ class ExportOrchestrator:
                 _get_assigned_objects,
                 _get_face_material_assignments,
             )
+
+            # ── 构建导出范围内的 shape 集合 ──
+            # 只记录 export scope 内的物体，不拉取整个场景的分配关系
+            scope_shapes = set()
+            if config.associated_objects:
+                for obj in config.associated_objects:
+                    if not cmds.objExists(obj):
+                        continue
+                    descendants = cmds.listRelatives(
+                        obj, allDescendents=True, fullPath=True
+                    ) or []
+                    descendants = cmds.ls(descendants, shapes=True) or []
+                    scope_shapes.update(descendants)
+                    own_shapes = cmds.listRelatives(
+                        obj, shapes=True, fullPath=True
+                    ) or []
+                    scope_shapes.update(own_shapes)
 
             # 收集材质列表
             if config.merge_zmetal:
@@ -1402,17 +1422,27 @@ class ExportOrchestrator:
 
             data = {}
             for mat in all_materials:
-                assigned = _get_assigned_objects(mat)
-                shape_list = list(assigned) if assigned else config.associated_objects[:1] if config.associated_objects else []
-                face_assignments = _get_face_material_assignments(shape_list) if shape_list else {}
+                all_assigned = _get_assigned_objects(mat)
+
+                # 过滤：只保留导出范围内的 shape
+                if scope_shapes:
+                    assigned = [s for s in all_assigned if s in scope_shapes]
+                else:
+                    assigned = all_assigned
+
+                if not assigned:
+                    continue
+
+                shape_list = list(assigned)
+                face_assignments = _get_face_material_assignments(shape_list)
                 mat_face = {}
                 for mesh_name, mat_faces in face_assignments.items():
                     if mat in mat_faces:
                         mat_face[mesh_name] = {mat: mat_faces[mat]}
+
                 # 记录每个物体的顶点/面/边数（三维匹配用）
-                obj_list = list(assigned) if assigned else []
                 match_info = {}
-                for obj in obj_list:
+                for obj in assigned:
                     try:
                         shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or [obj]
                         for shp in shapes:
@@ -1425,18 +1455,24 @@ class ExportOrchestrator:
                                 break
                     except Exception:
                         pass
+
                 data[mat] = {
-                    "count": len(assigned) if assigned else 0,
-                    "objects": obj_list,
+                    "count": len(assigned),
+                    "objects": assigned,
                     "match_info": match_info,
                     "face_assignments": mat_face,
                 }
+
+            if not data:
+                return ""
 
             import json
             os.makedirs(asset_dir, exist_ok=True)
             with open(mcm_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
 
+            total_objs = sum(len(d["objects"]) for d in data.values())
+            print(f"[MCM] 导出成功: {len(data)} 个材质, {total_objs} 个模型 -> {mcm_path}")
             return mcm_path
         except Exception as e:
             print(f"[MCM] 导出失败: {e}")
