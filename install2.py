@@ -157,6 +157,11 @@ def install_ez_for_maya(source_dir=None):
             "source": os.path.join(source_dir, "EZicon.png"),
             "target": os.path.join(icons_dir, "EZicon.png"),
             "description": "图标文件"
+        },
+        {
+            "source": os.path.join(source_dir, "ezmany", "other", "help", "EZ_help"),
+            "target": os.path.join(other_dir, "help", "EZ_help"),
+            "description": "帮助文档"
         }
     ]
     
@@ -169,12 +174,20 @@ def install_ez_for_maya(source_dir=None):
         
         try:
             # 确保目标目录存在
-            target_dir = os.path.dirname(target_path)
+            if os.path.isdir(source_path):
+                target_dir = target_path
+            else:
+                target_dir = os.path.dirname(target_path)
             if not os.path.exists(target_dir):
                 os.makedirs(target_dir)
             
-            # 复制文件
-            shutil.copy2(source_path, target_path)
+            # 复制文件/文件夹
+            if os.path.isdir(source_path):
+                if os.path.exists(target_path):
+                    shutil.rmtree(target_path)
+                shutil.copytree(source_path, target_path)
+            else:
+                shutil.copy2(source_path, target_path)
             files_copied.append(description)
             print(f"复制{description}:")
             print(f"  从: {source_path}")
@@ -191,6 +204,9 @@ def install_ez_for_maya(source_dir=None):
     
     # 创建工具架按钮
     create_shelf_button(scripts_dir, maya_user_dir)
+    
+    # 写入userSetup.py，使状态栏按钮在Maya重启后自动恢复
+    _install_user_setup(maya_user_dir, icons_dir, scripts_dir)
     
     # 安装完成提示
     print("\n" + "="*50)
@@ -309,17 +325,20 @@ def _add_status_line_button(icon_path, command_code):
         status_line_widget = wrap_instance(int(status_line_ptr), QtWidgets.QWidget)
 
         def _create_button():
-            parent_height = status_line_widget.height()
-            if parent_height <= 0:
-                parent_height = status_line_widget.minimumHeight()
-            if parent_height <= 0:
-                parent_height = 40
-            icon_sz = max(parent_height, 36)
+            # 查找状态行中已有的工具按钮，使用相同的图标大小（跟随 Maya 自身 DPI/显示设置）
+            icon_sz = 24
+            for child in status_line_widget.findChildren(QtWidgets.QToolButton):
+                es = child.iconSize()
+                if es.width() > 0 and es.height() > 0:
+                    icon_sz = es.width()
+                    break
 
             button = QtWidgets.QToolButton()
             button.setAutoRaise(True)
             button.setToolTip("EZforMaya - 脚本浏览器")
             button.setIconSize(QtCore.QSize(icon_sz, icon_sz))
+            button.setFixedSize(icon_sz, icon_sz)
+            button.setStyleSheet("QToolButton{margin:0;padding:0;border:none;background:transparent;}")
 
             if icon_path and os.path.exists(icon_path):
                 button.setIcon(QtGui.QIcon(icon_path))
@@ -340,6 +359,126 @@ def _add_status_line_button(icon_path, command_code):
 
     except Exception as e:
         print(f"[EZforMaya] 添加状态行按钮失败: {e}")
+
+
+def _install_user_setup(maya_user_dir, icons_dir, scripts_dir):
+    """写入/更新 userSetup.py，使状态栏按钮在 Maya 重启后自动恢复"""
+    try:
+        user_setup_path = os.path.join(maya_user_dir, "scripts", "userSetup.py")
+        user_setup_dir = os.path.dirname(user_setup_path)
+        if not os.path.exists(user_setup_dir):
+            os.makedirs(user_setup_dir)
+
+        # 要追加的启动代码
+        startup_code = '''
+# === EZforMaya 状态栏按钮自动恢复 ===
+
+def _ezm_add_status_button():
+    """Maya 启动时自动添加 EZforMaya 状态栏按钮"""
+    try:
+        import os
+        import sys
+        import maya.cmds as cmds
+        import maya.mel as mel
+        import maya.OpenMayaUI as omui
+
+        try:
+            import shiboken6
+            wrap_instance = shiboken6.wrapInstance
+        except ImportError:
+            try:
+                import shiboken2
+                wrap_instance = shiboken2.wrapInstance
+            except ImportError:
+                return
+
+        try:
+            from PySide6 import QtWidgets, QtGui, QtCore
+        except ImportError:
+            from PySide2 import QtWidgets, QtGui, QtCore
+
+        status_line_name = mel.eval('string $tempStr = $gStatusLine')
+        status_line_ptr = omui.MQtUtil.findControl(status_line_name)
+        if not status_line_ptr:
+            return
+
+        status_line_widget = wrap_instance(int(status_line_ptr), QtWidgets.QWidget)
+
+        button = QtWidgets.QToolButton()
+        button.setAutoRaise(True)
+        button.setToolTip("EZforMaya - 脚本浏览器")
+
+        # 查找状态行中已有的工具按钮，使用相同的图标大小（跟随 Maya 自身 DPI/显示设置）
+        icon_sz = 24
+        for child in status_line_widget.findChildren(QtWidgets.QToolButton):
+            es = child.iconSize()
+            if es.width() > 0 and es.height() > 0:
+                icon_sz = es.width()
+                break
+        button.setIconSize(QtCore.QSize(icon_sz, icon_sz))
+        button.setFixedSize(icon_sz, icon_sz)
+        button.setStyleSheet("QToolButton{margin:0;padding:0;border:none;background:transparent;}")
+
+        ezicon_path = os.path.join(os.path.expanduser("~"), "Documents", "maya", "scripts", "ezmany", "other", "icons", "EZicon.png")
+        if os.path.exists(ezicon_path):
+            button.setIcon(QtGui.QIcon(ezicon_path))
+        else:
+            button.setText("EZ")
+
+        def _on_click(_checked=False):
+            ezmany_path = os.path.join(os.path.expanduser("~"), "Documents", "maya", "scripts", "ezmany", "other", "scripts")
+            if ezmany_path not in sys.path:
+                sys.path.append(ezmany_path)
+            ezfor_many_file = os.path.join(ezmany_path, "EZforMany.py")
+            if os.path.exists(ezfor_many_file):
+                exec(open(ezfor_many_file, encoding='utf-8').read())
+                run_file_browser()
+
+        button.clicked.connect(_on_click)
+
+        layout = status_line_widget.layout()
+        if layout:
+            layout.addWidget(button)
+
+    except Exception:
+        pass  # 静默失败，不影响 Maya 正常启动
+
+
+import maya.utils
+maya.utils.executeDeferred(_ezm_add_status_button)
+# === EZforMaya 状态栏按钮 结束 ===
+'''
+
+        # 读取现有 userSetup.py 内容
+        existing_content = ""
+        if os.path.exists(user_setup_path):
+            with open(user_setup_path, 'r', encoding='utf-8') as f:
+                existing_content = f.read()
+
+        # 如果已存在 EZforMaya 的启动代码，则替换；否则追加
+        marker_start = "# === EZforMaya 状态栏按钮自动恢复 ==="
+        marker_end = "# === EZforMaya 状态栏按钮 结束 ==="
+
+        if marker_start in existing_content and marker_end in existing_content:
+            # 替换已有代码块
+            before = existing_content.split(marker_start)[0]
+            after_parts = existing_content.split(marker_end)
+            after = after_parts[1] if len(after_parts) > 1 else ""
+            new_content = before.rstrip('\n') + '\n' + startup_code + after
+        else:
+            # 追加新代码块
+            if existing_content and not existing_content.endswith('\n'):
+                existing_content += '\n'
+            new_content = existing_content + '\n' + startup_code
+
+        with open(user_setup_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+
+        print(f"[EZforMaya] userSetup.py 已更新: {user_setup_path}")
+        return True
+    except Exception as e:
+        print(f"[EZforMaya] 写入 userSetup.py 失败: {e}")
+        return False
 
 
 def create_shelf_button(scripts_dir, maya_user_dir):
@@ -389,24 +528,8 @@ ezmany_path = os.path.join(maya_scripts_dir, "ezmany", "other", "scripts")
 if ezmany_path not in sys.path:
     sys.path.append(ezmany_path)
 
-# 最佳实践：优先检查特定模块，再考虑全局搜索
-def best_practice_check(func_name):
-    import maya.cmds as cmds
-    import sys
-
-    if hasattr(cmds, func_name):
-        return True
-
-    if func_name in globals() and callable(globals()[func_name]):
-        return True
-    
-    return False
-    
-if best_practice_check("run_file_browser"):
-    run_file_browser()
-    
-else:
-    ezfor_many_file = os.path.join(ezmany_path, "EZforMany.py")
+ezfor_many_file = os.path.join(ezmany_path, "EZforMany.py")
+if os.path.exists(ezfor_many_file):
     exec(open(ezfor_many_file, encoding='utf-8').read())
     run_file_browser()
 
