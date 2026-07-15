@@ -72,18 +72,20 @@ def add_status_line_button():
         def _create_button():
             global _status_line_button
 
-            # 延迟到布局完成后再取实际高度
-            parent_height = status_line_widget.height()
-            if parent_height <= 0:
-                parent_height = status_line_widget.minimumHeight()
-            if parent_height <= 0:
-                parent_height = 40  # Maya 状态行默认高度
-            icon_sz = max(parent_height, 36)
+            # 查找状态行中已有的工具按钮，使用相同的图标大小（跟随 Maya 自身 DPI/显示设置）
+            icon_sz = 24
+            for child in status_line_widget.findChildren(QtWidgets.QToolButton):
+                es = child.iconSize()
+                if es.width() > 0 and es.height() > 0:
+                    icon_sz = es.width()
+                    break
 
             button = QtWidgets.QToolButton()
             button.setAutoRaise(True)
             button.setToolTip("松鼠资产管理器")
             button.setIconSize(QtCore.QSize(icon_sz, icon_sz))
+            button.setFixedSize(icon_sz, icon_sz)
+            button.setStyleSheet("QToolButton{margin:0;padding:0;border:none;background:transparent;}")
 
             if icon_path and os.path.exists(icon_path):
                 button.setIcon(QtGui.QIcon(icon_path))
