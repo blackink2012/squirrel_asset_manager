@@ -1368,9 +1368,11 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         def mouse_press(event):
             if event.button() == QtCore.Qt.MouseButton.RightButton:
-                # 右键时先选中卡片，再弹出菜单
+                # 右键时：如果卡片已在多选中，保留多选；否则单选该卡片
                 if hasattr(card, 'material_data'):
-                    self._on_card_clicked(card)
+                    mid = card.material_data.get("id")
+                    if mid not in self._selected_materials:
+                        self._on_card_clicked(card)
                 self._on_context_menu(event.position().toPoint(), card)
                 return
 
