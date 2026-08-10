@@ -3680,7 +3680,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             traceback.print_exc()
 
     def _on_create_dome_light(self, preset_path, hdr_material):
-        """HDR → 创建环境光：导入MA预设 + 替换HDR贴图路径 + 拷贝贴图到工程"""
+        """HDR → 创建环境光：导入MA预设 + 根据贴图策略替换HDR贴图路径"""
         import maya.cmds as cmds
         import json, os, tempfile
         from ..core.zasset_io import ZassetIO
@@ -3695,7 +3695,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             return
 
         try:
-            from ..integration.import_executor import _get_texture_target_dir
+            from ..integration.import_executor import _get_texture_target_dir, _get_texture_import_policy
 
             asset_name = ""
             asset_id = ""
@@ -3723,16 +3723,36 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             tex_name = tex_files[0]
             tex_basename = os.path.basename(tex_name)
 
-            target_dir = _get_texture_target_dir(asset_name, asset_id)
-            os.makedirs(target_dir, exist_ok=True)
-            hdr_target_path = os.path.join(target_dir, tex_basename).replace("\\", "/")
+            # ── 根据贴图导入策略决定 HDR 文件路径 ──
+            tex_policy = _get_texture_import_policy()
 
-            if not os.path.isfile(hdr_target_path):
-                with open(hdr_target_path, 'wb') as f:
-                    f.write(ZassetIO.read_file(json_path, tex_name))
-                print(f"[DomeLight] 贴图已拷贝: {hdr_target_path}")
+            if tex_policy == "source_directory":
+                # 不拷贝，直接使用 zasset 内的原始路径
+                hdr_target_path = os.path.join(json_path, tex_name).replace("\\", "/")
+                if not os.path.isfile(hdr_target_path):
+                    # zasset 内路径可能不以 textures/ 开头，回退拼接
+                    hdr_target_path = os.path.join(json_path, "textures", tex_basename).replace("\\", "/")
+                print(f"[DomeLight] 贴图策略=直接读取，使用原始路径: {hdr_target_path}")
+
+            elif tex_policy == "asset_directory":
+                # 使用 zasset 同级目录路径
+                hdr_target_path = os.path.join(json_path, tex_name).replace("\\", "/")
+                if not os.path.isfile(hdr_target_path):
+                    hdr_target_path = os.path.join(json_path, "textures", tex_basename).replace("\\", "/")
+                print(f"[DomeLight] 贴图策略=资产目录，使用资产路径: {hdr_target_path}")
+
             else:
-                print(f"[DomeLight] 贴图已存在: {hdr_target_path}")
+                # copy_to_project：拷贝到工程 sourceimages 目录
+                target_dir = _get_texture_target_dir(asset_name, asset_id)
+                os.makedirs(target_dir, exist_ok=True)
+                hdr_target_path = os.path.join(target_dir, tex_basename).replace("\\", "/")
+
+                if not os.path.isfile(hdr_target_path):
+                    with open(hdr_target_path, 'wb') as f:
+                        f.write(ZassetIO.read_file(json_path, tex_name))
+                    print(f"[DomeLight] 贴图已拷贝: {hdr_target_path}")
+                else:
+                    print(f"[DomeLight] 贴图已存在: {hdr_target_path}")
 
             # ── 2. 导入 MA 预设文件 ──
             # 从 MA 预设文件中解析出所有节点类型（用于只追踪这些类型的变更，避免全场景扫描）
