@@ -4889,7 +4889,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
     def _on_ai_analysis(self, material):
         """AI 分析缩略图（右键菜单）— 选中资产后走统一配置流程"""
         mid = material.get('id', '')
-        if mid:
+        if mid and mid not in self._thumbnail_grid._selected_materials:
             self._thumbnail_grid._selected_materials.clear()
             self._thumbnail_grid._selected_materials[mid] = material
             self._thumbnail_grid._refresh_card_highlights()
