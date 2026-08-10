@@ -71,11 +71,12 @@ def _detect_formats_from_files(zasset_path: str) -> List[str]:
     detected = set()
     
     for name in all_names:
-        if name.startswith("textures/"):
-            continue
-        
         ext = os.path.splitext(name)[1].lower().lstrip(".")
         if not ext:
+            continue
+
+        # textures/ 目录下仅检测 HDR 格式，跳过普通贴图
+        if name.startswith("textures/") and ext not in HDR_FORMATS:
             continue
         
         if ext in GEOMETRY_FORMATS:
