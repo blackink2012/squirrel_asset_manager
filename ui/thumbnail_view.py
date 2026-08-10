@@ -1983,6 +1983,56 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                         a.triggered.connect(lambda *a, pp=preset_path, m=mat:
                             self.createDomeLightRequested.emit(pp, m))
                     menu.addMenu(dome_sub)
+            # HDR 额外：导入贴图子菜单（与 textures 一致）
+            hdr_tex_names = _get_texture_names(json_path)
+            if _is_ctx_enabled(sub_lib, "import_texture", ctx_preset) and hdr_tex_names:
+                tex_sub = QtWidgets.QMenu('导入贴图', menu)
+                tex_sub.setStyleSheet(_get_sub_style(font_size))
+
+                # 按分辨率分组
+                resolution_groups = {}
+                for tn in hdr_tex_names:
+                    parts = tn.split('/', 1)
+                    if len(parts) == 2:
+                        res, fname = parts
+                        resolution_groups.setdefault(res, []).append(fname)
+                    else:
+                        resolution_groups.setdefault('', []).append(tn)
+
+                if len(resolution_groups) > 1:
+                    for res, files in sorted(resolution_groups.items()):
+                        res_label = res if res else '根目录'
+                        res_sub = QtWidgets.QMenu(res_label, tex_sub)
+                        res_sub.setStyleSheet(_get_sub_style(font_size))
+                        for fname in files:
+                            full_path = f"{res}/{fname}" if res else fname
+                            action = res_sub.addAction(f'  {fname}')
+                            action.triggered.connect(
+                                lambda *a, jp=json_path, fp=full_path:
+                                    self.importSingleTextureRequested.emit(jp, fp))
+                        res_sub.addSeparator()
+                        res_paths = [f"{res}/{f}" if res else f for f in files]
+                        all_label = f'  导入全部 ({res_label})'
+                        action_all = res_sub.addAction(all_label)
+                        action_all.triggered.connect(
+                            lambda *a, jp=json_path, fps=res_paths:
+                                self.importTexturesSharedUVRequested.emit(jp, fps))
+                        tex_sub.addMenu(res_sub)
+                else:
+                    all_files = []
+                    for res, files in resolution_groups.items():
+                        for fname in files:
+                            full_path = f"{res}/{fname}" if res else fname
+                            a = tex_sub.addAction(f'  {fname}')
+                            a.triggered.connect(lambda *a, jp=json_path, tn=full_path:
+                                self.importSingleTextureRequested.emit(jp, tn))
+                            all_files.append(full_path)
+                    tex_sub.addSeparator()
+                    a_all = tex_sub.addAction('  导入全部')
+                    a_all.triggered.connect(lambda *a, jp=json_path, fps=all_files:
+                        self.importTexturesSharedUVRequested.emit(jp, fps))
+
+                menu.addMenu(tex_sub)
             if _is_ctx_enabled(sub_lib, "assign_texture", ctx_preset):
                 menu.addAction('指定贴图').triggered.connect(
                     lambda: self.assignHdrToDomeRequested.emit(mat))

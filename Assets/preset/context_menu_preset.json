@@ -126,6 +126,7 @@
         "add_reference": true,
         "create_dome_light": true,
         "assign_texture": true,
+        "import_texture": true,
         "favorites": true,
         "select_all": true,
         "duplicate": true,
@@ -141,7 +142,6 @@
         "ai_analysis": true,
         "apply_material": false,
         "create_material": false,
-        "import_texture": false,
         "apply_light": false
     },
     "ani": {
