@@ -3509,7 +3509,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             return
 
         try:
-            from ..integration.import_executor import _get_texture_target_dir
+            from ..integration.import_executor import _get_texture_target_dir, _get_texture_import_policy
 
             asset_name = ""
             asset_id = ""
@@ -3534,13 +3534,31 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 return
             tex_name = tex_files[0]
             tex_basename = os.path.basename(tex_name)
-            target_dir = _get_texture_target_dir(asset_name, asset_id)
-            os.makedirs(target_dir, exist_ok=True)
-            hdr_target_path = os.path.join(target_dir, tex_basename).replace("\\", "/")
-            if not os.path.isfile(hdr_target_path):
-                with open(hdr_target_path, 'wb') as f:
-                    f.write(ZassetIO.read_file(json_path, tex_name))
-                print(f"[AssignHdr] 贴图已拷贝: {hdr_target_path}")
+
+            # ── 根据贴图导入策略决定 HDR 文件路径 ──
+            tex_policy = _get_texture_import_policy()
+
+            if tex_policy == "source_directory":
+                hdr_target_path = os.path.join(json_path, tex_name).replace("\\", "/")
+                if not os.path.isfile(hdr_target_path):
+                    hdr_target_path = os.path.join(json_path, "textures", tex_basename).replace("\\", "/")
+                print(f"[AssignHdr] 贴图策略=直接读取，使用原始路径: {hdr_target_path}")
+
+            elif tex_policy == "asset_directory":
+                hdr_target_path = os.path.join(json_path, tex_name).replace("\\", "/")
+                if not os.path.isfile(hdr_target_path):
+                    hdr_target_path = os.path.join(json_path, "textures", tex_basename).replace("\\", "/")
+                print(f"[AssignHdr] 贴图策略=资产目录，使用资产路径: {hdr_target_path}")
+
+            else:
+                # copy_to_project：拷贝到工程 sourceimages 目录
+                target_dir = _get_texture_target_dir(asset_name, asset_id)
+                os.makedirs(target_dir, exist_ok=True)
+                hdr_target_path = os.path.join(target_dir, tex_basename).replace("\\", "/")
+                if not os.path.isfile(hdr_target_path):
+                    with open(hdr_target_path, 'wb') as f:
+                        f.write(ZassetIO.read_file(json_path, tex_name))
+                    print(f"[AssignHdr] 贴图已拷贝: {hdr_target_path}")
 
             # ── 2. 对选中的每个对象，找形状节点并替换现有HDR贴图路径 ──
             for obj in sel:
@@ -3797,20 +3815,38 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                         except Exception as e:
                             print(f"[DomeLight] 替换 {node} 贴图失败: {e}")
                         continue
-                    # 3b. 其他节点 → 遍历字符串属性，匹配贴图扩展名
-                    attrs = cmds.listAttr(node, string=True, visible=True) or []
-                    for attr in attrs:
-                        try:
-                            full_attr = f"{node}.{attr}"
-                            old_val = cmds.getAttr(full_attr)
-                            if not isinstance(old_val, str) or not old_val:
-                                continue
-                            ext = os.path.splitext(old_val)[1].lower()
-                            if ext in ('.hdr', '.exr', '.png', '.jpg', '.jpeg', '.tga'):
-                                cmds.setAttr(full_attr, hdr_target_path, type="string")
-                                print(f"[DomeLight] 属性贴图已替换: {full_attr} → {hdr_target_path}")
-                        except Exception:
-                            pass
+                    # 3b. 其他节点 → 遍历字符串属性（含隐藏属性），匹配贴图扩展名
+                    assigned = False
+                    for try_visible in (True, False):
+                        if assigned:
+                            break
+                        attrs = cmds.listAttr(node, string=True, visible=try_visible) or []
+                        for attr in attrs:
+                            try:
+                                full_attr = f"{node}.{attr}"
+                                old_val = cmds.getAttr(full_attr)
+                                if not isinstance(old_val, str) or not old_val:
+                                    continue
+                                ext = os.path.splitext(old_val)[1].lower()
+                                if ext in ('.hdr', '.exr', '.png', '.jpg', '.jpeg', '.tga'):
+                                    cmds.setAttr(full_attr, hdr_target_path, type="string")
+                                    print(f"[DomeLight] 属性贴图已替换: {full_attr} → {hdr_target_path}")
+                                    assigned = True
+                                    break
+                            except Exception:
+                                pass
+                    # 3c. 回退：检查已知的贴图属性名（tex0, tex, texture, fileTextureName 等）
+                    if not assigned:
+                        for known_attr in ("tex0", "tex", "texture", "fileTextureName"):
+                            full_attr = f"{node}.{known_attr}"
+                            if cmds.objExists(full_attr):
+                                try:
+                                    cmds.setAttr(full_attr, hdr_target_path, type="string")
+                                    print(f"[DomeLight] 已知属性贴图已替换: {full_attr} → {hdr_target_path}")
+                                    assigned = True
+                                    break
+                                except Exception:
+                                    pass
 
             cmds.select(clear=True)
             print(f"[MaterialLibrary] 创建环境光完成 ({os.path.basename(preset_path)})")
