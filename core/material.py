@@ -185,16 +185,20 @@ class Material:
 
     # ── 序列化（UI 桥接） ──
 
-    def to_dict(self) -> dict:
+    def to_dict(self, include_thumb: bool = True) -> dict:
         """
         序列化为 UI 层兼容的 dict（与 MOCK_MATERIALS 格式一致）。
+
+        Args:
+            include_thumb: 是否读取缩略图字节。批量填充网格时传 False，
+                           缩略图由网格按需懒加载；单材质预览时保持 True。
 
         Returns:
             dict: 包含 id, name, name_cn, category, tags, node_type,
                   color, thumbnail_path, json_path, node_json_path,
                   software, renderer, color_space, create_date
         """
-        tb = self.read_thumbnail_content()
+        tb = self.read_thumbnail_content() if include_thumb else None
         d = {
             "id":               self.id,
             "name":             self.name,
