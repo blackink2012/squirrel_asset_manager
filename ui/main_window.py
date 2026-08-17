@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 import tempfile
 import uuid
@@ -5599,6 +5600,22 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             )
             if field_map:
                 kwargs.update(field_map)
+            # 贴图分类：仅导出材质上的贴图，跳过材质节点(.zmetal/.mcm)与几何体
+            if base_config.asset_type == "textures":
+                kwargs.update({
+                    "export_zmetal": False,
+                    "merge_zmetal": False,
+                    "export_mcm": False,
+                    "export_ma": False,
+                    "export_mb": False,
+                    "export_fbx": False,
+                    "export_obj": False,
+                    "export_usd": False,
+                    "export_abc": False,
+                    "export_material_only": True,
+                    "export_textures": True,
+                    "collect_associated": False,
+                })
             return ExportConfig(**kwargs)
 
         configs = []
