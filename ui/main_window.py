@@ -1,7 +1,6 @@
 import os
 import subprocess
 import tempfile
-import time
 import uuid
 
 from ..utils.maya_utils import get_qt_modules, get_maya_window
@@ -70,7 +69,6 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
     VIEW_LIST = 1
 
     def __init__(self, parent=None, library_path=None):
-        _t0 = time.perf_counter()
         if parent is None:
             parent = get_maya_window()
         super(MaterialLibraryWindow, self).__init__(parent)
@@ -100,24 +98,14 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         if _sam_mod:
             _sam_mod.manager = self._material_manager
         self._init_data_layer(library_path)
-        _t_data = time.perf_counter()
         self._restore_window_state()
 
         self._setup_ui()
-        _t_ui = time.perf_counter()
         self._create_connections()
         self._apply_styles()
         self._load_data()
-        _t_load = time.perf_counter()
         # 设置搜索栏标签列表
         self._init_search_bar_tags()
-        _t_end = time.perf_counter()
-        _ms = lambda a, b: (b - a) * 1000.0
-        print(f"[Perf][启动] 总耗时 {_ms(_t0, _t_end):.1f} ms | "
-              f"数据层(load_library) {_ms(_t0, _t_data):.1f} | "
-              f"UI构建 {_ms(_t_data, _t_ui):.1f} | "
-              f"首屏填充 {_ms(_t_ui, _t_load):.1f} | "
-              f"搜索栏 {_ms(_t_load, _t_end):.1f}")
         # 注：拖拽到视口由 dragDroppedOnViewport 信号处理，无需覆盖层
 
     # ── 数据层 ────────────────────────────────────────
@@ -333,11 +321,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             query["tags"] = q_tags
 
         # ── 2. 执行搜索 ──
-        _t_s0 = time.perf_counter()
         results = mgr.search(query)
-        _t_s1 = time.perf_counter()
         dicts = [m.to_dict(include_thumb=False) for m in results]
-        _t_s2 = time.perf_counter()
         asset_type = mgr.ASSET_SUB_LIBRARIES.get(root_lib, root_lib)
         for d in dicts:
             d["_category_display"] = mgr.get_category_display_name(
@@ -346,11 +331,6 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         # ── 3. 设置网格数据（set_materials 会清空筛选状态） ──
         self._thumbnail_grid.set_materials(dicts)
-        _t_s3 = time.perf_counter()
-        print(f"[Perf][搜索填充] 结果 {len(results)} 个 | "
-              f"search {(_t_s1 - _t_s0) * 1000.0:.1f} ms | "
-              f"to_dict(读缩略图) {(_t_s2 - _t_s1) * 1000.0:.1f} ms | "
-              f"set_materials {(_t_s3 - _t_s2) * 1000.0:.1f} ms")
 
         # ── 4. 恢复筛选状态（仅用于 UI 展示，实际已由 mgr 过滤好） ──
         if q_tags:
@@ -1354,7 +1334,6 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
     def _on_category_selected(self, category_id, descendant_ids, root_lib="materials"):
         """选中分类 → 统一 .zasset 路径刷新网格（所有子库同一套逻辑）"""
-        _t0 = time.perf_counter()
         # category_id 可能是复合 ID（如 "textures||AAAcustom"），提取 short_id
         if "||" in category_id:
             _, cat_short = split_cat_id(category_id)
@@ -1375,8 +1354,6 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         # Dict 模式：让 mgr.search() 处理组合过滤（分类+搜索+标签共存）
         self._dict_mode_search_and_set(category=cat_short)
-        _t1 = time.perf_counter()
-        print(f"[Perf][点击分类] {cat_short} 总耗时 {(_t1 - _t0) * 1000.0:.1f} ms")
 
     def _on_categories_multi_selected(self, cat_ids, all_desc_ids, root_lib="materials"):
         """多选分类 → 聚合所有选中分类及其后代的资产
