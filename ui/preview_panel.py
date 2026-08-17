@@ -147,13 +147,9 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         if not hasattr(self, '_preview_frame') or not hasattr(self, '_preview_label'):
             return
         try:
-            fw = self._preview_frame.width()
-            s = fw - 16
+            s = self._preview_frame.width() - 16
             if s < 80:
                 s = 160
-            fw = self._preview_frame.width()
-            if fw > 0:
-                self._preview_frame.setMaximumHeight(fw)
             if self._material:
                 self._draw_preview(self._material)
             else:
@@ -478,7 +474,7 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         else:
             self._d_notes.setVisible(False)
         self._update_fav_btn()
-        self._draw_preview(material)
+        self._draw_preview(material, clear_events=True)
         self._update_thumb_buttons()
 
     def _update_thumb_buttons(self):
@@ -827,11 +823,13 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         for b in getattr(self, '_thumb_btns', []):
             b.setEnabled(False)
 
-    def _draw_preview(self, mat):
+    def _draw_preview(self, mat, clear_events=False):
         # 停止旧播放器
         self._stop_media()
-        # 立即重绘，清除上一材质的视频帧（避免同步读 mp4 阻塞期间残留旧画面）
-        QtWidgets.QApplication.processEvents()
+        # 仅切换材质时立即重绘，清除上一材质的视频帧（避免同步读 mp4 阻塞期间残留旧画面）
+        # resize 路径不调用，防止拖动分割条时事件重入导致抖动
+        if clear_events:
+            QtWidgets.QApplication.processEvents()
 
         thumb_path = mat.get("thumbnail_path", "")
         is_zasset = mat.get("is_zasset", False)
