@@ -165,18 +165,22 @@ def import_external_folder(folder_path, mgr, cat_id):
         from ..core.zasset_builder import ZassetBuilder
         ZassetBuilder.build(target_path, files_built, meta)
 
-        # 缩略图
+        # 缩略图（用 Qt 生成，不再依赖 Pillow）
         if thumb_source and os.path.isfile(thumb_source):
             try:
-                from PIL import Image
-                import io
-                with Image.open(thumb_source) as img:
-                    img.thumbnail((512, 512), Image.Resampling.LANCZOS)
-                    if img.mode not in ('RGB', 'RGBA'):
-                        img = img.convert('RGBA')
-                    buf = io.BytesIO()
-                    img.save(buf, format='PNG')
-                    ZassetIO.write_thumbnail(target_path, buf.getvalue())
+                from ..utils.maya_utils import get_qt_modules
+                _, QtCore, QtGui, _, _ = get_qt_modules()
+                pix = QtGui.QPixmap(thumb_source)
+                if not pix.isNull():
+                    if pix.width() > 512 or pix.height() > 512:
+                        pix = pix.scaled(512, 512, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                                         QtCore.Qt.TransformationMode.SmoothTransformation)
+                    ba = QtCore.QByteArray()
+                    buf = QtCore.QBuffer(ba)
+                    buf.open(QtCore.QIODeviceBase.WriteOnly)
+                    pix.save(buf, "PNG")
+                    buf.close()
+                    ZassetIO.write_thumbnail(target_path, bytes(ba))
             except Exception:
                 pass
     else:

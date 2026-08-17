@@ -948,16 +948,18 @@ class PreviewPanelWidget(QtWidgets.QWidget):
                     full_path = os.path.join(textures_dir, fname)
                     if os.path.isfile(full_path):
                         try:
-                            from PIL import Image
-                            with Image.open(full_path) as img:
-                                result = f"{img.width}x{img.height}"
+                            reader = QtGui.QImageReader(full_path)
+                            size = reader.size()
+                            if size.isValid():
+                                result = f"{size.width()}x{size.height()}"
                                 break
                         except Exception:
-                            if ext in (".exr", ".hdr"):
-                                resolution = self._read_hdr_exr_size(full_path)
-                                if resolution:
-                                    result = resolution
-                                    break
+                            pass
+                        if ext in (".exr", ".hdr"):
+                            resolution = self._read_hdr_exr_size(full_path)
+                            if resolution:
+                                result = resolution
+                                break
         except Exception:
             pass
 

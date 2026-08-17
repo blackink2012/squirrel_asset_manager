@@ -24,7 +24,9 @@ ThumbnailCaptureOverlay — ZJG_截屏工具的极薄集成层
 
 import os
 import sys
+import shutil
 import tempfile
+import subprocess
 
 from ..utils.zjg_capture import CaptureTool as _OriginalCaptureTool
 try:
@@ -141,23 +143,35 @@ class ThumbnailCaptureOverlay(_OriginalCaptureTool):
             except: pass
             return
 
-        # 生成 GIF（原版逻辑）
+        # 生成 GIF（用 ffmpeg，不再依赖 Pillow）
         time_str = os.path.basename(self.record_temp_dir).replace("MayaScreenRecord_", "")
         file_name = f"Recording_{time_str}.aicon"
         file_path = os.path.join(self.save_path, file_name)
 
         try:
-            from PIL import Image
-            frames = []
-            for i in range(self.frame_counter):
-                frame_path = os.path.join(self.record_temp_dir, f"frame_{i:06d}.png")
-                frames.append(Image.open(frame_path).convert("P", palette=Image.Palette.ADAPTIVE))
-            duration = int(self.record_timer.interval() * 3)
-            frames[0].save(file_path, save_all=True, append_images=frames[1:],
-                          duration=duration, loop=0, optimize=True, format="GIF")
-            for f in frames: f.close()
-        except Exception as e:
-            print(f"[CaptureOverlay] 生成 GIF 失败: {e}")
+            fps = int(self.toolbar.fps_label.text().split()[0])
+        except Exception:
+            fps = 0
+        if fps <= 0:
+            fps = max(1, round(1000 / max(1, self.record_timer.interval())))
+
+        ffmpeg = self._find_ffmpeg()
+        if ffmpeg:
+            try:
+                pattern = os.path.join(self.record_temp_dir, "frame_%06d.png")
+                vf = f"fps={fps},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse"
+                cmd = [
+                    ffmpeg, '-y', '-framerate', str(fps), '-i', pattern,
+                    '-vf', vf, '-loop', '0', '-f', 'gif', file_path,
+                ]
+                result = subprocess.run(cmd, capture_output=True, timeout=180)
+                if result.returncode != 0 or not os.path.isfile(file_path):
+                    err = result.stderr.decode('utf-8', errors='replace')[-200:]
+                    print(f"[CaptureOverlay] 生成 GIF 失败: {err}")
+            except Exception as e:
+                print(f"[CaptureOverlay] 生成 GIF 失败: {e}")
+        else:
+            print("[CaptureOverlay] 未找到 ffmpeg，跳过 GIF 生成")
 
         # 清理临时帧
         try:
