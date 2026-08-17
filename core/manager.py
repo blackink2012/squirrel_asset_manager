@@ -17,7 +17,6 @@ MaterialManager — 材质库核心管理器
 
 import os
 import sys
-import time
 import uuid
 import json
 from typing import Optional, List, Dict, Union
@@ -63,6 +62,7 @@ class MaterialManager:
         self._search_text_cache: Dict[str, str] = {}  # material_id → 预计算搜索文本
         self._folder_meta_cache: Dict[str, dict] = {}  # dir_path → FolderMetadata 缓存
         self._sub_lib_index: Dict[str, List[Material]] = {}  # sub_library → 材质分桶索引
+        self._load_failures: List[dict] = []  # 加载失败的资产 [{name, path, reason}]
 
         # ── 从 config.json 加载配置 ──
         self._config = {}
@@ -132,7 +132,6 @@ class MaterialManager:
         Returns:
             bool: 加载成功返回 True
         """
-        _t0 = time.perf_counter()
         if not library_path or not os.path.isdir(library_path):
             print(f"[MaterialManager] 库路径无效: {library_path}")
             return False
@@ -143,6 +142,7 @@ class MaterialManager:
         self._name_cache.clear()
         self._duplicate_files.clear()
         self._folder_meta_cache.clear()
+        self._load_failures.clear()
 
         # 首次运行：创建所有子库文件夹 + 子分类文件夹 + 易读名元数据
         is_first_run = (os.path.isfile(os.path.join(self._library_path, "library.json")) == False)
@@ -191,7 +191,6 @@ class MaterialManager:
         # ── 扫描所有子库目录，索引资产（优先使用索引缓存）──
         # 遍历所有子库（materials, models, textures, lights, scenes, hdr）
         sub_lib_dirs = list(self.ASSET_SUB_LIBRARIES.keys())
-        _t_dirs = time.perf_counter()
 
         # 目录指纹 + 索引缓存：命中则跳过磁盘扫描与分类树遍历
         _signatures = self._compute_zasset_signatures()
@@ -200,8 +199,6 @@ class MaterialManager:
         if _cached is not None:
             _materials_dicts, _category_tree = _cached
             self._rebuild_from_cache(_materials_dicts, _category_tree)
-            _t_scan = time.perf_counter()
-            _t_cat = _t_scan
             print(f"[MaterialManager] 命中索引缓存: {len(_materials_dicts)} 个材质")
         else:
             def _scan_all_sub_libs():
@@ -230,9 +227,7 @@ class MaterialManager:
                 pass
 
             # ── 构建分类索引（使 _categories 包含所有分类） ──
-            _t_scan = time.perf_counter()
             self._build_category_index()
-            _t_cat = time.perf_counter()
 
             # 写索引缓存（供下次启动秒开）
             self._save_index_cache(_signatures)
@@ -287,21 +282,15 @@ class MaterialManager:
             self._save_favorites_to_file(fav_path)
 
         # 刷新分类的 material_count
-        _t_migfav = time.perf_counter()
         self._refresh_material_counts()
-        _t_end = time.perf_counter()
 
         total = len(self._materials)
-        _ms = lambda a, b: (b - a) * 1000.0
-        print(f"[Perf][load_library] 总耗时 {_ms(_t0, _t_end):.1f} ms | "
-              f"目录准备 {_ms(_t0, _t_dirs):.1f} | "
-              f"扫描 .zasset {_ms(_t_dirs, _t_scan):.1f} | "
-              f"分类索引(get_category_tree) {_ms(_t_scan, _t_cat):.1f} | "
-              f"迁移/收藏 {_ms(_t_cat, _t_migfav):.1f} | "
-              f"计数刷新 {_ms(_t_migfav, _t_end):.1f} | "
-              f"材质 {total} 个")
         print(f"[MaterialManager] 加载完成: {total} 个材质, "
               f"{len(self._categories)} 个分类")
+        if self._load_failures:
+            print(f"[MaterialManager] ⚠ 加载失败 {len(self._load_failures)} 个资产:")
+            for _f in self._load_failures:
+                print(f"  - {_f['name']} ({_f['path']}): {_f['reason']}")
 
         return total >= 0  # 空库也算成功
 
@@ -518,12 +507,19 @@ class MaterialManager:
                         parsed.append((fp, _fut.result()))
                     except Exception as e:
                         print(f"[MaterialManager] 跳过损坏文件: {fp} ({e})")
+                        self._load_failures.append({
+                            "name": os.path.basename(fp), "path": fp, "reason": str(e)
+                        })
                         failed += 1
 
         for filepath, mats in parsed:
             if not mats:
                 failed += 1
                 print(f"[MaterialManager] 跳过: {os.path.basename(filepath)} (from_json 返回空列表)")
+                self._load_failures.append({
+                    "name": os.path.basename(filepath), "path": filepath,
+                    "reason": "meta.json 缺失或无效"
+                })
                 continue
             for mat in mats:
                 if mat.id in self._materials:
@@ -1804,7 +1800,6 @@ class MaterialManager:
             return result
 
         import bisect
-        _t_tree0 = time.perf_counter()
 
         # 预计算所有材质的规范化路径并排序，供前缀计数复用
         norm_paths = sorted(
@@ -1922,9 +1917,6 @@ class MaterialManager:
             })
 
         self._cached_tree = result
-        _t_tree1 = time.perf_counter()
-        print(f"[Perf][get_category_tree] 构建耗时 {(_t_tree1 - _t_tree0) * 1000.0:.1f} ms "
-              f"(材质 {len(norm_paths)} 个)")
         return result
 
     # ── 收藏方法 ────────────────────────────────────────
@@ -2122,6 +2114,10 @@ class MaterialManager:
     def get_library_path(self) -> str:
         """获取当前材质库路径"""
         return self._library_path
+
+    def get_load_failures(self) -> List[dict]:
+        """返回本次加载失败的资产列表，每项为 {name, path, reason}"""
+        return self._load_failures
 
 
 # ── 自测 ──────────────────────────────────────────────────
