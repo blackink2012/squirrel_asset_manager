@@ -6,7 +6,7 @@ def reload_ui():
     for mod in list(sys.modules.keys()):
         if "squirrel_asset_manager" in mod:
             del sys.modules[mod]
-    sys.path.insert(0, r"E:\TRAE_projects\MaterialManagementPro")
+    sys.path.insert(0, r"E:\TRAE_Project\MaterialManagementPro")
     from squirrel_asset_manager.ui.main_window import MaterialLibraryWindow
     MaterialLibraryWindow.show_window()
 
