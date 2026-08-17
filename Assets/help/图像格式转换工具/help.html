@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图像格式转换工具 - 使用帮助</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+  display: flex; justify-content: center;
+}
+.wrapper { display: flex; max-width: 1080px; width: 100%; }
+.sidebar {
+  width: 220px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #f5f5f5; padding: 24px 16px; flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+.sidebar h2 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; border: none; padding: 0; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; }
+.sidebar a:hover { background: #e0e0e0; color: #000; text-decoration: none; }
+.sidebar a.sub { padding-left: 20px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 800px; min-width: 0; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 20px 0 8px; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0 8px 24px; }
+li { margin: 4px 0; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+pre { background: #f8f8f8; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0; border: 1px solid #e0e0e0; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; }
+td { background: #fff; font-size: 13px; }
+img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #ddd; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; }
+.badge-red { background: #fdecea; color: #e74c3c; }
+.badge-orange { background: #fef5e7; color: #e67e22; }
+.badge-blue { background: #eaf2f8; color: #2980b9; }
+.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h2>目录</h2>
+  <a href="#overview">1. 工具概述</a>
+  <a href="#formats">2. 支持的格式</a>
+  <a href="#ui">3. 界面说明</a>
+  <a href="#workflow">4. 使用流程</a>
+  <a href="#hdr-tone" class="sub">4.1 HDR色调映射</a>
+  <a href="#resolution" class="sub">4.2 分辨率调整</a>
+  <a href="#filename" class="sub">4.3 文件名清理</a>
+  <a href="#faq">5. 常见问题</a>
+</nav>
+
+<div class="content">
+
+<h1>图像格式转换工具</h1>
+
+<p>本工具使用 OpenCV 进行 HDR/EXR/TIFF/PNG/JPEG 等格式的批量转换，支持分辨率调整、格式转换和文件夹层级保持。</p>
+
+<h2 id="overview">1. 工具概述</h2>
+
+<p>图像格式转换工具可以：</p>
+<ul>
+<li>批量转换多种图像格式（HDR、EXR、PNG、JPEG、TIFF、BMP、WebP、TGA）</li>
+<li>从 HDR/EXR 浮点格式转换为 8 位格式时自动进行色调映射</li>
+<li>支持自定义输出分辨率</li>
+<li>保持原始文件夹层级结构</li>
+<li>自动清理不符合 Maya 规范的文件名</li>
+<li>实时显示转换日志和进度</li>
+</ul>
+
+<h2 id="formats">2. 支持的格式</h2>
+
+<table>
+<tr><th>格式</th><th>扩展名</th><th>支持模式</th><th>说明</th></tr>
+<tr><td><b>Radiance HDR</b></td><td>.hdr</td><td>浮点</td><td>高动态范围图像格式</td></tr>
+<tr><td><b>OpenEXR</b></td><td>.exr</td><td>浮点</td><td>工业级高动态范围图像格式</td></tr>
+<tr><td><b>PNG</b></td><td>.png</td><td>8位</td><td>无损压缩格式，支持透明通道</td></tr>
+<tr><td><b>JPEG</b></td><td>.jpg, .jpeg</td><td>8位</td><td>有损压缩格式，文件体积小</td></tr>
+<tr><td><b>TIFF</b></td><td>.tif, .tiff</td><td>两者</td><td>支持多种压缩方式</td></tr>
+<tr><td><b>BMP</b></td><td>.bmp</td><td>8位</td><td>无压缩位图格式</td></tr>
+<tr><td><b>WebP</b></td><td>.webp</td><td>8位</td><td>现代图像格式，压缩率高</td></tr>
+<tr><td><b>TGA</b></td><td>.tga</td><td>8位</td><td>游戏常用图像格式</td></tr>
+</table>
+
+<h2 id="ui">3. 界面说明</h2>
+
+<h3>3.1 输入模式</h3>
+
+<table>
+<tr><th>模式</th><th>说明</th><th>适用场景</th></tr>
+<tr><td><span class="badge badge-blue">选择文件</span></td><td>手动选择一个或多个图像文件</td><td>转换少量特定文件</td></tr>
+<tr><td><span class="badge badge-orange">选择文件夹</span></td><td>选择包含图像文件的文件夹，自动递归搜索</td><td>批量转换整个文件夹</td></tr>
+</table>
+
+<h3>3.2 输入格式过滤</h3>
+
+<p>仅转换指定格式的文件，留空则转换所有支持格式。支持逗号分隔多个格式。</p>
+
+<table>
+<tr><th>输入内容</th><th>效果</th></tr>
+<tr><td>（留空）</td><td>转换所有支持的图像格式</td></tr>
+<tr><td><code>png, jpg</code></td><td>仅转换 PNG 和 JPEG 文件</td></tr>
+<tr><td><code>exr</code></td><td>仅转换 EXR 文件</td></tr>
+<tr><td><code>hdr, exr</code></td><td>仅转换 HDR 和 EXR 文件</td></tr>
+</table>
+
+<h3>3.3 输出格式</h3>
+
+<table>
+<tr><th>格式</th><th>可用选项</th></tr>
+<tr><td><b>JPEG</b></td><td>品质 10%-100%（默认 95%）</td></tr>
+<tr><td><b>PNG</b></td><td>压缩级别 0-9（默认 5）</td></tr>
+<tr><td><b>TIFF</b></td><td>压缩方式：LZW、NONE、DEFLATE（默认 LZW）</td></tr>
+<tr><td><b>EXR / HDR</b></td><td>无额外选项</td></tr>
+<tr><td><b>其他格式</b></td><td>无额外选项</td></tr>
+</table>
+
+<h3>3.4 输出分辨率</h3>
+
+<table>
+<tr><th>选项</th><th>说明</th></tr>
+<tr><td><b>宽/高</b></td><td>目标分辨率，留空保持原尺寸</td></tr>
+<tr><td><b>保持宽高比</b></td><td>勾选时按比例缩放，取消则拉伸到指定尺寸</td></tr>
+</table>
+
+<h3>3.5 输出结构</h3>
+
+<table>
+<tr><th>选项</th><th>说明</th></tr>
+<tr><td><b>保持层级结构</b></td><td>勾选时保持原始文件夹层级结构，取消则所有文件输出到同一目录</td></tr>
+</table>
+
+<h2 id="workflow">4. 使用流程</h2>
+
+<div class="step">
+<h3>单文件转换流程</h3>
+<ol>
+<li>选择「选择文件」模式</li>
+<li>点击「浏览...」按钮选择要转换的图像文件</li>
+<li>设置输出文件夹（可选，默认使用输入文件目录）</li>
+<li>选择目标格式</li>
+<li>调整分辨率和其他选项（按需）</li>
+<li>点击「开始转换」按钮开始转换</li>
+</ol>
+</div>
+
+<div class="step">
+<h3>文件夹批量转换流程</h3>
+<ol>
+<li>选择「选择文件夹」模式</li>
+<li>点击「浏览...」按钮选择包含图像文件的文件夹</li>
+<li>设置输入格式过滤（可选）</li>
+<li>设置输出文件夹（可选）</li>
+<li>选择目标格式</li>
+<li>调整分辨率和其他选项（按需）</li>
+<li>点击「开始转换」按钮开始转换</li>
+</ol>
+</div>
+
+<h3 id="hdr-tone">4.1 HDR色调映射</h3>
+
+<p>当从 HDR/EXR 浮点格式转换为 8 位格式（如 PNG、JPEG）时，工具会自动进行色调映射：</p>
+
+<pre>
+1. 应用 Reinhard 色调映射：image = image / (image + 1.0)
+2. 应用 Gamma 校正：image = pow(image, 1.0 / 2.2)
+3. 转换为 8 位：image = image * 255
+</pre>
+
+<div class="note"><b>提示：</b>HDR 转 8 位格式时会损失动态范围，建议用于预览或缩略图生成。</div>
+
+<h3 id="resolution">4.2 分辨率调整</h3>
+
+<p>分辨率调整规则：</p>
+<ul>
+<li><b>仅设置宽度</b>：按比例计算高度</li>
+<li><b>仅设置高度</b>：按比例计算宽度</li>
+<li><b>同时设置宽高</b>：按较小比例缩放以适应（保持宽高比时）</li>
+<li><b>取消保持宽高比</b>：强制拉伸到指定尺寸</li>
+</ul>
+
+<h3 id="filename">4.3 文件名清理</h3>
+
+<p>工具会自动清理不符合 Maya 规范的文件名：</p>
+<ul>
+<li>保留：字母、数字、下划线、点号</li>
+<li>其他字符替换为下划线 <code>_</code></li>
+<li>开头必须是字母，否则用随机字母替换</li>
+</ul>
+
+<div class="warn"><b>注意：</b>文件名清理会修改源文件！如果源文件不符合 Maya 规范，工具会自动重命名源文件。</div>
+
+<h2 id="faq">5. 常见问题</h2>
+
+<h3>❌ EXR 文件无法读取</h3>
+<p>可能是缺少 <code>imageio</code> 依赖。EXR 文件读取优先使用 OpenCV，如果失败会回退到 imageio。建议安装 imageio 以获得更好的 EXR 兼容性。</p>
+
+<h3>❌ 转换后图像颜色异常</h3>
+<p>HDR/EXR 转 8 位格式时会进行色调映射，可能导致颜色与原始文件有差异。如果需要精确保留色彩，请保持原始格式或使用专业图像处理软件。</p>
+
+<h3>❌ 文件名被自动修改</h3>
+<p>Maya 要求文件名仅包含字母、数字、下划线和点号，且必须以字母开头。不符合规范的文件会被自动重命名。</p>
+
+<h3>❌ 转换速度慢</h3>
+<p>HDR/EXR 文件解码需要大量计算。建议：
+<ul>
+<li>使用文件夹模式时，通过格式过滤排除不需要转换的文件</li>
+<li>避免同时转换大量高分辨率 EXR 文件</li>
+</ul></p>
+
+<h3>❌ 内存不足</h3>
+<p>处理超大分辨率图像时可能出现内存不足。建议：
+<ul>
+<li>设置输出分辨率限制图像大小</li>
+<li>分批转换，不要同时处理过多文件</li>
+</ul></p>
+
+<h3>❌ 输出文件夹不存在</h3>
+<p>工具会自动创建输出文件夹，无需手动创建。</p>
+
+<div class="footer">
+图像格式转换工具 - MaterialManagementPro QuickTools
+</div>
+
+</div><!-- content -->
+</div><!-- wrapper -->
+</body>
+</html>
