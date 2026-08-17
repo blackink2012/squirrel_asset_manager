@@ -175,13 +175,17 @@ class MaterialDragLabel(QtWidgets.QLabel):
         if pix:
             drag.setPixmap(pix.scaled(80, 80, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation))
             drag.setHotSpot(QtCore.QPoint(40, 40))
-        drag.exec(QtCore.Qt.DropAction.CopyAction)
-        # 拖拽结束后触发导入/赋予（有选中则赋予，无则仅创建）
-        if grid and selected:
+        result = drag.exec(QtCore.Qt.DropAction.CopyAction)
+        # 仅当拖拽未被插件内部目标接受、且鼠标落在插件窗口之外时，才视为拖到 Maya 视口
+        if grid and selected and result == QtCore.Qt.DropAction.IgnoreAction:
             cursor_global = QtGui.QCursor.pos()
-            grid.dragDroppedOnViewport.emit(
-                [m.get("id", "") for m in selected],
-                cursor_global.x(), cursor_global.y())
+            top_window = grid.window()
+            outside = (top_window is None
+                       or not top_window.frameGeometry().contains(cursor_global))
+            if outside:
+                grid.dragDroppedOnViewport.emit(
+                    [m.get("id", "") for m in selected],
+                    cursor_global.x(), cursor_global.y())
 
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.MouseButton.LeftButton:
