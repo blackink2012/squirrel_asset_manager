@@ -12,7 +12,8 @@ shiboken6; python_version >= "3.9"
 # PySide2; python_version < "3.9"
 # shiboken2; python_version < "3.9"
 
-# ── 图像处理 ──
+# ── 图像处理（可选，仅 quicktools 快捷工具需要）──
+# 核心功能已改用 Maya 自带 Qt + 内置 ffmpeg，无需 Pillow
 Pillow>=10.0.0
 
 # ── AI 分析（可选，仅 AI 分析缩略图功能需要）──

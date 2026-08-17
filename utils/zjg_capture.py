@@ -4,10 +4,11 @@ Maya 现代化截屏录屏工具 - 独立工具栏版本（可输入分辨率，
 """
 
 import os
+import shutil
 import ctypes
 import tempfile
+import subprocess
 from datetime import datetime
-from PIL import Image
 
 try:
     from PySide6 import QtCore
@@ -539,6 +540,23 @@ class CaptureTool(QtWidgets.QWidget):
         self.toolbar.record_btn.setStyleSheet("QPushButton { background-color: #d0d0d0; color: #000000; }")
         self.update()
 
+    @staticmethod
+    def _find_ffmpeg():
+        """查找 ffmpeg 可执行文件（优先插件内置 bin/）"""
+        plugin_bin = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'bin', 'ffmpeg.exe',
+        )
+        if os.path.isfile(plugin_bin):
+            return plugin_bin
+        found = shutil.which('ffmpeg')
+        if found:
+            return found
+        for p in ['C:/ffmpeg/bin/ffmpeg.exe', 'C:/Program Files/ffmpeg/bin/ffmpeg.exe']:
+            if os.path.isfile(p):
+                return p
+        return ''
+
     def _stop_recording(self):
         if not self.is_recording:
             return
@@ -559,25 +577,42 @@ class CaptureTool(QtWidgets.QWidget):
         file_name = f"Recording_{time_str}.gif"
         file_path = os.path.join(self.save_path, file_name)
 
+        # 用 ffmpeg 合成 GIF（不再依赖 Pillow）
         try:
-            frames = []
-            for i in range(self.frame_counter):
-                frame_path = os.path.join(self.record_temp_dir, f"frame_{i:06d}.png")
-                frames.append(Image.open(frame_path).convert("P", palette=Image.Palette.ADAPTIVE))
+            fps = int(self.toolbar.fps_label.text().split()[0])
+        except Exception:
+            fps = 0
+        if fps <= 0:
+            fps = max(1, round(1000 / max(1, self.record_timer.interval())))
 
-            duration = int(self.record_timer.interval() * 3)
-            frames[0].save(
-                file_path,
-                save_all=True,
-                append_images=frames[1:],
-                duration=duration,
-                loop=0,
-                optimize=True
+        ok = False
+        ffmpeg = self._find_ffmpeg()
+        if ffmpeg:
+            try:
+                pattern = os.path.join(self.record_temp_dir, "frame_%06d.png")
+                vf = f"fps={fps},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse"
+                cmd = [
+                    ffmpeg, '-y', '-framerate', str(fps), '-i', pattern,
+                    '-vf', vf, '-loop', '0', file_path,
+                ]
+                result = subprocess.run(cmd, capture_output=True, timeout=180)
+                ok = (result.returncode == 0 and os.path.isfile(file_path)
+                      and os.path.getsize(file_path) > 0)
+            except Exception:
+                ok = False
+
+        # 无 ffmpeg 或合成失败时，保存最后一帧 PNG 作为兜底
+        if not ok:
+            last_frame = os.path.join(
+                self.record_temp_dir,
+                f"frame_{self.frame_counter - 1:06d}.png",
             )
-            for f in frames:
-                f.close()
-        except Exception as e:
-            pass
+            if os.path.isfile(last_frame):
+                try:
+                    fallback = os.path.splitext(file_path)[0] + ".png"
+                    shutil.copy2(last_frame, fallback)
+                except Exception:
+                    pass
 
         try:
             for f in os.listdir(self.record_temp_dir):
