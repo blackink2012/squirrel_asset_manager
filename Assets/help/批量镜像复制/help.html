@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>批量镜像复制工具 - 使用帮助</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+  display: flex; justify-content: center;
+}
+.wrapper { display: flex; max-width: 1080px; width: 100%; }
+.sidebar {
+  width: 220px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #f5f5f5; padding: 24px 16px; flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+.sidebar h2 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; border: none; padding: 0; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; }
+.sidebar a:hover { background: #e0e0e0; color: #000; text-decoration: none; }
+.sidebar a.sub { padding-left: 20px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 800px; min-width: 0; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 20px 0 8px; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0 8px 24px; }
+li { margin: 4px 0; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+pre { background: #f8f8f8; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0; border: 1px solid #e0e0e0; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; }
+td { background: #fff; font-size: 13px; }
+img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #ddd; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; }
+.badge-red { background: #fdecea; color: #e74c3c; }
+.badge-orange { background: #fef5e7; color: #e67e22; }
+.badge-blue { background: #eaf2f8; color: #2980b9; }
+.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h2>目录</h2>
+  <a href="#overview">1. 工具概述</a>
+  <a href="#features">2. 核心功能</a>
+  <a href="#ui">3. 界面说明</a>
+  <a href="#workflow">4. 使用流程</a>
+  <a href="#preview" class="sub">4.1 预览模式</a>
+  <a href="#faq">5. 常见问题</a>
+</nav>
+
+<div class="content">
+
+<h1>批量镜像复制工具</h1>
+
+<p>本工具可将源文件夹中指定格式的文件按完整的目录层级结构镜像复制到目标文件夹，适用于资产归档、文件分发和目录结构备份等场景。</p>
+
+<h2 id="overview">1. 工具概述</h2>
+
+<p>批量镜像复制工具可以：</p>
+<ul>
+<li>按文件扩展名过滤并批量复制文件</li>
+<li>保持源文件夹的完整目录层级结构</li>
+<li>跳过目标位置已存在的文件，避免重复复制</li>
+<li>支持预览模式，先行查看将要复制的文件列表</li>
+<li>实时显示复制进度和操作日志</li>
+<li>后台线程运行，界面不卡顿</li>
+<li>使用 <code>shutil.copy2</code> 保留文件元数据（修改时间等）</li>
+</ul>
+
+<h2 id="features">2. 核心功能</h2>
+
+<table>
+<tr><th>功能</th><th>说明</th></tr>
+<tr><td><b>镜像复制</b></td><td>将源文件夹中匹配的文件按相对路径完整复制到目标文件夹，保持目录结构不变</td></tr>
+<tr><td><b>格式过滤</b></td><td>按文件扩展名筛选要复制的文件，支持逗号分隔多个格式</td></tr>
+<tr><td><b>跳过已存在</b></td><td>目标位置已存在的文件自动跳过，不会覆盖</td></tr>
+<tr><td><b>预览模式</b></td><td>仅显示将要复制的文件列表，不实际执行复制操作</td></tr>
+<tr><td><b>进度追踪</b></td><td>实时进度条 + 详细操作日志，完成时弹出统计摘要</td></tr>
+</table>
+
+<h2 id="ui">3. 界面说明</h2>
+
+<h3>3.1 源文件夹</h3>
+<p>选择要从中复制文件的源文件夹。所有匹配的文件将按其在源文件夹中的相对路径进行复制。</p>
+
+<h3>3.2 目标文件夹</h3>
+<p>选择文件要复制到的目标文件夹。工具会在目标文件夹中自动重建源文件夹的目录结构。</p>
+
+<div class="warn"><b>注意：</b>源文件夹和目标文件夹不能相同，否则会导致操作被拒绝。</div>
+
+<h3>3.3 文件格式</h3>
+<p>指定要复制的文件扩展名，多个格式用逗号分隔。扩展名不区分大小写，可带或不带前导点号。</p>
+
+<table>
+<tr><th>输入内容</th><th>效果</th></tr>
+<tr><td><code>.exr, .hdr, .png, .jpg</code></td><td>复制 EXR、HDR、PNG 和 JPEG 文件（默认值）</td></tr>
+<tr><td><code>exr, hdr</code></td><td>仅复制 EXR 和 HDR 文件（自动补全点号）</td></tr>
+<tr><td><code>.tif, .tiff, .exr</code></td><td>复制 TIFF 和 EXR 文件</td></tr>
+</table>
+
+<h3>3.4 预览选项</h3>
+<p>勾选「仅预览（不实际复制）」后，点击开始复制将只扫描文件并列出匹配结果，不会执行任何复制操作。</p>
+
+<h3>3.5 操作按钮</h3>
+
+<table>
+<tr><th>按钮</th><th>功能</th></tr>
+<tr><td><b>开始复制</b></td><td>扫描源文件夹并开始镜像复制（或预览）</td></tr>
+<tr><td><b>清除日志</b></td><td>清空操作日志区域的内容</td></tr>
+<tr><td><b>退出</b></td><td>关闭工具窗口</td></tr>
+</table>
+
+<h3>3.6 进度与日志</h3>
+<ul>
+<li><b>进度标签：</b>显示当前处理状态（等待中 / 扫描中 / 处理中 / 完成）</li>
+<li><b>进度条：</b>显示整体完成百分比</li>
+<li><b>操作日志：</b>以时间戳记录每步操作，包括复制、跳过、失败等信息</li>
+</ul>
+
+<h2 id="workflow">4. 使用流程</h2>
+
+<div class="step">
+<h3>标准复制流程</h3>
+<ol>
+<li>点击源文件夹旁的「浏览」按钮，选择要复制的源文件夹</li>
+<li>点击目标文件夹旁的「浏览」按钮，选择目标文件夹</li>
+<li>在文件格式输入框中指定要复制的文件扩展名（多个用逗号分隔）</li>
+<li>（可选）勾选「仅预览」先行查看匹配结果</li>
+<li>点击「开始复制」按钮开始操作</li>
+<li>观察进度条和操作日志，等待完成</li>
+<li>完成时弹出统计摘要对话框</li>
+</ol>
+</div>
+
+<h3 id="preview">4.1 预览模式</h3>
+
+<p>预览模式不会实际复制任何文件，仅用于查看源文件夹中哪些文件将被匹配和复制。适用于：</p>
+<ul>
+<li>确认文件格式过滤器是否配置正确</li>
+<li>了解将要复制的文件总数和大小</li>
+<li>验证目录结构是否符合预期</li>
+</ul>
+
+<div class="note"><b>提示：</b>预览模式下匹配的文件数量与实际复制一致，可以准确评估操作规模。</div>
+
+<h2 id="faq">5. 常见问题</h2>
+
+<h3>源文件夹和目标文件夹能否相同？</h3>
+<p>不能。工具会检测源文件夹和目标文件夹是否相同，相同时会拒绝执行并提示错误。</p>
+
+<h3>目标文件已存在会怎样？</h3>
+<p>工具会自动跳过目标位置已存在的文件，不会进行覆盖。每条跳过记录都会在操作日志中以 <code>[跳过]</code> 标记显示。</p>
+
+<h3>复制失败怎么办？</h3>
+<p>单个文件复制失败不会中断整体流程，工具会继续处理后续文件。操作完成后会弹出统计摘要，其中列出所有失败文件及其错误原因，方便排查。</p>
+
+<h3>目录结构是如何保持的？</h3>
+<p>工具会计算每个文件相对于源文件夹根目录的路径，然后在目标文件夹中重建相同的相对路径。例如源文件夹中的 <code>maps/diffuse/color.exr</code> 会复制到 <code>目标文件夹/maps/diffuse/color.exr</code>。</p>
+
+<h3>文件元数据会保留吗？</h3>
+<p>工具使用 <code>shutil.copy2</code> 进行复制，会尽可能保留文件的修改时间等元数据信息。</p>
+
+<h3>复制过程中界面会卡顿吗？</h3>
+<p>不会。复制操作在独立的后台线程中执行，界面通过定时器（100ms 间隔）轮询进度队列进行更新，保持流畅响应。</p>
+
+<h3>可以复制大量文件吗？</h3>
+<p>可以。工具使用 <code>os.walk</code> 递归扫描源文件夹，对文件数量没有硬性限制。但处理大量文件时，扫描阶段可能需要一定时间。</p>
+
+<div class="footer">
+批量镜像复制工具 - MaterialManagementPro QuickTools
+</div>
+
+</div><!-- content -->
+</div><!-- wrapper -->
+</body>
+</html>
