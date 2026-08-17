@@ -9,6 +9,11 @@ from ..utils.settings import SettingsManager
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
+class _ThumbnailSignal(QtCore.QObject):
+    """跨线程缩略图加载完成信号"""
+    loaded = QtCore.Signal(str, object)  # (material_id, bytes or None)
+
+
 def _get_sub_style(font_size=13):
     return f"""
     QMenu {{ background-color:#2a2a2a; color:#d0d0d0;
@@ -335,6 +340,12 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         self._manager = None                # MaterialManager 引用（用于收藏判断）
         self._card_widgets = {}             # material_id → QFrame（缩放复用）
         self._thumb_cache = {}              # material_id → 原始 QPixmap
+        # ── 缩略图懒加载 ──
+        from concurrent.futures import ThreadPoolExecutor
+        self._thumb_pool = ThreadPoolExecutor(max_workers=4)
+        self._pending_thumbs = set()        # 正在后台读取缩略图的 material_id
+        self._thumb_signal = _ThumbnailSignal(self)
+        self._thumb_signal.loaded.connect(self._on_thumb_loaded)
         # ── 虚拟化相关 ──
         self._card_pool = {}               # material_id → QFrame（虚拟化卡片池）
         self._columns = 8                  # 当前列数（默认最大列数，卡片最小）
@@ -890,6 +901,62 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         container_h = max(total_h, self._scroll.viewport().height())
         self._icon_container.setFixedSize(container_w, container_h)
 
+    # ── 缩略图懒加载 ────────────────────────────────────
+
+    def _request_thumbnail(self, mid, material):
+        """后台线程读取单个 .zasset 缩略图，完成后回填卡片"""
+        if mid in self._thumb_cache or mid in self._pending_thumbs:
+            return
+        zpath = material.get("json_path") or material.get("zasset_path") or ""
+        if not zpath or not os.path.isdir(zpath):
+            return
+        self._pending_thumbs.add(mid)
+
+        def _read():
+            try:
+                from ..core.zasset_io import ZassetIO
+                return ZassetIO.read_thumbnail(zpath)
+            except Exception:
+                return None
+
+        fut = self._thumb_pool.submit(_read)
+        fut.add_done_callback(lambda f, m=mid: self._on_thumb_future_done(m, f))
+
+    def _on_thumb_future_done(self, mid, future):
+        try:
+            data = future.result()
+        except Exception:
+            data = None
+        self._thumb_signal.loaded.emit(mid, data)
+
+    def _on_thumb_loaded(self, mid, data):
+        """主线程：缩略图读取完成，缓存并更新对应卡片"""
+        self._pending_thumbs.discard(mid)
+        if not data:
+            return
+        raw = QtGui.QPixmap()
+        if not raw.loadFromData(data):
+            return
+        # 方形裁剪，与 _create_card 缓存逻辑保持一致
+        if raw.width() != raw.height():
+            s = min(raw.width(), raw.height())
+            raw = raw.copy((raw.width() - s) // 2, (raw.height() - s) // 2, s, s)
+        self._thumb_cache[mid] = raw
+        card = self._card_pool.get(mid)
+        if card is not None:
+            self._apply_card_thumb(card, raw)
+
+    def _apply_card_thumb(self, card, raw):
+        thumb = getattr(card, '_thumb_label', None)
+        if thumb is None:
+            return
+        W = self._thumb_size
+        thumb_sz = W - 4 - max(3, int(W * 0.06)) * 2
+        pix = raw.scaled(thumb_sz, thumb_sz,
+                         QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+                         QtCore.Qt.TransformationMode.SmoothTransformation)
+        thumb.setPixmap(pix)
+
     def set_sort_key(self, key):
         reverse = False
         if key.startswith("-"):
@@ -1236,12 +1303,23 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         thumb.setFixedSize(thumb_sz, thumb_sz)
         thumb.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         thumb.setScaledContents(False)
+        card._thumb_label = thumb
 
         thumb_path = material.get("thumbnail_path", "")
         is_zasset = material.get("is_zasset", False)
         thumb_bytes = material.get("thumb_bytes") if is_zasset else None
         mid = material.get("id", "")
         pix_loaded = False
+
+        # 懒加载场景：thumb_bytes 为空但缓存已有图 → 直接用缓存图（切换分类复用）
+        if is_zasset and not thumb_bytes and mid in self._thumb_cache:
+            raw = self._thumb_cache[mid]
+            if not raw.isNull():
+                pix = raw.scaled(thumb_sz, thumb_sz,
+                                 QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+                                 QtCore.Qt.TransformationMode.SmoothTransformation)
+                thumb.setPixmap(pix)
+                pix_loaded = True
 
         # ⚡ .zasset 模式：从 thumb_bytes 加载缩略图
         if is_zasset and thumb_bytes:
@@ -1308,6 +1386,9 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                              material.get("name_cn", ""))
             painter.end()
             thumb.setPixmap(pix)
+        # 懒加载：.zasset 且未携带缩略图字节、且无缓存图时，后台异步读取后回填
+        if is_zasset and not thumb_bytes and not pix_loaded:
+            self._request_thumbnail(mid, material)
         layout.addWidget(thumb, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
 
         # ── 文本区 ──
@@ -1983,56 +2064,6 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                         a.triggered.connect(lambda *a, pp=preset_path, m=mat:
                             self.createDomeLightRequested.emit(pp, m))
                     menu.addMenu(dome_sub)
-            # HDR 额外：导入贴图子菜单（与 textures 一致）
-            hdr_tex_names = _get_texture_names(json_path)
-            if _is_ctx_enabled(sub_lib, "import_texture", ctx_preset) and hdr_tex_names:
-                tex_sub = QtWidgets.QMenu('导入贴图', menu)
-                tex_sub.setStyleSheet(_get_sub_style(font_size))
-
-                # 按分辨率分组
-                resolution_groups = {}
-                for tn in hdr_tex_names:
-                    parts = tn.split('/', 1)
-                    if len(parts) == 2:
-                        res, fname = parts
-                        resolution_groups.setdefault(res, []).append(fname)
-                    else:
-                        resolution_groups.setdefault('', []).append(tn)
-
-                if len(resolution_groups) > 1:
-                    for res, files in sorted(resolution_groups.items()):
-                        res_label = res if res else '根目录'
-                        res_sub = QtWidgets.QMenu(res_label, tex_sub)
-                        res_sub.setStyleSheet(_get_sub_style(font_size))
-                        for fname in files:
-                            full_path = f"{res}/{fname}" if res else fname
-                            action = res_sub.addAction(f'  {fname}')
-                            action.triggered.connect(
-                                lambda *a, jp=json_path, fp=full_path:
-                                    self.importSingleTextureRequested.emit(jp, fp))
-                        res_sub.addSeparator()
-                        res_paths = [f"{res}/{f}" if res else f for f in files]
-                        all_label = f'  导入全部 ({res_label})'
-                        action_all = res_sub.addAction(all_label)
-                        action_all.triggered.connect(
-                            lambda *a, jp=json_path, fps=res_paths:
-                                self.importTexturesSharedUVRequested.emit(jp, fps))
-                        tex_sub.addMenu(res_sub)
-                else:
-                    all_files = []
-                    for res, files in resolution_groups.items():
-                        for fname in files:
-                            full_path = f"{res}/{fname}" if res else fname
-                            a = tex_sub.addAction(f'  {fname}')
-                            a.triggered.connect(lambda *a, jp=json_path, tn=full_path:
-                                self.importSingleTextureRequested.emit(jp, tn))
-                            all_files.append(full_path)
-                    tex_sub.addSeparator()
-                    a_all = tex_sub.addAction('  导入全部')
-                    a_all.triggered.connect(lambda *a, jp=json_path, fps=all_files:
-                        self.importTexturesSharedUVRequested.emit(jp, fps))
-
-                menu.addMenu(tex_sub)
             if _is_ctx_enabled(sub_lib, "assign_texture", ctx_preset):
                 menu.addAction('指定贴图').triggered.connect(
                     lambda: self.assignHdrToDomeRequested.emit(mat))

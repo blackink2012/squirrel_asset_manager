@@ -830,6 +830,8 @@ class PreviewPanelWidget(QtWidgets.QWidget):
     def _draw_preview(self, mat):
         # 停止旧播放器
         self._stop_media()
+        # 立即重绘，清除上一材质的视频帧（避免同步读 mp4 阻塞期间残留旧画面）
+        QtWidgets.QApplication.processEvents()
 
         thumb_path = mat.get("thumbnail_path", "")
         is_zasset = mat.get("is_zasset", False)
@@ -1059,6 +1061,7 @@ class PreviewPanelWidget(QtWidgets.QWidget):
             self._mp4_player.deleteLater()
         self._mp4_player = None
         if self._mp4_widget:
+            self._mp4_widget.hide()  # 立即隐藏，避免切换时闪现上一次的视频画面
             self._mp4_widget.deleteLater()
         self._mp4_widget = None
         self._preview_label.clear()

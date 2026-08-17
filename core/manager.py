@@ -17,6 +17,7 @@ MaterialManager — 材质库核心管理器
 
 import os
 import sys
+import time
 import uuid
 import json
 from typing import Optional, List, Dict, Union
@@ -60,6 +61,8 @@ class MaterialManager:
         self._name_cache: Dict[str, set] = {}  # sub_lib → set(name) 同名检测加速
         self._path_index: Dict[str, 'Material'] = {}  # json_path → Material 反向索引
         self._search_text_cache: Dict[str, str] = {}  # material_id → 预计算搜索文本
+        self._folder_meta_cache: Dict[str, dict] = {}  # dir_path → FolderMetadata 缓存
+        self._sub_lib_index: Dict[str, List[Material]] = {}  # sub_library → 材质分桶索引
 
         # ── 从 config.json 加载配置 ──
         self._config = {}
@@ -129,6 +132,7 @@ class MaterialManager:
         Returns:
             bool: 加载成功返回 True
         """
+        _t0 = time.perf_counter()
         if not library_path or not os.path.isdir(library_path):
             print(f"[MaterialManager] 库路径无效: {library_path}")
             return False
@@ -138,6 +142,7 @@ class MaterialManager:
         self._materials.clear()
         self._name_cache.clear()
         self._duplicate_files.clear()
+        self._folder_meta_cache.clear()
 
         # 首次运行：创建所有子库文件夹 + 子分类文件夹 + 易读名元数据
         is_first_run = (os.path.isfile(os.path.join(self._library_path, "library.json")) == False)
@@ -183,37 +188,54 @@ class MaterialManager:
                 "total_materials": 0,
             })
 
-        # ── 扫描所有子库目录，索引资产 ──
+        # ── 扫描所有子库目录，索引资产（优先使用索引缓存）──
         # 遍历所有子库（materials, models, textures, lights, scenes, hdr）
         sub_lib_dirs = list(self.ASSET_SUB_LIBRARIES.keys())
+        _t_dirs = time.perf_counter()
 
-        def _scan_all_sub_libs():
-            """对所有子库执行 _scan_materials_directory"""
-            for sld in sub_lib_dirs:
-                d = os.path.join(self._library_path, sld)
-                if os.path.isdir(d):
-                    self._scan_materials_directory(d)
+        # 目录指纹 + 索引缓存：命中则跳过磁盘扫描与分类树遍历
+        _signatures = self._compute_zasset_signatures()
+        _cached = self._load_index_cache(_signatures)
 
-        _scan_all_sub_libs()
+        if _cached is not None:
+            _materials_dicts, _category_tree = _cached
+            self._rebuild_from_cache(_materials_dicts, _category_tree)
+            _t_scan = time.perf_counter()
+            _t_cat = _t_scan
+            print(f"[MaterialManager] 命中索引缓存: {len(_materials_dicts)} 个材质")
+        else:
+            def _scan_all_sub_libs():
+                """对所有子库执行 _scan_materials_directory"""
+                for sld in sub_lib_dirs:
+                    d = os.path.join(self._library_path, sld)
+                    if os.path.isdir(d):
+                        self._scan_materials_directory(d)
 
-        # ── 补充扫描库根目录下的自定义顶级分类文件夹 ──
-        # 自定义顶级分类不在 ASSET_SUB_LIBRARIES 下，而是直接放在库根目录，
-        # 需单独扫描以索引其中的 .zasset 资产
-        try:
-            for entry in os.listdir(self._library_path):
-                if entry in sub_lib_dirs or entry.startswith('.'):
-                    continue
-                entry_path = os.path.join(self._library_path, entry)
-                if not os.path.isdir(entry_path):
-                    continue
-                if entry in ("library.json", "favorites.json", "FolderMetadata.fdata"):
-                    continue
-                self._scan_materials_directory(entry_path)
-        except PermissionError:
-            pass
+            _scan_all_sub_libs()
 
-        # ── 构建分类索引（使 _categories 包含所有分类） ──
-        self._build_category_index()
+            # ── 补充扫描库根目录下的自定义顶级分类文件夹 ──
+            # 自定义顶级分类不在 ASSET_SUB_LIBRARIES 下，而是直接放在库根目录，
+            # 需单独扫描以索引其中的 .zasset 资产
+            try:
+                for entry in os.listdir(self._library_path):
+                    if entry in sub_lib_dirs or entry.startswith('.'):
+                        continue
+                    entry_path = os.path.join(self._library_path, entry)
+                    if not os.path.isdir(entry_path):
+                        continue
+                    if entry in ("library.json", "favorites.json", "FolderMetadata.fdata"):
+                        continue
+                    self._scan_materials_directory(entry_path)
+            except PermissionError:
+                pass
+
+            # ── 构建分类索引（使 _categories 包含所有分类） ──
+            _t_scan = time.perf_counter()
+            self._build_category_index()
+            _t_cat = time.perf_counter()
+
+            # 写索引缓存（供下次启动秒开）
+            self._save_index_cache(_signatures)
 
         # ── 文件后缀专有化：FolderMetadata 和缩略图迁移（仅一次） ──
 
@@ -265,45 +287,170 @@ class MaterialManager:
             self._save_favorites_to_file(fav_path)
 
         # 刷新分类的 material_count
+        _t_migfav = time.perf_counter()
         self._refresh_material_counts()
+        _t_end = time.perf_counter()
 
         total = len(self._materials)
+        _ms = lambda a, b: (b - a) * 1000.0
+        print(f"[Perf][load_library] 总耗时 {_ms(_t0, _t_end):.1f} ms | "
+              f"目录准备 {_ms(_t0, _t_dirs):.1f} | "
+              f"扫描 .zasset {_ms(_t_dirs, _t_scan):.1f} | "
+              f"分类索引(get_category_tree) {_ms(_t_scan, _t_cat):.1f} | "
+              f"迁移/收藏 {_ms(_t_cat, _t_migfav):.1f} | "
+              f"计数刷新 {_ms(_t_migfav, _t_end):.1f} | "
+              f"材质 {total} 个")
         print(f"[MaterialManager] 加载完成: {total} 个材质, "
               f"{len(self._categories)} 个分类")
 
         return total >= 0  # 空库也算成功
+
+    # ── 索引缓存 ────────────────────────────────────────
+
+    _CACHE_VERSION = 2
+    # Material 可缓存字段（用于从缓存重建对象）
+    _CACHE_FIELDS = (
+        "id", "name", "name_cn", "sub_library", "category", "tags", "node_type",
+        "json_path", "thumbnail_path", "software", "renderer", "color_space",
+        "create_date", "file_mtime", "exported_formats", "ani", "resolution",
+        "variant_types", "default_version", "default_lod", "notes",
+    )
+
+    def _index_cache_path(self) -> str:
+        return os.path.join(self._library_path, ".squirrel_index_cache.json")
+
+    def _compute_zasset_signatures(self) -> dict:
+        """计算所有 .zasset 的目录指纹 {path: mtime_us}，用于缓存失效检测"""
+        sigs = {}
+        sub_lib_dirs = list(self.ASSET_SUB_LIBRARIES.keys())
+        dirs = []
+        for sld in sub_lib_dirs:
+            d = os.path.join(self._library_path, sld)
+            if os.path.isdir(d):
+                dirs.append(d)
+        try:
+            for entry in os.listdir(self._library_path):
+                if entry in sub_lib_dirs or entry.startswith('.'):
+                    continue
+                ep = os.path.join(self._library_path, entry)
+                if os.path.isdir(ep) and entry not in ("library.json", "favorites.json", "FolderMetadata.fdata"):
+                    dirs.append(ep)
+        except PermissionError:
+            pass
+
+        # 用一次递归 scandir 遍历同时拿到路径与 mtime，避免逐文件 stat 的网络往返
+        # （Windows 上 DirEntry.stat(follow_symlinks=False) 复用 scandir 已收集的信息）
+        def _walk(root):
+            try:
+                with os.scandir(root) as it:
+                    for e in it:
+                        if e.name.endswith('.zasset') and e.is_dir(follow_symlinks=False):
+                            try:
+                                sigs[e.path] = e.stat(follow_symlinks=False).st_mtime_ns // 1000
+                            except OSError:
+                                sigs[e.path] = 0
+                        elif e.is_dir(follow_symlinks=False) and not e.name.startswith('.'):
+                            _walk(e.path)
+            except OSError:
+                pass
+
+        for d in dirs:
+            _walk(d)
+        return sigs
+
+    def _load_index_cache(self, signatures: dict):
+        """读索引缓存，签名一致则返回 (materials_dicts, category_tree)，否则 None"""
+        cache_path = self._index_cache_path()
+        if not os.path.isfile(cache_path):
+            return None
+        try:
+            data = self._json_handler.read_json(cache_path)
+            if not data or data.get("version") != self._CACHE_VERSION:
+                return None
+            if data.get("signatures") != signatures:
+                return None
+            return data.get("materials", []), data.get("category_tree", [])
+        except Exception:
+            return None
+
+    def _save_index_cache(self, signatures: dict):
+        """写索引缓存（材质元数据 + 分类树）"""
+        cache_path = self._index_cache_path()
+        materials = [m.to_dict(include_thumb=False) for m in self._materials.values()]
+        tree = self._cached_tree if self._cached_tree is not None else self.get_category_tree()
+        data = {
+            "version": self._CACHE_VERSION,
+            "signatures": signatures,
+            "materials": materials,
+            "category_tree": tree,
+        }
+        try:
+            self._json_handler.write_json(cache_path, data)
+        except Exception as e:
+            print(f"[MaterialManager] 写索引缓存失败: {e}")
+
+    def _rebuild_from_cache(self, materials_dicts, category_tree):
+        """从缓存重建内存索引，跳过磁盘扫描"""
+        self._materials.clear()
+        self._name_cache.clear()
+        self._path_index.clear()
+        self._search_text_cache.clear()
+        self._duplicate_files.clear()
+        for d in materials_dicts:
+            try:
+                mat = Material(**{k: d.get(k) for k in self._CACHE_FIELDS})
+            except Exception:
+                continue
+            self._materials[mat.id] = mat
+            if mat.json_path:
+                self._path_index[mat.json_path] = mat
+            self._build_search_text(mat)
+            if mat.name:
+                self._name_cache.setdefault(mat.sub_library or "", set()).add(mat.name)
+        self._cached_tree = category_tree
+        self._build_category_index()
 
     # ── 文件夹元数据 ────────────────────────────────────
 
     METADATA_FILENAME = "FolderMetadata.fdata"
 
     def _ensure_folder_meta(self, dir_path: str, default_name_cn: str = ""):
-        """确保文件夹内有 FolderMetadata.fdata，缺失则创建。返回元数据 dict。"""
+        """确保文件夹内有 FolderMetadata.fdata，缺失则创建。返回元数据 dict（带缓存）。"""
+        cached = self._folder_meta_cache.get(dir_path)
+        if cached is not None:
+            return cached
         meta_path = os.path.join(dir_path, self.METADATA_FILENAME)
         if os.path.isfile(meta_path):
             data = self._json_handler.read_json(meta_path) or {}
             if "id" not in data:
                 data["id"] = str(uuid.uuid4())
                 self._json_handler.write_json(meta_path, data)
-            return data
-        data = {
-            "id": str(uuid.uuid4()),
-            "name_cn": default_name_cn or os.path.basename(dir_path),
-        }
-        self._json_handler.write_json(meta_path, data)
+        else:
+            data = {
+                "id": str(uuid.uuid4()),
+                "name_cn": default_name_cn or os.path.basename(dir_path),
+            }
+            self._json_handler.write_json(meta_path, data)
+        self._folder_meta_cache[dir_path] = data
         return data
 
     def _read_folder_meta(self, dir_path: str) -> dict:
-        """读取文件夹元数据，无则返回空 dict"""
+        """读取文件夹元数据，无则返回空 dict（带缓存）"""
+        cached = self._folder_meta_cache.get(dir_path)
+        if cached is not None:
+            return cached
         meta_path = os.path.join(dir_path, self.METADATA_FILENAME)
+        data = {}
         if os.path.isfile(meta_path):
-            return self._json_handler.read_json(meta_path) or {}
-        return {}
+            data = self._json_handler.read_json(meta_path) or {}
+        self._folder_meta_cache[dir_path] = data
+        return data
 
     def _write_folder_meta(self, dir_path: str, data: dict):
-        """写入文件夹元数据"""
+        """写入文件夹元数据（同时更新缓存）"""
         meta_path = os.path.join(dir_path, self.METADATA_FILENAME)
         self._json_handler.write_json(meta_path, data)
+        self._folder_meta_cache[dir_path] = data
 
     def _has_child_folders(self, dir_path: str) -> bool:
         """检查目录下是否有子文件夹（不含 textures）"""
@@ -359,55 +506,64 @@ class MaterialManager:
         failed = 0
         skipped = 0
 
-        for filepath in zasset_files:
-            try:
-                mats = Material.from_json(filepath, self._json_handler)
-                if not mats:
-                    failed += 1
-                    print(f"[MaterialManager] 跳过: {os.path.basename(filepath)} (from_json 返回空列表)")
-                    continue
-                for mat in mats:
-                    if mat.id in self._materials:
-                        existing = self._materials[mat.id]
-                        display = existing.name or existing.name_cn or "unknown"
-                        print(f"[MaterialManager] ⚠ UUID冲突: {os.path.basename(filepath)} (id={mat.id}) "
-                              f"与 {display} ({os.path.basename(existing.json_path)}) 重复，收集待修复")
-                        self._duplicate_files.append(filepath)
-                        skipped += 1
-                        continue
+        # ── 并行读取 meta.json（纯读、线程安全，降低网络盘串行 I/O 等待）──
+        from concurrent.futures import ThreadPoolExecutor
+        parsed = []
+        if zasset_files:
+            with ThreadPoolExecutor(max_workers=8) as _ex:
+                _futs = [(fp, _ex.submit(Material.from_json, fp, self._json_handler))
+                         for fp in zasset_files]
+                for fp, _fut in _futs:
+                    try:
+                        parsed.append((fp, _fut.result()))
+                    except Exception as e:
+                        print(f"[MaterialManager] 跳过损坏文件: {fp} ({e})")
+                        failed += 1
 
-                    # 从路径推断分类（.zasset 在分类文件夹内）
-                    mat_dir = os.path.dirname(filepath)
-                    rel = os.path.relpath(mat_dir, materials_dir)
-                    parts = rel.replace("\\", "/").split("/")
-                    if len(parts) >= 2:
-                        mat.category = parts[-2]
-                    elif len(parts) == 1 and parts[0] not in (".", ""):
-                        mat.category = parts[0]
-                    else:
-                        mat.category = "custom"
-                    # 记录所属子库（优先从目录链上 FolderMetadata.fdata 的 type 字段确定，
-                    # 避免 meta.json 中的 asset_type 写入非子库名导致过滤丢失）
-                    folder_sub_lib = os.path.basename(materials_dir)
-                    fdata_sub_lib = ""
-                    check_dir = mat_dir
-                    while check_dir and check_dir.startswith(materials_dir):
-                        fm = self._read_folder_meta(check_dir)
-                        t = fm.get("type", "")
-                        if t:
-                            fdata_sub_lib = t
-                            break
-                        parent = os.path.dirname(check_dir)
-                        if parent == check_dir:
-                            break
-                        check_dir = parent
-                    mat.sub_library = fdata_sub_lib if fdata_sub_lib else folder_sub_lib
-
-                    self._materials[mat.id] = mat
-                    loaded += 1
-            except Exception as e:
-                print(f"[MaterialManager] 跳过损坏文件: {filepath} ({e})")
+        for filepath, mats in parsed:
+            if not mats:
                 failed += 1
+                print(f"[MaterialManager] 跳过: {os.path.basename(filepath)} (from_json 返回空列表)")
+                continue
+            for mat in mats:
+                if mat.id in self._materials:
+                    existing = self._materials[mat.id]
+                    display = existing.name or existing.name_cn or "unknown"
+                    print(f"[MaterialManager] ⚠ UUID冲突: {os.path.basename(filepath)} (id={mat.id}) "
+                          f"与 {display} ({os.path.basename(existing.json_path)}) 重复，收集待修复")
+                    self._duplicate_files.append(filepath)
+                    skipped += 1
+                    continue
+
+                # 从路径推断分类（.zasset 在分类文件夹内）
+                mat_dir = os.path.dirname(filepath)
+                rel = os.path.relpath(mat_dir, materials_dir)
+                parts = rel.replace("\\", "/").split("/")
+                if len(parts) >= 2:
+                    mat.category = parts[-2]
+                elif len(parts) == 1 and parts[0] not in (".", ""):
+                    mat.category = parts[0]
+                else:
+                    mat.category = "custom"
+                # 记录所属子库（优先从目录链上 FolderMetadata.fdata 的 type 字段确定，
+                # 避免 meta.json 中的 asset_type 写入非子库名导致过滤丢失）
+                folder_sub_lib = os.path.basename(materials_dir)
+                fdata_sub_lib = ""
+                check_dir = mat_dir
+                while check_dir and check_dir.startswith(materials_dir):
+                    fm = self._read_folder_meta(check_dir)
+                    t = fm.get("type", "")
+                    if t:
+                        fdata_sub_lib = t
+                        break
+                    parent = os.path.dirname(check_dir)
+                    if parent == check_dir:
+                        break
+                    check_dir = parent
+                mat.sub_library = fdata_sub_lib if fdata_sub_lib else folder_sub_lib
+
+                self._materials[mat.id] = mat
+                loaded += 1
 
         # 名称冲突检测：全子库范围内检查完全同名资产，自动重命名
         import re as _re
@@ -470,12 +626,15 @@ class MaterialManager:
         self._search_text_cache[mat.id] = " ".join(parts).lower()
 
     def _refresh_material_counts(self):
-        """刷新每个分类的 material_count"""
+        """刷新每个分类的 material_count，并重建子库分桶索引"""
         # 清零
         for cat in self._categories.values():
             cat.material_count = 0
+        # 重建子库分桶索引（供 get_materials 按 sub_library 快速过滤）
+        sub_lib_index = {}
         # 计数
         for mat in self._materials.values():
+            sub_lib_index.setdefault(mat.sub_library or "", []).append(mat)
             if mat.category in self._categories:
                 self._categories[mat.category].material_count += 1
             # 也更新父分类
@@ -483,6 +642,7 @@ class MaterialManager:
             while parent_cat:
                 parent_cat.material_count += 1
                 parent_cat = self._find_parent_category(parent_cat.id)
+        self._sub_lib_index = sub_lib_index
 
     def _find_parent_category(self, category_id: str) -> Optional[Category]:
         """查找分类的父分类"""
@@ -596,44 +756,45 @@ class MaterialManager:
             sub_library: 可选，指定子库名称（"materials"/"textures"/等），
                          用于防止跨子库同名分类串库
         """
-        if not category_id or category_id == "all":
-            result = list(self._materials.values())
-        else:
-            sub_lib_dir = sub_library or "materials"
-            if self._library_path:
-                materials_dir = os.path.join(self._library_path, sub_lib_dir)
-            else:
-                materials_dir = ""
-
-            def _under_category(mat, cat_id):
-                # 匹配1：category 字段精确匹配（直接同名）
-                if mat.category == cat_id:
-                    return True
-                # 匹配2：category 为嵌套路径（如 "characters/soldier" 匹配 cat_id="soldier"）
-                if mat.category:
-                    norm_cat = mat.category.replace("\\", "/")
-                    if norm_cat.endswith("/" + cat_id) or norm_cat == cat_id:
-                        return True
-                # 匹配3：磁盘路径匹配（支持嵌套层级）
-                if mat.json_path and materials_dir:
-                    norm_json = os.path.normpath(mat.json_path)
-                    norm_materials = os.path.normpath(materials_dir)
-                    if norm_json.startswith(norm_materials + os.sep):
-                        rel_path = norm_json[len(norm_materials) + 1:]
-                        # 直接子目录：rel_path 以 cat_id/ 开头 或 恰好等于 cat_id
-                        if rel_path == cat_id or rel_path.startswith(cat_id + os.sep):
-                            return True
-                        # 嵌套路径：rel_path 中包含 /cat_id/ 片段（如 "characters/soldier/a.zasset"）
-                        if (os.sep + cat_id + os.sep) in (os.sep + rel_path):
-                            return True
-                return False
-
-            result = [m for m in self._materials.values() if _under_category(m, category_id)]
-
-        # 可选：子库过滤（防止跨子库同名分类串库）
+        # 子库分桶：直接取对应子库的材质列表，避免全量遍历后再过滤
         if sub_library:
-            result = [m for m in result if m.sub_library == sub_library]
-        return result
+            pool = self._sub_lib_index.get(sub_library, [])
+        else:
+            pool = list(self._materials.values())
+
+        if not category_id or category_id == "all":
+            return list(pool)
+
+        sub_lib_dir = sub_library or "materials"
+        if self._library_path:
+            materials_dir = os.path.join(self._library_path, sub_lib_dir)
+        else:
+            materials_dir = ""
+        norm_materials = os.path.normpath(materials_dir) if materials_dir else ""
+
+        def _under_category(mat, cat_id):
+            # 匹配1：category 字段精确匹配（直接同名）
+            if mat.category == cat_id:
+                return True
+            # 匹配2：category 为嵌套路径（如 "characters/soldier" 匹配 cat_id="soldier"）
+            if mat.category:
+                norm_cat = mat.category.replace("\\", "/")
+                if norm_cat.endswith("/" + cat_id) or norm_cat == cat_id:
+                    return True
+            # 匹配3：磁盘路径匹配（支持嵌套层级）
+            if mat.json_path and materials_dir:
+                norm_json = os.path.normpath(mat.json_path)
+                if norm_json.startswith(norm_materials + os.sep):
+                    rel_path = norm_json[len(norm_materials) + 1:]
+                    # 直接子目录：rel_path 以 cat_id/ 开头 或 恰好等于 cat_id
+                    if rel_path == cat_id or rel_path.startswith(cat_id + os.sep):
+                        return True
+                    # 嵌套路径：rel_path 中包含 /cat_id/ 片段（如 "characters/soldier/a.zasset"）
+                    if (os.sep + cat_id + os.sep) in (os.sep + rel_path):
+                        return True
+            return False
+
+        return [m for m in pool if _under_category(m, category_id)]
 
     def get_by_id(self, material_id: str) -> Optional[Material]:
         """按 ID 获取单个材质"""
@@ -1630,6 +1791,9 @@ class MaterialManager:
         获取文件系统镜像树（所有子库按文件夹结构递归）。
         每个子库根目录作为顶级节点，其内容为子节点。
         结果缓存，在 reload/load_library 时清空。
+
+        性能：所有 material_count 通过一次性预排序 + 前缀二分统计，
+        避免对每个文件夹全量遍历材质（原 O(F×M) → O(M·logM + F·logM)）。
         """
         if self._cached_tree is not None:
             return self._cached_tree
@@ -1638,6 +1802,23 @@ class MaterialManager:
         if not self._library_path:
             self._cached_tree = result
             return result
+
+        import bisect
+        _t_tree0 = time.perf_counter()
+
+        # 预计算所有材质的规范化路径并排序，供前缀计数复用
+        norm_paths = sorted(
+            os.path.normpath(m.json_path)
+            for m in self._materials.values() if m.json_path
+        )
+
+        def _prefix_count(prefix_norm: str) -> int:
+            """统计 norm_paths 中以 prefix_norm + os.sep 开头的数量（前缀二分）"""
+            if not norm_paths:
+                return 0
+            lo = bisect.bisect_left(norm_paths, prefix_norm + os.sep)
+            hi = bisect.bisect_left(norm_paths, prefix_norm + chr(ord(os.sep) + 1))
+            return hi - lo
 
         def scan_dir(dir_path, parent_id=None, root_lib=""):
             nodes = []
@@ -1656,12 +1837,8 @@ class MaterialManager:
                 meta = self._ensure_folder_meta(full)
                 display = meta.get("name_cn", name)
 
-                # 统计该分类下的材质数（仅按磁盘路径匹配，避免跨子库同名串数）
-                norm_full = os.path.normpath(full)
-                count = sum(1 for m in self._materials.values()
-                           if m.json_path and (
-                               os.path.normpath(m.json_path).startswith(norm_full + os.sep)
-                           ))
+                # 统计该分类下的材质数（前缀二分，避免跨子库同名串数）
+                count = _prefix_count(os.path.normpath(full))
 
                 # type 优先从 FolderMetadata 读取；为空时用所属子库作为 fallback
                 # （粘贴创建的目录没有 .fdata 的 type 字段，需从磁盘路径推断）
@@ -1691,21 +1868,12 @@ class MaterialManager:
             meta = self._ensure_folder_meta(sub_path, sub_name)
             sub_display = meta.get("name_cn", sub_name)
             children = scan_dir(sub_path, sub_dir, sub_dir)
-            # 汇总子节点计数到根节点
+            # 汇总子节点计数到根节点（子节点 material_count 已递归包含其后代）
             children_total = sum(child.get("material_count", 0) for child in children)
-            total = children_total
             # 补充直接放在子库根目录下的资产（不在任何子分类中）
-            for m in self._materials.values():
-                if m.json_path and os.path.normpath(m.json_path).startswith(
-                        os.path.normpath(sub_path) + os.sep):
-                    # 如果这个材质不在任何子分类文件夹内，追加
-                    in_child = any(
-                        os.path.normpath(m.json_path).startswith(
-                            os.path.normpath(os.path.join(sub_path, c.get("id", ""))) + os.sep)
-                        for c in children
-                    )
-                    if not in_child:
-                        total += 1
+            norm_sub_path = os.path.normpath(sub_path)
+            direct = sum(1 for p in norm_paths if os.path.dirname(p) == norm_sub_path)
+            total = children_total + direct
             sub_node = {
                 "id": sub_dir, "name": sub_dir, "name_cn": sub_display,
                 "icon": "", "description": "",
@@ -1754,6 +1922,9 @@ class MaterialManager:
             })
 
         self._cached_tree = result
+        _t_tree1 = time.perf_counter()
+        print(f"[Perf][get_category_tree] 构建耗时 {(_t_tree1 - _t_tree0) * 1000.0:.1f} ms "
+              f"(材质 {len(norm_paths)} 个)")
         return result
 
     # ── 收藏方法 ────────────────────────────────────────
