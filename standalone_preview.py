@@ -47,6 +47,8 @@ except ImportError:
         print("[独立预览] 错误：需要 PySide6 或 PySide2（pip install PySide6）")
         sys.exit(1)
 
+from squirrel_asset_manager.utils.maya_utils import qt_exec
+
 
 def main():
     parser = argparse.ArgumentParser(description="Squirrel Asset Manager 独立预览")
@@ -69,7 +71,7 @@ def main():
     if args.smoke_test:
         QtCore.QTimer.singleShot(200, app.quit)
 
-    return app.exec_()
+    return qt_exec(app)
 
 
 if __name__ == "__main__":
