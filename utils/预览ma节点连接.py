@@ -28,21 +28,67 @@ try:
 except ImportError:
     _maya_api_available = False
 
-# PySide6 导入必须在 maya.standalone.initialize() 之前或之后都可以
+# PySide 导入必须在 maya.standalone.initialize() 之前或之后都可以
 # 关键是：QApplication 必须在 maya.standalone.initialize() 之前创建
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QGraphicsView, QGraphicsScene,
-    QGraphicsRectItem, QGraphicsTextItem, QGraphicsPathItem,
-    QGraphicsEllipseItem, QFileDialog, QMessageBox, QStatusBar,
-    QToolBar, QPushButton, QGraphicsItem, QVBoxLayout, QHBoxLayout,
-    QWidget, QFrame, QLabel
-)
-from PySide6.QtCore import Qt, QPointF, QRectF, QLineF, Signal, QObject
-from PySide6.QtGui import (
-    QPen, QBrush, QColor, QPainterPath, QFont, QPainter,
-    QLinearGradient, QWheelEvent, QMouseEvent, QPolygonF,
-    QTransform, QKeyEvent, QFontMetrics
-)
+def get_qt_modules():
+    """获取 Qt 绑定（PySide6 优先，失败自动降级 PySide2）
+
+    - Maya 2025+ 自带 PySide6
+    - Maya 2022~2024 自带 PySide2
+    """
+    try:
+        from PySide6 import QtWidgets, QtCore, QtGui
+        return QtWidgets, QtCore, QtGui
+    except ImportError:
+        pass
+    try:
+        from PySide2 import QtWidgets, QtCore, QtGui
+        return QtWidgets, QtCore, QtGui
+    except ImportError:
+        pass
+    raise ImportError("需要 PySide6 或 PySide2")
+
+
+QtWidgets, QtCore, QtGui = get_qt_modules()
+
+QApplication = QtWidgets.QApplication
+QMainWindow = QtWidgets.QMainWindow
+QGraphicsView = QtWidgets.QGraphicsView
+QGraphicsScene = QtWidgets.QGraphicsScene
+QGraphicsRectItem = QtWidgets.QGraphicsRectItem
+QGraphicsTextItem = QtWidgets.QGraphicsTextItem
+QGraphicsPathItem = QtWidgets.QGraphicsPathItem
+QGraphicsEllipseItem = QtWidgets.QGraphicsEllipseItem
+QFileDialog = QtWidgets.QFileDialog
+QMessageBox = QtWidgets.QMessageBox
+QStatusBar = QtWidgets.QStatusBar
+QToolBar = QtWidgets.QToolBar
+QPushButton = QtWidgets.QPushButton
+QGraphicsItem = QtWidgets.QGraphicsItem
+QVBoxLayout = QtWidgets.QVBoxLayout
+QHBoxLayout = QtWidgets.QHBoxLayout
+QWidget = QtWidgets.QWidget
+QFrame = QtWidgets.QFrame
+QLabel = QtWidgets.QLabel
+Qt = QtCore.Qt
+QPointF = QtCore.QPointF
+QRectF = QtCore.QRectF
+QLineF = QtCore.QLineF
+Signal = QtCore.Signal
+QObject = QtCore.QObject
+QPen = QtGui.QPen
+QBrush = QtGui.QBrush
+QColor = QtGui.QColor
+QPainterPath = QtGui.QPainterPath
+QFont = QtGui.QFont
+QPainter = QtGui.QPainter
+QLinearGradient = QtGui.QLinearGradient
+QWheelEvent = QtGui.QWheelEvent
+QMouseEvent = QtGui.QMouseEvent
+QPolygonF = QtGui.QPolygonF
+QTransform = QtGui.QTransform
+QKeyEvent = QtGui.QKeyEvent
+QFontMetrics = QtGui.QFontMetrics
 
 
 # ---------- .zmetal 解析器 ----------

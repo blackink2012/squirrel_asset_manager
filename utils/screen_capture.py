@@ -34,7 +34,6 @@ class ScreenCapture:
             QPixmap，失败返回 null QPixmap
         """
         # 延迟导入避免模块级依赖
-        from PySide6 import QtWidgets, QtCore
         try:
             from PySide6 import QtWidgets as _qw
             from PySide6 import QtCore as _qc
