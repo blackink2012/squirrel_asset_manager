@@ -170,6 +170,11 @@ def import_external_folder(folder_path, mgr, cat_id):
             try:
                 from ..utils.maya_utils import get_qt_modules
                 _, QtCore, QtGui, _, _ = get_qt_modules()
+                # QIODeviceBase 位置兼容：PySide6 在 QIODeviceBase，PySide2 在 QIODevice
+                try:
+                    _write_only = QtCore.QIODeviceBase.WriteOnly
+                except AttributeError:
+                    _write_only = QtCore.QIODevice.WriteOnly
                 pix = QtGui.QPixmap(thumb_source)
                 if not pix.isNull():
                     if pix.width() > 512 or pix.height() > 512:
@@ -177,7 +182,7 @@ def import_external_folder(folder_path, mgr, cat_id):
                                          QtCore.Qt.TransformationMode.SmoothTransformation)
                     ba = QtCore.QByteArray()
                     buf = QtCore.QBuffer(ba)
-                    buf.open(QtCore.QIODeviceBase.WriteOnly)
+                    buf.open(_write_only)
                     pix.save(buf, "PNG")
                     buf.close()
                     ZassetIO.write_thumbnail(target_path, bytes(ba))

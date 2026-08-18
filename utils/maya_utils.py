@@ -1,3 +1,5 @@
+import re
+
 _IN_MAYA = False
 try:
     import maya.cmds as cmds
@@ -9,26 +11,39 @@ except ImportError:
 
 def get_maya_version():
     if _IN_MAYA:
-        return int(cmds.about(version=True))
+        try:
+            raw = str(cmds.about(version=True))
+            # 兼容 "2024" / "2024.2" / "2024.2.1" 等格式，取首个整数
+            m = re.search(r"\d+", raw)
+            return int(m.group()) if m else 0
+        except Exception:
+            return 0
     return 0
 
 
 def get_qt_modules():
-    if _IN_MAYA:
-        maya_ver = get_maya_version()
-        if maya_ver >= 2025:
-            from PySide6 import QtWidgets, QtCore, QtGui
-            from shiboken6 import wrapInstance
-            WindowType = QtCore.Qt.WindowType
-        else:
-            from PySide2 import QtWidgets, QtCore, QtGui
-            from shiboken2 import wrapInstance
-            WindowType = QtCore.Qt
+    """获取 Qt 绑定（PySide6 优先，失败自动降级 PySide2）
+
+    - Maya 2025+ 自带 PySide6/shiboken6
+    - Maya 2022~2024 自带 PySide2/shiboken2
+    不依赖版本号判断：直接尝试导入，哪个可用用哪个，
+    避免版本号解析失败或环境缺失绑定时报错。
+    """
+    try:
+        from PySide6 import QtWidgets, QtCore, QtGui
+        from shiboken6 import wrapInstance
+        WindowType = QtCore.Qt.WindowType
         return QtWidgets, QtCore, QtGui, wrapInstance, WindowType
-    from PySide6 import QtWidgets, QtCore, QtGui
-    from shiboken6 import wrapInstance
-    WindowType = QtCore.Qt.WindowType
-    return QtWidgets, QtCore, QtGui, wrapInstance, WindowType
+    except ImportError:
+        pass
+    try:
+        from PySide2 import QtWidgets, QtCore, QtGui
+        from shiboken2 import wrapInstance
+        WindowType = QtCore.Qt
+        return QtWidgets, QtCore, QtGui, wrapInstance, WindowType
+    except ImportError:
+        pass
+    raise ImportError("需要 PySide6/shiboken6 或 PySide2/shiboken2")
 
 
 def get_maya_window():
