@@ -2516,13 +2516,45 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
 
 # ========== UI 界面 ==========
 
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QLabel, QLineEdit, QPushButton, QCheckBox, QFileDialog, QGroupBox, QMessageBox, QRadioButton,
-    QListView, QTreeView
-)
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QAbstractItemView
+def get_qt_modules():
+    """获取 Qt 绑定（PySide6 优先，失败自动降级 PySide2）
+
+    - Maya 2025+ 自带 PySide6
+    - Maya 2022~2024 自带 PySide2
+    """
+    try:
+        from PySide6 import QtWidgets, QtCore, QtGui
+        return QtWidgets, QtCore, QtGui
+    except ImportError:
+        pass
+    try:
+        from PySide2 import QtWidgets, QtCore, QtGui
+        return QtWidgets, QtCore, QtGui
+    except ImportError:
+        pass
+    raise ImportError("需要 PySide6 或 PySide2")
+
+
+QtWidgets, QtCore, QtGui = get_qt_modules()
+
+QApplication = QtWidgets.QApplication
+QMainWindow = QtWidgets.QMainWindow
+QWidget = QtWidgets.QWidget
+QVBoxLayout = QtWidgets.QVBoxLayout
+QHBoxLayout = QtWidgets.QHBoxLayout
+QTabWidget = QtWidgets.QTabWidget
+QLabel = QtWidgets.QLabel
+QLineEdit = QtWidgets.QLineEdit
+QPushButton = QtWidgets.QPushButton
+QCheckBox = QtWidgets.QCheckBox
+QFileDialog = QtWidgets.QFileDialog
+QGroupBox = QtWidgets.QGroupBox
+QMessageBox = QtWidgets.QMessageBox
+QRadioButton = QtWidgets.QRadioButton
+QListView = QtWidgets.QListView
+QTreeView = QtWidgets.QTreeView
+QAbstractItemView = QtWidgets.QAbstractItemView
+Qt = QtCore.Qt
 
 
 def _select_multiple_directories(parent, title='选择文件夹'):
@@ -2855,7 +2887,7 @@ class RadarTabWidget(QWidget):
         self.import_basic_header.setText("导入 - 基础设置 ▼" if is_expanded else "导入 - 基础设置 ►")
 
     def show_radar_help(self):
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QScrollArea, QPushButton
+        QDialog, QScrollArea = QtWidgets.QDialog, QtWidgets.QScrollArea
 
         help_window = QDialog(self)
         help_window.setWindowTitle("全频雷达版使用帮助")
@@ -3369,7 +3401,7 @@ class MATabWidget(QWidget):
         self.ma_import_basic_header.setText("导入 - 基础设置 ▼" if is_expanded else "导入 - 基础设置 ►")
 
     def show_ma_help(self):
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QScrollArea, QPushButton
+        QDialog, QScrollArea = QtWidgets.QDialog, QtWidgets.QScrollArea
 
         help_window = QDialog(self)
         help_window.setWindowTitle("MA+JSON版使用帮助")

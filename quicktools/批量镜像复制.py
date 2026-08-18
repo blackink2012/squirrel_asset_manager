@@ -7,14 +7,43 @@ import threading
 import queue
 from datetime import datetime
 
-from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLineEdit, QLabel, QCheckBox,
-    QProgressBar, QTextEdit, QFileDialog, QMessageBox,
-    QFrame
-)
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QFont
+def get_qt_modules():
+    """获取 Qt 绑定（PySide6 优先，失败自动降级 PySide2）
+
+    - Maya 2025+ 自带 PySide6
+    - Maya 2022~2024 自带 PySide2
+    """
+    try:
+        from PySide6 import QtWidgets, QtCore, QtGui
+        return QtWidgets, QtCore, QtGui
+    except ImportError:
+        pass
+    try:
+        from PySide2 import QtWidgets, QtCore, QtGui
+        return QtWidgets, QtCore, QtGui
+    except ImportError:
+        pass
+    raise ImportError("需要 PySide6 或 PySide2")
+
+
+QtWidgets, QtCore, QtGui = get_qt_modules()
+
+QApplication = QtWidgets.QApplication
+QWidget = QtWidgets.QWidget
+QVBoxLayout = QtWidgets.QVBoxLayout
+QHBoxLayout = QtWidgets.QHBoxLayout
+QPushButton = QtWidgets.QPushButton
+QLineEdit = QtWidgets.QLineEdit
+QLabel = QtWidgets.QLabel
+QCheckBox = QtWidgets.QCheckBox
+QProgressBar = QtWidgets.QProgressBar
+QTextEdit = QtWidgets.QTextEdit
+QFileDialog = QtWidgets.QFileDialog
+QMessageBox = QtWidgets.QMessageBox
+QFrame = QtWidgets.QFrame
+QTimer = QtCore.QTimer
+Qt = QtCore.Qt
+QFont = QtGui.QFont
 
 
 def find_files_by_extensions(root_folder, extensions):
