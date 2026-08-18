@@ -16,6 +16,42 @@ MaterialManagementPro — Maya 材质/资产管理插件
     pmgr.get_materials()
 """
 
+import sys as _sys
+import importlib.machinery as _machinery
+
+
+def _install_py_before_pyd():
+    """让 .py 优先于 .pyd 加载（本机调试：py+pyd 共存时优先 py）
+
+    Python 默认 import 顺序是 .pyd → .py → .pyc。本钩子把 .py 提到 .pyd 前，
+    实现「同名 py 存在时优先用 py（方便调试），没有 py 时回退到 pyd」。
+    - 本机源码目录（py+pyd 共存）→ 优先加载 py
+    - 独立库（只有 pyd）→ 无 py 可匹配，自动回退加载 pyd
+    """
+    try:
+        hook = _machinery.FileFinder.path_hook(
+            (_machinery.SourceFileLoader, _machinery.SOURCE_SUFFIXES),
+            (_machinery.ExtensionFileLoader, _machinery.EXTENSION_SUFFIXES),
+            (_machinery.SourcelessFileLoader, _machinery.BYTECODE_SUFFIXES),
+        )
+        # 移除默认的 FileFinder 钩子（pyd 优先）
+        from importlib import _bootstrap_external as _be
+        default_hook = _be.FileFinder.path_hook(*_be._get_supported_file_loaders())
+        removed = False
+        while default_hook in _sys.path_hooks:
+            _sys.path_hooks.remove(default_hook)
+            removed = True
+        if removed:
+            # 清空已缓存的目录 importer，否则仍按旧顺序（pyd 优先）加载
+            _be._path_importer_cache.clear()
+        if hook not in _sys.path_hooks:
+            _sys.path_hooks.insert(0, hook)
+    except Exception:
+        pass
+
+
+_install_py_before_pyd()
+
 from typing import Optional
 from .core.manager import MaterialManager
 

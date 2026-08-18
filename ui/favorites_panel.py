@@ -1,6 +1,12 @@
-from ..utils.maya_utils import get_qt_modules
+from ..utils.maya_utils import get_qt_modules, qt_exec
 
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
+
+
+def _event_pos(event):
+    """QMouseEvent 坐标兼容：PySide6 用 position()，PySide2 用 pos()"""
+    return event.position().toPoint() if hasattr(event, "position") else event.pos()
+
 
 DEFAULT_COLLECTIONS = [
     {"id": "default", "name": "\u9ed8\u8ba4\u6536\u85cf\u5939", "icon": "\u2605", "materials": []},
@@ -115,7 +121,7 @@ class FavoritesPanelWidget(QtWidgets.QWidget):
         def _on_drag_move(event):
             if event.mimeData().hasFormat("application/x-material-ids") or event.mimeData().hasFormat("application/x-material-id"):
                 event.accept()
-                item = self_ref._collection_list.itemAt(event.position().toPoint())
+                item = self_ref._collection_list.itemAt(_event_pos(event))
                 if item:
                     _set_hover(item)
                 else:
@@ -126,7 +132,7 @@ class FavoritesPanelWidget(QtWidgets.QWidget):
         def _on_drop(event):
             _clear_hover()
             mime = event.mimeData()
-            item = self_ref._collection_list.itemAt(event.position().toPoint())
+            item = self_ref._collection_list.itemAt(_event_pos(event))
             coll_id = item.data(QtCore.Qt.ItemDataRole.UserRole) if item else "default"
 
             # 多选拖拽
@@ -178,7 +184,7 @@ class FavoritesPanelWidget(QtWidgets.QWidget):
         if item is None:
             menu = QtWidgets.QMenu(self)
             menu.addAction("+ \u65b0\u5efa\u6536\u85cf\u5939").triggered.connect(self._on_add_collection)
-            menu.exec(self._collection_list.viewport().mapToGlobal(pos))
+            qt_exec(menu, self._collection_list.viewport().mapToGlobal(pos))
             return
 
         coll_id = item.data(QtCore.Qt.ItemDataRole.UserRole)
@@ -193,7 +199,7 @@ class FavoritesPanelWidget(QtWidgets.QWidget):
             menu.addAction("\u91cd\u547d\u540d").triggered.connect(lambda: self._on_rename_collection(coll_id))
             menu.addAction("\u5220\u9664\u6536\u85cf\u5939").triggered.connect(lambda: self._on_delete_collection(coll_id))
 
-        menu.exec(self._collection_list.viewport().mapToGlobal(pos))
+        qt_exec(menu, self._collection_list.viewport().mapToGlobal(pos))
 
     def _on_add_collection(self):
         name, ok = QtWidgets.QInputDialog.getText(

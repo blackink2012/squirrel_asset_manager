@@ -1,7 +1,7 @@
 import json
 import os
 
-from ..utils.maya_utils import get_qt_modules
+from ..utils.maya_utils import get_qt_modules, qt_exec
 from ..utils.mock_data import DEFAULT_CATEGORIES
 from ..utils.settings import SettingsManager
 
@@ -10,6 +10,12 @@ _CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
                             "Assets", "preset", "config.json")
 
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
+
+
+def _event_pos(event):
+    """QMouseEvent 坐标兼容：PySide6 用 position()，PySide2 用 pos()"""
+    return event.position().toPoint() if hasattr(event, "position") else event.pos()
+
 
 # ── 核心顶级分类（不可删除） ──────────────────────
 _CORE_SUB_LIBS = frozenset({"materials", "models", "lights", "textures", "scenes", "hdr", "ani"})
@@ -172,7 +178,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
                            or mime.hasFormat("application/x-material-id")
                            or (mime.hasText() and mime.text().startswith("[") and mime.text().endswith("]")))
             if is_material:
-                item = self_ref._tree.itemAt(event.position().toPoint())
+                item = self_ref._tree.itemAt(_event_pos(event))
                 if item and item.data(0, QtCore.Qt.ItemDataRole.UserRole) != "all":
                     _set_drag_hover(item)
                 else:
@@ -209,7 +215,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
                     pass
 
             if ids is not None and isinstance(ids, list) and len(ids) > 0:
-                target = self_ref._tree.itemAt(event.position().toPoint())
+                target = self_ref._tree.itemAt(_event_pos(event))
                 tgt_id = target.data(0, QtCore.Qt.ItemDataRole.UserRole) if target else None
                 root_lib = _get_target_root_lib(target)
                 if target and tgt_id and tgt_id != "all":
@@ -223,7 +229,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
             mat_id_bytes = mime.data("application/x-material-id")
             if mat_id_bytes:
                 mat_id = mat_id_bytes.data().decode()
-                target = self_ref._tree.itemAt(event.position().toPoint())
+                target = self_ref._tree.itemAt(_event_pos(event))
                 tgt_id = target.data(0, QtCore.Qt.ItemDataRole.UserRole) if target else None
                 root_lib = _get_target_root_lib(target)
                 if mat_id and tgt_id and tgt_id != "all":
@@ -233,7 +239,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
                     return
 
             # 分类内部拖拽
-            target = self_ref._tree.itemAt(event.position().toPoint())
+            target = self_ref._tree.itemAt(_event_pos(event))
             src = self_ref._tree.currentItem()
             if target and src:
                 src_id = src.data(0, QtCore.Qt.ItemDataRole.UserRole)
@@ -516,7 +522,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
                 lambda checked=False, root_lib=blank_rl: self._on_add_category(root_lib=root_lib)
             )
 
-        menu.exec(self._tree.viewport().mapToGlobal(pos))
+        qt_exec(menu, self._tree.viewport().mapToGlobal(pos))
 
     def _on_add_category(self, parent_id=None, root_lib=None):
         """添加分类：双输入对话框 → 中文名 + 英文 ID"""
@@ -594,7 +600,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         btn_layout.addWidget(ok_btn)
         layout.addLayout(btn_layout)
 
-        if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+        if qt_exec(dialog) != QtWidgets.QDialog.DialogCode.Accepted:
             return
 
         name_cn = cn_input.text().strip()
@@ -683,7 +689,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         btn_layout.addWidget(ok_btn)
         layout.addLayout(btn_layout)
 
-        if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+        if qt_exec(dialog) != QtWidgets.QDialog.DialogCode.Accepted:
             return
 
         name_cn = cn_input.text().strip()
@@ -768,7 +774,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         btn_layout.addWidget(ok_btn)
         layout.addLayout(btn_layout)
 
-        if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+        if qt_exec(dialog) != QtWidgets.QDialog.DialogCode.Accepted:
             return
 
         new_name = cn_input.text().strip()

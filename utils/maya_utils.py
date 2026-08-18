@@ -46,13 +46,28 @@ def get_qt_modules():
     raise ImportError("需要 PySide6/shiboken6 或 PySide2/shiboken2")
 
 
+def qt_exec(obj, *args, **kwargs):
+    """exec() 兼容：PySide6 用 exec()，PySide2 只有 exec_()
+
+    适用于 QDialog / QMenu / QDrag 等 Qt 对象。
+    """
+    fn = getattr(obj, "exec_", None)
+    if fn is None:
+        fn = obj.exec
+    return fn(*args, **kwargs)
+
+
 def get_maya_window():
     if not _IN_MAYA:
         return None
-    QtWidgets, QtCore, QtGui, wrapInstance, WindowType = get_qt_modules()
-    main_window_ptr = omui.MQtUtil.mainWindow()
-    if main_window_ptr:
-        return wrapInstance(int(main_window_ptr), QtWidgets.QMainWindow)
+    try:
+        QtWidgets, QtCore, QtGui, wrapInstance, WindowType = get_qt_modules()
+        main_window_ptr = omui.MQtUtil.mainWindow()
+        if main_window_ptr:
+            return wrapInstance(int(main_window_ptr), QtWidgets.QMainWindow)
+    except Exception:
+        # 无 Maya 上下文（如 mayapy 独立运行 / standalone 预览）时安全返回 None
+        return None
     return None
 
 

@@ -2,11 +2,16 @@ import json
 import os
 import re
 
-from ..utils.maya_utils import get_qt_modules
+from ..utils.maya_utils import get_qt_modules, qt_exec
 from ..utils.mock_data import MOCK_MATERIALS
 from ..utils.settings import SettingsManager
 
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
+
+
+def _event_pos(event):
+    """QMouseEvent 坐标兼容：PySide6 用 position()，PySide2 用 pos()"""
+    return event.position().toPoint() if hasattr(event, "position") else event.pos()
 
 
 class _ThumbnailSignal(QtCore.QObject):
@@ -93,7 +98,7 @@ def _show_frame_mode_dialog(parent=None) -> str:
     btn_layout.addWidget(ok_btn)
     layout.addLayout(btn_layout)
 
-    if dialog.exec() == QtWidgets.QDialog.Accepted:
+    if qt_exec(dialog) == QtWidgets.QDialog.Accepted:
         return "timeline" if rb_timeline.isChecked() else "current"
     return ""
 
@@ -175,7 +180,7 @@ class MaterialDragLabel(QtWidgets.QLabel):
         if pix:
             drag.setPixmap(pix.scaled(80, 80, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation))
             drag.setHotSpot(QtCore.QPoint(40, 40))
-        result = drag.exec(QtCore.Qt.DropAction.CopyAction)
+        result = qt_exec(drag, QtCore.Qt.DropAction.CopyAction)
         # 仅当拖拽未被插件内部目标接受、且鼠标落在插件窗口之外时，才视为拖到 Maya 视口
         if grid and selected and result == QtCore.Qt.DropAction.IgnoreAction:
             cursor_global = QtGui.QCursor.pos()
@@ -474,7 +479,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         if event.button() != QtCore.Qt.MouseButton.LeftButton:
             return
         # 检查是否点到了卡片
-        child = self._icon_container.childAt(event.position().toPoint())
+        child = self._icon_container.childAt(_event_pos(event))
         card = child if hasattr(child, 'material_data') else None
         if card:
             # 点击到卡片，交给卡片的 mousePressEvent
@@ -486,7 +491,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         self._refresh_card_highlights()
         self.selectionChanged.emit()
         # 开始框选
-        self._rubber_origin = event.position().toPoint()
+        self._rubber_origin = _event_pos(event)
         if not self._rubber_band:
             self._rubber_band = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Shape.Rectangle, self._icon_container)
         self._rubber_band.setGeometry(QtCore.QRect(self._rubber_origin, QtCore.QSize()))
@@ -494,7 +499,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
     def _icon_mouse_move(self, event):
         if self._rubber_band and self._rubber_origin:
-            rect = QtCore.QRect(self._rubber_origin, event.position().toPoint()).normalized()
+            rect = QtCore.QRect(self._rubber_origin, _event_pos(event)).normalized()
             self._rubber_band.setGeometry(rect)
             # 节流：30ms内只执行一次框选更新
             self._rubber_pending_rect = rect
@@ -533,7 +538,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
     def _icon_mouse_release(self, event):
         if self._rubber_band and self._rubber_origin:
-            rect = QtCore.QRect(self._rubber_origin, event.position().toPoint()).normalized()
+            rect = QtCore.QRect(self._rubber_origin, _event_pos(event)).normalized()
             self._rubber_band.hide()
             self._select_cards_in_rect(rect)
             self._rubber_origin = None
@@ -616,9 +621,9 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         _orig_table_press = self._table_view.mousePressEvent
         def _table_mouse_press(event):
             if event.button() == QtCore.Qt.MouseButton.RightButton:
-                index = self._table_view.indexAt(event.position().toPoint())
+                index = self._table_view.indexAt(_event_pos(event))
                 if index.isValid():
-                    self._on_table_context_menu(event.position().toPoint())
+                    self._on_table_context_menu(_event_pos(event))
                 return
             _orig_table_press(event)
         self._table_view.mousePressEvent = _table_mouse_press
@@ -722,7 +727,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         ref_table_action = menu.addAction("\U0001f517 \u6dfb\u52a0\u5f15\u7528") if _is_ctx_enabled(sub_lib, "add_reference", ctx_preset) else None
         delete_action = menu.addAction("\u5220\u9664") if _is_ctx_enabled(sub_lib, "delete", ctx_preset) else None
 
-        action = menu.exec(self._table_view.viewport().mapToGlobal(pos))
+        action = qt_exec(menu, self._table_view.viewport().mapToGlobal(pos))
         if action == apply_action:
             self.materialApplied.emit(mat)
         elif action == edit_action:
@@ -1458,7 +1463,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                     mid = card.material_data.get("id")
                     if mid not in self._selected_materials:
                         self._on_card_clicked(card)
-                self._on_context_menu(event.position().toPoint(), card)
+                self._on_context_menu(_event_pos(event), card)
                 return
 
             modifiers = QtWidgets.QApplication.keyboardModifiers() if hasattr(QtWidgets, 'QApplication') else QtCore.Qt.KeyboardModifier.NoModifier
@@ -1477,7 +1482,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                 self._on_card_shift_click(card)
             else:
                 # 不立即切换选择——等 mouseRelease 判断是点击还是拖拽
-                card._press_pos = event.position().toPoint()
+                card._press_pos = _event_pos(event)
 
         def mouse_release(event):
             if event.button() != QtCore.Qt.MouseButton.LeftButton:
@@ -1486,7 +1491,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             if press_pos is None:
                 return
             # 鼠标移动超过阈值 → 视为拖拽，不改变选择
-            if (event.position().toPoint() - press_pos).manhattanLength() > _drag_threshold:
+            if (_event_pos(event) - press_pos).manhattanLength() > _drag_threshold:
                 return
             # 未移动 → 视为点击，切换为单选
             if hasattr(card, 'material_data'):
@@ -1518,7 +1523,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         import_sub.addSeparator()
         import_textures_action = import_sub.addAction("🖼️ 导入贴图")
         import_hdr_action = import_sub.addAction("☀️ 导入HDR")
-        action = menu.exec(self._icon_container.mapToGlobal(pos))
+        action = qt_exec(menu, self._icon_container.mapToGlobal(pos))
         if action == create_action:
             self.createAssetRequested.emit({})
         elif action == paste_action:
@@ -2125,7 +2130,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         ai_action = menu.addAction('\U0001f9e0 AI 分析缩略图') if _is_ctx_enabled(sub_lib, "ai_analysis", ctx_preset) else None
 
-        action = menu.exec(card.mapToGlobal(pos))
+        action = qt_exec(menu, card.mapToGlobal(pos))
         if action is None:  # 菜单被取消，不做任何操作
             return
         if action in preview_node_actions:
@@ -2208,7 +2213,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                 # 弹出选择对话框
                 from .variant_import_dialog import VariantImportDialog
                 dlg = VariantImportDialog(json_path, self)
-                if dlg.exec() == QtWidgets.QDialog.Accepted:
+                if qt_exec(dlg) == QtWidgets.QDialog.Accepted:
                     version, lod = dlg.result()
                     if version and lod:
                         self.variantGeometryImportRequested.emit(json_path, version, lod)
