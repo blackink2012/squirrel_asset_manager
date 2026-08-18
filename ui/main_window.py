@@ -34,6 +34,15 @@ from ..core.category import Category
 from ..utils.mock_data import MOCK_MATERIALS
 from .preview_panel import FlowLayout
 
+
+def _safe_asset_name(name: str) -> str:
+    """与导出编排一致的资产名清洗（供路径拼接，避免与 .zasset 实际目录名不一致）"""
+    try:
+        from ..core.export_orchestrator import ExportOrchestrator
+        return ExportOrchestrator._sanitize_filename(name)
+    except Exception:
+        return (name or "").replace(':', '_').replace('/', '_')
+
 try:
     from ..utils.settings import SettingsManager
 except ImportError:
@@ -5709,7 +5718,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         # ── ⑥ 同名冲突检测 ──
         conflict_policy = self._load_name_conflict_policy()
         for i, cfg in enumerate(configs):
-            safe_name = cfg.asset_name.replace(':', '_').replace('/', '_')
+            safe_name = _safe_asset_name(cfg.asset_name)
             asset_zasset = os.path.join(cat_dir, f"{safe_name}.zasset")
             if not os.path.exists(asset_zasset):
                 continue
@@ -5878,7 +5887,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             pending = getattr(self, '_pending_thumbnails', None)
             if pending is None:
                 self._pending_thumbnails = []
-            safe_name = cfg.asset_name.replace(':', '_').replace('/', '_')
+            safe_name = _safe_asset_name(cfg.asset_name)
             self._pending_thumbnails.append((cfg, safe_name))
 
         if not export_result.success:
@@ -5896,7 +5905,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             pass
 
         # 记录最后导出路径（供 _refresh_after_export 诊断用）
-        safe_name = cfg.asset_name.replace(':', '_').replace('/', '_')
+        safe_name = _safe_asset_name(cfg.asset_name)
         self._last_export_dir = os.path.join(self._asset_cat_dir, safe_name)
         self._last_export_name = safe_name
 
@@ -5947,7 +5956,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             else:
                 need_show = False
 
-        safe_name = cfg.asset_name.replace(':', '_').replace('/', '_')
+        safe_name = _safe_asset_name(cfg.asset_name)
         material_dir = os.path.join(self._asset_cat_dir, safe_name)
 
         # Phase 5: 不再给 overlay 设置 save_path_override，避免写入独立 .sicon 文件
@@ -5958,7 +5967,15 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         def on_captured(pixmap):
             if not pixmap.isNull():
                 # 写入 .zasset 内部 thumb.sicon
-                zasset_path = material_dir + ".zasset"
+                # 优先用导出结果中的真实 .zasset 路径（避免拼接差异）
+                zasset_path = ""
+                try:
+                    if export_result.files:
+                        zasset_path = export_result.files[0]
+                except Exception:
+                    pass
+                if not zasset_path or not os.path.isdir(zasset_path):
+                    zasset_path = material_dir + ".zasset"
                 if os.path.isdir(zasset_path):
                     try:
                         ba = QtCore.QByteArray()
@@ -6031,11 +6048,11 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         result = ExportConnector.export_asset(cfg, skip_thumbnail=skip_thumb)
         self._asset_results.append(result)
         if skip_thumb and result.success:
-            safe_name = cfg.asset_name.replace(':', '_').replace('/', '_')
+            safe_name = _safe_asset_name(cfg.asset_name)
             self._pending_thumbnails.append((cfg, safe_name))
 
         # 记录最后导出路径
-        safe_name = cfg.asset_name.replace(':', '_').replace('/', '_')
+        safe_name = _safe_asset_name(cfg.asset_name)
         self._last_export_dir = os.path.join(self._asset_cat_dir, safe_name)
         self._last_export_name = safe_name
 
@@ -6067,7 +6084,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         # 如果有截图 overlay 且已保存选区，自动截图
         if self._asset_overlay and self._screenshot_rect:
-            safe_name = cfg.asset_name.replace(':', '_').replace('/', '_')
+            safe_name = _safe_asset_name(cfg.asset_name)
             material_dir = os.path.join(self._asset_cat_dir, safe_name)
 
             # Phase 5: 不再设置 save_path_override，避免写入独立 .sicon 文件
@@ -6077,7 +6094,15 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             def on_captured_auto(pixmap):
                 if not pixmap.isNull():
                     # 写入 .zasset 内部 thumb.sicon
-                    zasset_path = material_dir + ".zasset"
+                    # 优先用导出结果中的真实 .zasset 路径（避免拼接差异）
+                    zasset_path = ""
+                    try:
+                        if result.files:
+                            zasset_path = result.files[0]
+                    except Exception:
+                        pass
+                    if not zasset_path or not os.path.isdir(zasset_path):
+                        zasset_path = material_dir + ".zasset"
                     if os.path.isdir(zasset_path):
                         try:
                             ba = QtCore.QByteArray()
