@@ -3,6 +3,12 @@ from ..utils.settings import SettingsManager
 
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
+# QAction 位置兼容：PySide6 在 QtGui，PySide2 在 QtWidgets
+try:
+    _QAction = QtGui.QAction
+except AttributeError:
+    _QAction = QtWidgets.QAction
+
 
 def _pinyin_first_char(text):
     """获取文本的拼音首字母（中文取拼音首字母，英文直接大写）"""
@@ -179,10 +185,20 @@ class SearchBarWidget(QtWidgets.QWidget):
 
     def _rebuild_tag_menu(self):
         """根据 _common_tags 重建标签列表（无闪烁：只替换标签 action 项）"""
-        import shiboken6
+        # 兼容 PySide6/shiboken6 与 PySide2/shiboken2（Maya 2022~2024 只有 shiboken2）
+        try:
+            from shiboken6 import isValid as _shiboken_is_valid
+        except ImportError:
+            try:
+                from shiboken2 import isValid as _shiboken_is_valid
+            except ImportError:
+                _shiboken_is_valid = None
         # ── 检查 _tag_sep 是否有效（tear-off 关闭后可能被销毁） ──
         try:
-            valid = hasattr(self, '_tag_sep') and shiboken6.isValid(self._tag_sep)
+            if _shiboken_is_valid is not None:
+                valid = hasattr(self, '_tag_sep') and _shiboken_is_valid(self._tag_sep)
+            else:
+                valid = hasattr(self, '_tag_sep')
         except Exception:
             valid = hasattr(self, '_tag_sep')
         if not valid:
@@ -200,7 +216,7 @@ class SearchBarWidget(QtWidgets.QWidget):
         # ── 重建标签列表 ──
         self._tag_actions = []
         if not self._common_tags:
-            na = QtGui.QAction("(无可用标签)", self._tag_menu)
+            na = _QAction("(无可用标签)", self._tag_menu)
             na.setEnabled(False)
             self._tag_actions.append(na)
             self._tag_menu.insertAction(self._tag_sep, na)
@@ -209,7 +225,7 @@ class SearchBarWidget(QtWidgets.QWidget):
         sorted_tags = sorted(self._common_tags, key=lambda t: _pinyin_first_char(t))
         for tag in sorted_tags:
             prefix = _pinyin_first_char(tag)
-            action = QtGui.QAction(f"{prefix}  {tag}", self._tag_menu)
+            action = _QAction(f"{prefix}  {tag}", self._tag_menu)
             action.setCheckable(True)
             action.setChecked(tag in self._active_tags)
             action.toggled.connect(lambda checked, t=tag: self._on_tag_toggled(t, checked))
