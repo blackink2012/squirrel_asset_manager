@@ -1,6 +1,6 @@
 import os
 import sys
-from ..utils.maya_utils import get_qt_modules
+from ..utils.maya_utils import get_qt_modules, qt_exec
 from ..utils.mock_data import DEFAULT_CATEGORIES
 from ..utils.settings import SettingsManager, apply_font_size_to_widget
 from .detail_panel import FlowLayout
@@ -571,7 +571,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         close_btn.clicked.connect(dlg.accept)
         lyt.addWidget(close_btn)
 
-        dlg.exec()
+        qt_exec(dlg)
 
     def _reload_tags(self, mgr):
         """刷新标签列表"""
