@@ -33,6 +33,20 @@ def _ensure_front(p):
 _ensure_front(_PROJECT)
 _ensure_front(_ROOT)
 
+# ── 包名兼容：脚本所在目录名与包名不一致时（如独立库 release 目录），
+# 将脚本所在目录注册为 squirrel_asset_manager 包，使绝对导入可用 ──
+if os.path.basename(_ROOT) != "squirrel_asset_manager" and \
+        os.path.isfile(os.path.join(_ROOT, "__init__.py")):
+    import importlib.util
+    _spec = importlib.util.spec_from_file_location(
+        "squirrel_asset_manager",
+        os.path.join(_ROOT, "__init__.py"),
+        submodule_search_locations=[_ROOT],
+    )
+    _pkg = importlib.util.module_from_spec(_spec)
+    sys.modules["squirrel_asset_manager"] = _pkg
+    _spec.loader.exec_module(_pkg)
+
 # ── Qt 绑定（PySide6 → PySide2 降级）──
 try:
     from PySide6 import QtWidgets
