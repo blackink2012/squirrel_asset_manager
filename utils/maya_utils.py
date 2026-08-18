@@ -57,6 +57,24 @@ def qt_exec(obj, *args, **kwargs):
     return fn(*args, **kwargs)
 
 
+def qt_connect(signal, slot):
+    """PySide2 + Cython(pyd) 兼容的信号连接。
+
+    PySide2 直接把 pyd 编译的绑定方法作为槽 connect，信号 emit 时会触发
+    无限递归（RecursionError: maximum recursion depth exceeded），
+    包一层普通 Python 函数即可规避（直接调用 pyd 方法无此问题）。
+    本函数定义在 .py 模块中（不被编译），保证包装函数始终是纯 Python；
+    无条件包装对 py 版也安全（仅多一层调用）。
+    """
+    signal.connect(lambda *a, **kw: slot(*a, **kw))
+
+
+def qt_single_shot(ms, fn):
+    """QTimer.singleShot 兼容包装（原因同 qt_connect）"""
+    QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
+    QtCore.QTimer.singleShot(ms, lambda: fn())
+
+
 def get_maya_window():
     if not _IN_MAYA:
         return None
