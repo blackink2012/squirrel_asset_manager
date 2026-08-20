@@ -482,73 +482,73 @@ class SettingsDialog(QtWidgets.QDialog):
     # ── 右键菜单标签页 ────────────────────────────
 
     _CONTEXT_MENU_ITEMS = [
-        ("import", t("ctx_menu.import")),
-        ("import_geometry", t("ctx_menu.import_geometry")),
-        ("add_reference", t("ctx_menu.add_reference")),
-        ("favorites", t("ctx_menu.favorites")),
-        ("select_all", t("ctx_menu.select_all")),
-        ("duplicate", t("ctx_menu.duplicate")),
-        ("open_folder", t("ctx_menu.open_folder")),
-        ("move_to", t("ctx_menu.move_to")),
-        ("copy_to", t("ctx_menu.copy_to")),
-        ("edit", t("ctx_menu.edit")),
-        ("create_asset", t("ctx_menu.create_asset")),
-        ("update_thumbnail", t("ctx_menu.update_thumbnail")),
-        ("update_asset", t("ctx_menu.update_asset")),
-        ("delete", t("ctx_menu.delete")),
-        ("preview_node", t("ctx_menu.preview_node")),
-        ("ai_analysis", t("ctx_menu.ai_analysis")),
-        ("apply_material", t("ctx_menu.apply_material")),
-        ("create_material", t("ctx_menu.create_material")),
-        ("import_texture", t("ctx_menu.import_texture")),
-        ("assign_texture", t("ctx_menu.assign_texture")),
-        ("apply_light", t("ctx_menu.apply_light")),
-        ("create_dome_light", t("ctx_menu.create_dome_light")),
+        ("import", "ctx_menu.import"),
+        ("import_geometry", "ctx_menu.import_geometry"),
+        ("add_reference", "ctx_menu.add_reference"),
+        ("favorites", "ctx_menu.favorites"),
+        ("select_all", "ctx_menu.select_all"),
+        ("duplicate", "ctx_menu.duplicate"),
+        ("open_folder", "ctx_menu.open_folder"),
+        ("move_to", "ctx_menu.move_to"),
+        ("copy_to", "ctx_menu.copy_to"),
+        ("edit", "ctx_menu.edit"),
+        ("create_asset", "ctx_menu.create_asset"),
+        ("update_thumbnail", "ctx_menu.update_thumbnail"),
+        ("update_asset", "ctx_menu.update_asset"),
+        ("delete", "ctx_menu.delete"),
+        ("preview_node", "ctx_menu.preview_node"),
+        ("ai_analysis", "ctx_menu.ai_analysis"),
+        ("apply_material", "ctx_menu.apply_material"),
+        ("create_material", "ctx_menu.create_material"),
+        ("import_texture", "ctx_menu.import_texture"),
+        ("assign_texture", "ctx_menu.assign_texture"),
+        ("apply_light", "ctx_menu.apply_light"),
+        ("create_dome_light", "ctx_menu.create_dome_light"),
     ]
 
     # 双击命令 — 各子库可选命令列表（仅导入/创建资产相关）
     _DOUBLE_CLICK_ITEMS = {
         "materials": [
-            ("none", t("ctx_menu.none")),
-            ("import", t("ctx_menu.import")),
-            ("apply_material", t("ctx_menu.apply_material")),
+            ("none", "ctx_menu.none"),
+            ("import", "ctx_menu.import"),
+            ("apply_material", "ctx_menu.apply_material"),
         ],
         "models": [
-            ("none", t("ctx_menu.none")),
-            ("import", t("ctx_menu.import")),
+            ("none", "ctx_menu.none"),
+            ("import", "ctx_menu.import"),
         ],
         "lights": [
-            ("none", t("ctx_menu.none")),
-            ("import", t("ctx_menu.import")),
-            ("apply_light", t("ctx_menu.apply_light")),
+            ("none", "ctx_menu.none"),
+            ("import", "ctx_menu.import"),
+            ("apply_light", "ctx_menu.apply_light"),
         ],
         "textures": [
-            ("none", t("ctx_menu.none")),
-            ("import", t("ctx_menu.import")),
-            ("import_texture", t("ctx_menu.import_texture")),
-            ("create_material", t("ctx_menu.create_material")),
-            ("apply_material", t("ctx_menu.apply_material")),
-            ("assign_texture", t("ctx_menu.assign_texture")),
+            ("none", "ctx_menu.none"),
+            ("import", "ctx_menu.import"),
+            ("import_texture", "ctx_menu.import_texture"),
+            ("create_material", "ctx_menu.create_material"),
+            ("apply_material", "ctx_menu.apply_material"),
+            ("assign_texture", "ctx_menu.assign_texture"),
         ],
         "hdr": [
-            ("none", t("ctx_menu.none")),
-            ("import", t("ctx_menu.import")),
-            ("create_dome_light", t("ctx_menu.create_dome_light")),
-            ("assign_texture", t("ctx_menu.assign_texture_only")),
+            ("none", "ctx_menu.none"),
+            ("import", "ctx_menu.import"),
+            ("create_dome_light", "ctx_menu.create_dome_light"),
+            ("assign_texture", "ctx_menu.assign_texture_only"),
         ],
         "scenes": [
-            ("none", t("ctx_menu.none")),
-            ("import", t("ctx_menu.import")),
+            ("none", "ctx_menu.none"),
+            ("import", "ctx_menu.import"),
         ],
         "ani": [
-            ("none", t("ctx_menu.none")),
-            ("import", t("ctx_menu.import")),
+            ("none", "ctx_menu.none"),
+            ("import", "ctx_menu.import"),
         ],
     }
     # 自定义库通用双击命令
     _DOUBLE_CLICK_ITEMS_GENERIC = [
-        ("none", t("ctx_menu.none")),
-        ("import", t("ctx_menu.import")),
+        ("none", "ctx_menu.none"),
+        ("import", "ctx_menu.import"),
     ]
 
     # 双击命令的子选项定义 — 有二级菜单的命令映射其可选子项
@@ -557,7 +557,7 @@ class SettingsDialog(QtWidgets.QDialog):
             "ma", "mb", "fbx", "obj", "usd", "abc",
             "ass", "vrscene", "rs", "vrmesh",
         ],
-        "import_texture": [t("option.all")],
+        "import_texture": ["option.all"],
         # create_material 和 create_dome_light 在运行时从 config.json 和 HDR_ligt/ 动态读取
     }
     # import_texture 固定为 "导入全部"
@@ -591,11 +591,11 @@ class SettingsDialog(QtWidgets.QDialog):
         right.addWidget(ctx_tip)
 
         self._ctx_cbs = {}
-        for key, label in self._CONTEXT_MENU_ITEMS:
-            cb = QtWidgets.QCheckBox(label)
+        for cfg_key, i18n_key in self._CONTEXT_MENU_ITEMS:
+            cb = QtWidgets.QCheckBox(t(i18n_key))
             cb.setStyleSheet("QCheckBox { color:#d0d0d0; font-size:13px; }")
             right.addWidget(cb)
-            self._ctx_cbs[key] = cb
+            self._ctx_cbs[cfg_key] = cb
 
         # ── 分隔线 ──
         sep = QtWidgets.QFrame()
@@ -701,15 +701,15 @@ class SettingsDialog(QtWidgets.QDialog):
         # 获取该子库可用的命令列表
         items = self._DOUBLE_CLICK_ITEMS.get(sub_lib, self._DOUBLE_CLICK_ITEMS_GENERIC)
 
-        for key, label in items:
-            rb = QtWidgets.QRadioButton(label)
+        for cfg_key, i18n_key in items:
+            rb = QtWidgets.QRadioButton(t(i18n_key))
             rb.setStyleSheet(
                 "QRadioButton { color:#d0d0d0; font-size:13px; spacing:6px; }"
                 "QRadioButton::indicator { width:16px; height:16px; }")
-            rb.toggled.connect(lambda checked, k=key: self._on_dc_cmd_toggled(k, checked))
+            rb.toggled.connect(lambda checked, k=cfg_key: self._on_dc_cmd_toggled(k, checked))
             self._dc_buttons_layout.addWidget(rb)
             self._dc_button_group.addButton(rb)
-            self._dc_buttons[key] = rb
+            self._dc_buttons[cfg_key] = rb
 
         # 读取当前子库的配置
         entry = self._dc_preset_data.get(sub_lib, {})
@@ -746,7 +746,7 @@ class SettingsDialog(QtWidgets.QDialog):
                     [f for f in os.listdir(preset_dir) if f.lower().endswith('.ma')])
                 if ma_files:
                     for f in ma_files:
-                        self._dc_option_combo.addItem(f)
+                        self._dc_option_combo.addItem(f, f)
                     has_options = True
         elif cmd == "create_material":
             # 从 config.json 的 material_presets 动态读取材质类型
@@ -759,19 +759,20 @@ class SettingsDialog(QtWidgets.QDialog):
                     cfg = json.load(f)
                 presets = cfg.get("material_presets", [])
                 for p in presets:
-                    self._dc_option_combo.addItem(p.get("node_type", ""))
+                    node_type = p.get("node_type", "")
+                    self._dc_option_combo.addItem(node_type, node_type)
                 has_options = True
             except Exception:
                 pass
         elif cmd in self._DOUBLE_CLICK_CMD_OPTIONS:
             options = self._DOUBLE_CLICK_CMD_OPTIONS[cmd]
             for opt in options:
-                self._dc_option_combo.addItem(opt)
+                self._dc_option_combo.addItem(t(opt, no_warn=True), opt)
             has_options = True
 
         # 恢复已保存的子选项
         if has_options and current_opt:
-            idx = self._dc_option_combo.findText(current_opt)
+            idx = self._dc_option_combo.findData(current_opt)
             if idx >= 0:
                 self._dc_option_combo.setCurrentIndex(idx)
             elif self._dc_option_combo.count() > 0:
@@ -827,7 +828,7 @@ class SettingsDialog(QtWidgets.QDialog):
             if rb.isChecked():
                 cmd = key
                 break
-        option = self._dc_option_combo.currentText() if self._dc_option_widget.isVisible() else ""
+        option = self._dc_option_combo.currentData() if self._dc_option_widget.isVisible() else ""
         self._dc_preset_data[sub_lib] = {"cmd": cmd, "option": option}
 
     def _set_locked(self, locked: bool):

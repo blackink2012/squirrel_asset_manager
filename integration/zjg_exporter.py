@@ -1219,15 +1219,29 @@ def _get_materials_from_selection(selection):
 # ========== 全频雷达版：序列化/反序列化函数 ==========
 
 def _get_processable_attrs(node):
-    """【终极全频段扫描】——仅一次 listAttr(every=True)"""
+    """【终极全频段扫描】——listAttr(every=True) 优先，失败回退默认调用。
+
+    注意：部分 Maya 版本（如 2025 中文版）的 cmds.listAttr 不支持 every 标志，
+    会抛「标志 every 无效」。此时回退到默认 listAttr(node)（已含全部可见属性），
+    避免属性集为空导致 zmetal 导出丢失材质属性。
+    """
     all_attrs = set()
     node_type = cmds.nodeType(node)
 
     # every=True 已包含全部属性（标准/隐藏/不可写/动态）
     try:
-        all_attrs.update(cmds.listAttr(node, every=True) or [])
+        attrs = cmds.listAttr(node, every=True) or []
+        if attrs:
+            all_attrs.update(attrs)
     except Exception:
         pass
+
+    # every=True 不可用或返回空 → 回退默认调用（可见属性）
+    if not all_attrs:
+        try:
+            all_attrs.update(cmds.listAttr(node) or [])
+        except Exception:
+            pass
 
     # PBR 属性兜底：从 every=True 结果中筛选，无需逐个 objExists
     pbr_attrs = {

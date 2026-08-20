@@ -45,9 +45,9 @@
         "thumb_source": "screenshot"
     },
     "models": {
-        "zmetal": true,
-        "zmetal_merge": true,
-        "mcm": true,
+        "zmetal": false,
+        "zmetal_merge": false,
+        "mcm": false,
         "mcm_min_count": 2,
         "ma": true,
         "mb": false,
