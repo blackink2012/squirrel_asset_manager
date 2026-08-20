@@ -5,6 +5,13 @@ import os
 import uuid
 import traceback
 
+# i18n 兼容导入（用户可见提示的翻译）
+try:
+    from squirrel_asset_manager.utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 # ========== 共享常量 ==========
 SKIP_ATTRS = {
     'message', 'caching', 'isHistoricallyInteresting',
@@ -1590,19 +1597,19 @@ def radar_export_materials(target_dir=None, custom_name=None, separate_files=Fal
     else:
         selection = cmds.ls(sl=True)
         if not selection:
-            cmds.warning("请先选择模型或材质！")
+            cmds.warning(t("zjg.select_model_or_material"))
             return
 
         if selection_is_material:
             materials = [item for item in selection if cmds.objExists(item)]
             if not materials:
-                cmds.warning("所选对象不是有效的可导出节点！")
+                cmds.warning(t("zjg.invalid_export_node"))
                 return
             print(f"[radar_export] 选中 {len(materials)} 个可导出节点: {[cmds.nodeType(m) for m in materials]}")
         else:
             materials = _get_materials_from_selection(selection)
             if not materials:
-                cmds.warning("所选对象没有关联的材质！")
+                cmds.warning(t("zjg.no_related_material"))
                 return
 
         selected_shapes = set(_get_all_shapes_with_material_from_selection(selection))
@@ -1968,7 +1975,7 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
                     print(f"[Import] 节点注册到分类列表失败 [{new_name}]: {e}")
             name_map[old_name] = new_node
         except Exception as e:
-            cmds.warning(f"创建节点失败 [{old_name}]: {e}")
+            cmds.warning(t("zjg.create_node_failed", name=old_name, error=e))
             name_map[old_name] = None
             failed_nodes.append(old_name)
 
@@ -2149,7 +2156,7 @@ def radar_import_materials(file_paths=None, user_ns=None, user_prefix=None, user
                     success, name_map = _radar_import_single_file(filepath, user_prefix, user_suffix, copy_textures=copy_textures)
                 total_success += success
             else:
-                cmds.warning(f"文件不存在: {filepath}")
+                cmds.warning(t("zjg.file_not_found", path=filepath))
 
     if assign_objects and objects_files:
         all_failed_objects = []
@@ -2201,7 +2208,7 @@ def radar_import_materials(file_paths=None, user_ns=None, user_prefix=None, user
                             cmds.select(failed_transforms, replace=True)
                             print(f"[选择] 已选择 {len(failed_transforms)} 个指定失败的模型")
                 except Exception as e:
-                    cmds.warning(f"指定材质失败: {e}")
+                    cmds.warning(t("zjg.assign_material_failed", error=e))
     elif assign_objects and not objects_files:
         print("[材质导入] 未找到 objects.json 文件，无法指定材质")
 
@@ -2226,7 +2233,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
     """MA+JSON版导出材质"""
     transforms = cmds.ls(selection=True, transforms=True)
     if not transforms:
-        cmds.warning("请先选择至少一个带有材质的模型！")
+        cmds.warning(t("zjg.select_model_with_material"))
         return False
 
     materials = set()
@@ -2242,7 +2249,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                     materials.add(mat)
 
     if not materials:
-        cmds.warning("所选模型没有关联的材质！")
+        cmds.warning(t("zjg.model_has_no_material"))
         return False
 
     materials = list(materials)
@@ -2347,7 +2354,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                         _replace_texture_paths_in_ma(ma_filepath, textures_dir, [mat])
                         print(f"[MA+JSON纹理打包] {mat} -> {textures_dir}")
                 except Exception as e:
-                    cmds.warning(f"导出 MA 失败 {mat}: {e}")
+                    cmds.warning(t("zjg.export_ma_failed", mat=mat, error=e))
         
         if create_material_folder:
             for mat in materials:
@@ -2358,7 +2365,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                         json.dump({mat: result_data[mat]}, f, indent=4, ensure_ascii=False)
                     print(f"[MA+JSON导出] 成功: {mat} 映射 -> {os.path.basename(mat_json_path)}")
                 except Exception as e:
-                    cmds.warning(f"写入 JSON 失败: {e}")
+                    cmds.warning(t("zjg.write_json_failed", error=e))
 
                 if export_metadata:
                     try:
@@ -2368,7 +2375,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                             json.dump(meta_data, f, indent=4, ensure_ascii=False)
                         print(f"[MA+JSON元数据导出] 成功: {mat} -> {os.path.basename(meta_filepath)}")
                     except Exception as e:
-                        cmds.warning(f"写入元数据 JSON 失败: {e}")
+                        cmds.warning(t("zjg.write_metadata_json_failed", error=e))
         else:
             if json_filepath:
                 try:
@@ -2376,7 +2383,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                         json.dump(result_data, f, indent=4, ensure_ascii=False)
                     print(f"[MA+JSON导出] 成功: 材质映射 -> {os.path.basename(json_filepath)}")
                 except Exception as e:
-                    cmds.warning(f"写入 JSON 失败: {e}")
+                    cmds.warning(t("zjg.write_json_failed", error=e))
                     return False
 
             if export_metadata and json_filepath:
@@ -2387,7 +2394,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                         json.dump(meta_data, f, indent=4, ensure_ascii=False)
                     print(f"[MA+JSON元数据导出] 成功: {len(materials)} 个材质元数据 -> {os.path.basename(meta_filepath)}")
                 except Exception as e:
-                    cmds.warning(f"写入元数据 JSON 失败: {e}")
+                    cmds.warning(t("zjg.write_metadata_json_failed", error=e))
     else:
         result_data = {}
         # 获取面级材质指定（只处理选择的模型）
@@ -2440,7 +2447,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                 with open(json_filepath, 'w', encoding='utf-8') as f:
                     json.dump(result_data, f, indent=4, ensure_ascii=False)
             except Exception as e:
-                cmds.warning(f"写入材质文件失败: {e}")
+                cmds.warning(t("zjg.write_material_file_failed", error=e))
                 return False
 
             if export_metadata:
@@ -2451,7 +2458,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                         json.dump(meta_data, f, indent=4, ensure_ascii=False)
                     print(f"[MA+JSON元数据导出] 成功: {len(materials)} 个材质元数据 -> {os.path.basename(meta_filepath)}")
                 except Exception as e:
-                    cmds.warning(f"写入元数据 JSON 失败: {e}")
+                    cmds.warning(t("zjg.write_metadata_json_failed", error=e))
 
             ma_filepath = json_filepath.rsplit('.', 1)[0] + '.ma'
 
@@ -2484,7 +2491,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                         _replace_texture_paths_in_ma(ma_filepath, textures_dir, materials)
                         print(f"[MA+JSON纹理打包] {len(materials)} 个材质纹理 -> {textures_dir}")
                 except Exception as e:
-                    cmds.warning(f"导出 MA 失败: {e}")
+                    cmds.warning(t("zjg.export_ma_failed_generic", error=e))
                     return False
 
     return True
@@ -2493,7 +2500,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
 def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=None, old_path_prefix=None, new_path_prefix=None, old_path_suffix=None, new_path_suffix=None, import_selection=False, fuzzy_match=False, copy_textures=False):
     """MA+JSON版导入材质"""
     if not os.path.exists(json_path):
-        cmds.warning(f"JSON 文件不存在: {json_path}")
+        cmds.warning(t("zjg.json_file_not_found", path=json_path))
         return False
 
     # 读取JSON文件
@@ -2501,7 +2508,7 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     except Exception as e:
-        cmds.warning(f"读取 JSON 失败: {e}")
+        cmds.warning(t("zjg.read_json_failed", error=e))
         return False
 
     # 检查材质文件夹（与JSON文件同名）
@@ -2514,7 +2521,7 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
     if import_selection:
         selected_objects = set(cmds.ls(sl=True, long=True) or [])
         if not selected_objects:
-            cmds.warning("没有选择任何物体")
+            cmds.warning(t("zjg.no_selection"))
             return False
 
     # 过滤需要导入的材质
@@ -2535,7 +2542,7 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
                     break
         
         if not materials_to_import:
-            cmds.warning("没有找到与选择物体相关的材质")
+            cmds.warning(t("zjg.no_related_material_found"))
             return False
         print(f"[MA+JSON导入] 找到 {len(materials_to_import)} 个与选择物体相关的材质")
     else:
@@ -2554,13 +2561,13 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
                 print(f"[MA+JSON导入] 警告: 找不到材质 {mat_name} 的 MA 文件")
         
         if not ma_files:
-            cmds.warning("没有找到任何材质的 MA 文件")
+            cmds.warning(t("zjg.no_ma_files_found"))
             return False
     else:
         # 兼容旧格式：尝试查找与JSON同名的MA文件
         ma_path = json_path.rsplit('.', 1)[0] + '.ma'
         if not os.path.exists(ma_path):
-            cmds.warning(f"找不到配套的 MA 文件: {ma_path}")
+            cmds.warning(t("zjg.ma_file_not_found", path=ma_path))
             return False
         ma_files = [ma_path]
 
@@ -2597,7 +2604,7 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
             cmds.file(ma_file, i=True, type="mayaAscii", namespace=temp_ns_base, defaultNamespace=False)
             print(f"[MA+JSON导入] 成功导入: {os.path.basename(ma_file)}")
         except Exception as e:
-            cmds.warning(f"导入 MA 文件失败 {ma_file}: {e}")
+            cmds.warning(t("zjg.import_ma_failed", file=ma_file, error=e))
 
     _process_texture_paths_in_maya(json_path, copy_textures)
 
@@ -3273,7 +3280,7 @@ class RadarTabWidget(QWidget):
 
         json_files = _collect_json_files_from_dirs(dirs)
         if not json_files:
-            cmds.warning("所选文件夹中没有找到材质文件！")
+            cmds.warning(t("zjg.no_material_files_in_folder"))
             return
 
         print(f"[文件夹导入] 找到 {len(json_files)} 个材质文件")
@@ -3621,7 +3628,7 @@ class MATabWidget(QWidget):
 
         json_files = _collect_json_files_from_dirs(dirs)
         if not json_files:
-            cmds.warning("所选文件夹中没有找到材质JSON文件！")
+            cmds.warning(t("zjg.no_material_json_in_folder"))
             return
 
         print(f"[文件夹导入] 找到 {len(json_files)} 个材质MA+JSON文件")

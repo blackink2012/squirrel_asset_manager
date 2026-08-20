@@ -23,6 +23,21 @@ try:
 except ImportError:
     IN_MAYA = False
 
+_T = None
+_help_path = lambda p: p
+try:
+    from utils.i18n import t as _T, help_path as _hpath
+    _help_path = _hpath
+except ImportError:
+    try:
+        from squirrel_asset_manager.utils.i18n import t as _T, help_path as _hpath
+        _help_path = _hpath
+    except ImportError:
+        _T = None
+
+def t(key, **kwargs):
+    return _T(key, **kwargs) if _T is not None else (key.format(**kwargs) if kwargs else key)
+
 
 def get_qt_modules():
     try:
@@ -55,9 +70,9 @@ def check_dependencies():
     if not missing:
         try:
             import imageio.v3
-            return True, "所有依赖已就绪"
+            return True, t("msg.dependencies_ready")
         except ImportError:
-            return True, "就绪（建议安装 imageio 以获得更好的 EXR 兼容性）"
+            return True, t("qtool.imgconvert.ready_imageio_recommended")
 
     python_path = sys.executable
     python_version = sys.version
@@ -77,18 +92,19 @@ def check_dependencies():
     maya_pip_cmd = f'"{_maya_py}" -m pip install opencv-python numpy imageio'
 
     msg = (
-        f"缺少以下依赖库：\n  "
+        t("qtool.imgconvert.dep_missing_libraries")
+        + "\n  "
         + "\n  ".join(missing)
-        + f"\n\n当前 Python 解释器：\n  {python_path}\n  {python_version}"
-        + "\n\n━━ 安装方法 ━━"
-        + "\n\n【推荐】使用 Maya 的 mayapy 安装（确保安装到正确的 Python 环境）："
-        + "\n  打开 Windows 命令提示符（以管理员身份运行），执行：\n"
-        + "\n  " + maya_pip_cmd
-        + "\n\n【方案二】在系统终端（cmd/PowerShell）中执行："
-        + "\n  ⚠ 注意：此方法安装到系统 Python，可能无法被 Maya 使用。\n"
-        + "\n  " + install_cmd
-        + "\n\n【方案三】在 Maya 脚本编辑器中执行（复制以下代码运行）：\n"
-        + "\n  import subprocess\n  import sys\n  result = subprocess.run(\n      [sys.executable, '-m', 'pip', 'install', 'opencv-python', 'numpy', 'imageio'],\n      capture_output=True,\n      text=True\n  )\n  print('安装结果:', result.returncode)\n  print('输出:', result.stdout)\n  print('错误:', result.stderr)\n"
+        + t("qtool.imgconvert.dep_interpreter", python_path=python_path, python_version=python_version)
+        + "\n\n━━ " + t("qtool.imgconvert.dep_install_methods") + " ━━"
+        + "\n\n" + t("qtool.imgconvert.dep_method1_recommended")
+        + "\n  " + t("qtool.imgconvert.dep_method1_cmd")
+        + "\n\n  " + maya_pip_cmd
+        + "\n\n" + t("qtool.imgconvert.dep_method2")
+        + "\n  " + t("qtool.imgconvert.dep_method2_note")
+        + "\n\n  " + install_cmd
+        + "\n\n" + t("qtool.imgconvert.dep_method3")
+        + "\n\n  import subprocess\n  import sys\n  result = subprocess.run(\n      [sys.executable, '-m', 'pip', 'install', 'opencv-python', 'numpy', 'imageio'],\n      capture_output=True,\n      text=True\n  )\n  print('" + t("qtool.imgconvert.dep_result") + "', result.returncode)\n  print('" + t("qtool.imgconvert.dep_output") + "', result.stdout)\n  print('" + t("qtool.imgconvert.dep_error") + "', result.stderr)\n"
     )
     return False, msg
 
@@ -178,7 +194,7 @@ def convert_image(input_path, output_path, input_format, output_format,
         if input_format in ('.hdr', '.hdri', '.pic'):
             image = _imread_exr_hdr(input_filename, input_format, cv2, np)
             if image is None:
-                return False, f"无法读取HDR文件: {input_path}"
+                return False, t("qtool.imgconvert.err_read_hdr", path=input_path)
             if image.dtype != np.float32:
                 image = image.astype(np.float32)
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -186,7 +202,7 @@ def convert_image(input_path, output_path, input_format, output_format,
         elif input_format == '.exr':
             image = _imread_exr_hdr(input_filename, input_format, cv2, np)
             if image is None:
-                return False, f"无法读取EXR文件: {input_path}"
+                return False, t("qtool.imgconvert.err_read_exr", path=input_path)
             if image.dtype != np.float32:
                 image = image.astype(np.float32)
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -194,7 +210,7 @@ def convert_image(input_path, output_path, input_format, output_format,
         else:
             image = cv2.imread(input_filename, cv2.IMREAD_UNCHANGED)
             if image is None:
-                return False, f"无法读取图像文件: {input_path}"
+                return False, t("qtool.imgconvert.err_read_image", path=input_path)
             if len(image.shape) == 2:
                 image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
             elif image.shape[2] == 4:
@@ -211,8 +227,8 @@ def convert_image(input_path, output_path, input_format, output_format,
             output_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
             success = cv2.imwrite(output_filename, output_bgr)
             if not success:
-                return False, f"无法保存EXR文件: {output_path}"
-            return True, "转换成功"
+                return False, t("qtool.imgconvert.err_save_exr", path=output_path)
+            return True, t("qtool.imgconvert.convert_success")
 
         if output_format in ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.webp', '.tga'):
             if image.dtype == np.float32 or image.dtype == np.float64:
@@ -237,15 +253,15 @@ def convert_image(input_path, output_path, input_format, output_format,
 
             success = cv2.imwrite(output_filename, output_image, params)
             if not success:
-                return False, f"无法保存图像文件: {output_path}"
-            return True, "转换成功"
+                return False, t("qtool.imgconvert.err_save_image", path=output_path)
+            return True, t("qtool.imgconvert.convert_success")
 
-        return False, f"不支持的输出格式: {output_format}"
+        return False, t("qtool.imgconvert.err_unsupported_format", fmt=output_format)
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return False, f"转换失败: {str(e)}"
+        return False, t("qtool.imgconvert.err_convert_failed", err=str(e))
     finally:
         os.chdir(original_cwd)
         if image is not None:
@@ -417,7 +433,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
 
     def __init__(self, parent=None):
         super(ImageFormatConverterDialog, self).__init__(parent)
-        self.setWindowTitle("图像格式批量转换")
+        self.setWindowTitle(t("qtool.imgconvert.title"))
         self.setMinimumSize(750, 600)
 
         ok, msg = check_dependencies()
@@ -435,7 +451,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
         label.setStyleSheet("color: #e06060; font-size: 13px; padding: 20px;")
         layout.addWidget(label)
 
-        btn = QtWidgets.QPushButton("确定")
+        btn = QtWidgets.QPushButton(t("common.ok"))
         btn.setObjectName("okBtn")
         btn.setStyleSheet(
             "QPushButton#okBtn { background: #5294e2; color: white; padding: 8px 20px; border-radius: 4px; }"
@@ -457,70 +473,70 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(12)
 
-        mode_group = QtWidgets.QGroupBox("输入模式")
+        mode_group = QtWidgets.QGroupBox(t("qtool.imgconvert.input_mode"))
         mode_layout = QtWidgets.QHBoxLayout(mode_group)
         mode_layout.setContentsMargins(8, 8, 8, 8)
 
-        self._mode_files = QtWidgets.QRadioButton("选择文件")
+        self._mode_files = QtWidgets.QRadioButton(t("qtool.imgconvert.select_files"))
         self._mode_files.setChecked(True)
         self._mode_files.toggled.connect(self._on_mode_changed)
         mode_layout.addWidget(self._mode_files)
 
-        self._mode_folder = QtWidgets.QRadioButton("选择文件夹")
+        self._mode_folder = QtWidgets.QRadioButton(t("qtool.imgconvert.select_folder"))
         self._mode_folder.toggled.connect(self._on_mode_changed)
         mode_layout.addWidget(self._mode_folder)
 
         left_layout.addWidget(mode_group)
 
-        input_group = QtWidgets.QGroupBox("输入")
+        input_group = QtWidgets.QGroupBox(t("qtool.imgconvert.input"))
         input_layout = QtWidgets.QHBoxLayout(input_group)
         input_layout.setContentsMargins(8, 8, 8, 8)
 
         self._input_path = QtWidgets.QLineEdit()
-        self._input_path.setPlaceholderText("选择要转换的图像文件...")
+        self._input_path.setPlaceholderText(t("qtool.imgconvert.ph_select_images"))
         input_layout.addWidget(self._input_path, 1)
 
-        browse_btn = QtWidgets.QPushButton("浏览...")
+        browse_btn = QtWidgets.QPushButton(t("qtool.imgconvert.browse"))
         browse_btn.clicked.connect(self._browse_input)
         input_layout.addWidget(browse_btn)
 
         left_layout.addWidget(input_group)
 
-        filter_group = QtWidgets.QGroupBox("输入格式过滤")
+        filter_group = QtWidgets.QGroupBox(t("qtool.imgconvert.input_format_filter"))
         filter_layout = QtWidgets.QVBoxLayout(filter_group)
         filter_layout.setContentsMargins(8, 8, 8, 8)
 
-        filter_layout.addWidget(QtWidgets.QLabel("仅转换以下格式（留空则转换所有支持格式）:"))
+        filter_layout.addWidget(QtWidgets.QLabel(t("qtool.imgconvert.filter_hint")))
         self._input_formats_edit = QtWidgets.QLineEdit()
-        self._input_formats_edit.setPlaceholderText("例如: png, jpg, exr")
+        self._input_formats_edit.setPlaceholderText(t("qtool.imgconvert.ph_format_example"))
         filter_layout.addWidget(self._input_formats_edit)
 
-        self._supported_fmt_label = QtWidgets.QLabel(f"支持格式: {', '.join(sorted(SUPPORTED_FORMATS.keys()))}")
+        self._supported_fmt_label = QtWidgets.QLabel(t("qtool.imgconvert.supported_formats", fmts=', '.join(sorted(SUPPORTED_FORMATS.keys()))))
         self._supported_fmt_label.setStyleSheet("color: #808080; font-size: 11px;")
         filter_layout.addWidget(self._supported_fmt_label)
 
         left_layout.addWidget(filter_group)
 
-        output_group = QtWidgets.QGroupBox("输出位置")
+        output_group = QtWidgets.QGroupBox(t("qtool.imgconvert.output_location"))
         output_layout = QtWidgets.QHBoxLayout(output_group)
         output_layout.setContentsMargins(8, 8, 8, 8)
 
         self._output_path = QtWidgets.QLineEdit()
-        self._output_path.setPlaceholderText("选择输出文件夹...")
+        self._output_path.setPlaceholderText(t("qtool.imgconvert.ph_select_output"))
         output_layout.addWidget(self._output_path, 1)
 
-        output_browse_btn = QtWidgets.QPushButton("浏览...")
+        output_browse_btn = QtWidgets.QPushButton(t("qtool.imgconvert.browse"))
         output_browse_btn.clicked.connect(self._browse_output_folder)
         output_layout.addWidget(output_browse_btn)
 
         left_layout.addWidget(output_group)
 
-        format_group = QtWidgets.QGroupBox("输出格式")
+        format_group = QtWidgets.QGroupBox(t("qtool.imgconvert.output_format"))
         format_layout = QtWidgets.QVBoxLayout(format_group)
         format_layout.setContentsMargins(8, 8, 8, 8)
 
         fmt_row = QtWidgets.QHBoxLayout()
-        fmt_row.addWidget(QtWidgets.QLabel("目标格式:"))
+        fmt_row.addWidget(QtWidgets.QLabel(t("qtool.imgconvert.target_format")))
         self._format_combo = QtWidgets.QComboBox()
         fmt_list = ['.exr', '.hdr', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.webp', '.tga']
         for fmt in fmt_list:
@@ -540,22 +556,22 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
 
         left_layout.addWidget(format_group)
 
-        res_group = QtWidgets.QGroupBox("输出分辨率（留空保持原尺寸）")
+        res_group = QtWidgets.QGroupBox(t("qtool.imgconvert.output_resolution"))
         res_layout = QtWidgets.QVBoxLayout(res_group)
         res_layout.setContentsMargins(8, 8, 8, 8)
 
         res_row = QtWidgets.QHBoxLayout()
-        res_row.addWidget(QtWidgets.QLabel("宽:"))
+        res_row.addWidget(QtWidgets.QLabel(t("qtool.imgconvert.width") + ":"))
         self._res_width = QtWidgets.QLineEdit()
-        self._res_width.setPlaceholderText("不限")
+        self._res_width.setPlaceholderText(t("qtool.imgconvert.unlimited"))
         self._res_width.setMaximumWidth(70)
         self._res_width.setValidator(QtGui.QIntValidator(1, 65536, self))
         res_row.addWidget(self._res_width)
 
         res_row.addSpacing(8)
-        res_row.addWidget(QtWidgets.QLabel("高:"))
+        res_row.addWidget(QtWidgets.QLabel(t("qtool.imgconvert.height") + ":"))
         self._res_height = QtWidgets.QLineEdit()
-        self._res_height.setPlaceholderText("不限")
+        self._res_height.setPlaceholderText(t("qtool.imgconvert.unlimited"))
         self._res_height.setMaximumWidth(70)
         self._res_height.setValidator(QtGui.QIntValidator(1, 65536, self))
         res_row.addWidget(self._res_height)
@@ -563,19 +579,19 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
         res_row.addStretch()
         res_layout.addLayout(res_row)
 
-        self._res_keep_aspect = QtWidgets.QCheckBox("保持宽高比")
+        self._res_keep_aspect = QtWidgets.QCheckBox(t("qtool.imgconvert.keep_aspect_ratio"))
         self._res_keep_aspect.setChecked(True)
         res_layout.addWidget(self._res_keep_aspect)
 
         left_layout.addWidget(res_group)
 
-        hierarchy_group = QtWidgets.QGroupBox("输出结构")
+        hierarchy_group = QtWidgets.QGroupBox(t("qtool.imgconvert.output_structure"))
         hierarchy_layout = QtWidgets.QVBoxLayout(hierarchy_group)
         hierarchy_layout.setContentsMargins(8, 8, 8, 8)
 
-        self._keep_hierarchy = QtWidgets.QCheckBox("保持层级结构")
+        self._keep_hierarchy = QtWidgets.QCheckBox(t("qtool.imgconvert.keep_hierarchy"))
         self._keep_hierarchy.setChecked(True)
-        self._keep_hierarchy.setToolTip("勾选时保持原始文件夹层级结构，取消则所有文件输出到同一目录")
+        self._keep_hierarchy.setToolTip(t("qtool.imgconvert.keep_hierarchy_tip"))
         hierarchy_layout.addWidget(self._keep_hierarchy)
 
         left_layout.addWidget(hierarchy_group)
@@ -588,7 +604,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(12)
 
-        log_group = QtWidgets.QGroupBox("转换日志")
+        log_group = QtWidgets.QGroupBox(t("qtool.imgconvert.convert_log"))
         log_layout = QtWidgets.QVBoxLayout(log_group)
         log_layout.setContentsMargins(8, 8, 8, 8)
 
@@ -601,7 +617,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
         self._progress.setVisible(False)
         log_layout.addWidget(self._progress)
 
-        self._status_label = QtWidgets.QLabel("就绪")
+        self._status_label = QtWidgets.QLabel(t("qtool.imgconvert.ready"))
         self._status_label.setStyleSheet("color: #808080; font-size: 12px;")
         log_layout.addWidget(self._status_label)
 
@@ -616,7 +632,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
 
         help_btn = QtWidgets.QPushButton("?")
         help_btn.setFixedSize(34, 34)
-        help_btn.setToolTip("使用帮助")
+        help_btn.setToolTip(t("qtool.imgconvert.help_tooltip"))
         help_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #ffa502; border: none;"
             "font-size: 18px; font-weight: bold; border-radius: 4px; }"
@@ -625,15 +641,15 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
         help_btn.clicked.connect(self._on_help)
         btn_layout.addWidget(help_btn)
 
-        self._file_count_label = QtWidgets.QLabel("已选择 0 个文件")
+        self._file_count_label = QtWidgets.QLabel(t("qtool.imgconvert.selected_count", n=0))
         self._file_count_label.setStyleSheet("color: #909090;")
         btn_layout.addWidget(self._file_count_label)
 
-        self._cancel_btn = QtWidgets.QPushButton("取消")
+        self._cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         self._cancel_btn.clicked.connect(self._on_cancel)
         btn_layout.addWidget(self._cancel_btn)
 
-        self._ok_btn = QtWidgets.QPushButton("开始转换")
+        self._ok_btn = QtWidgets.QPushButton(t("qtool.imgconvert.start_convert"))
         self._ok_btn.setObjectName("okBtn")
         self._ok_btn.clicked.connect(self._convert)
         btn_layout.addWidget(self._ok_btn)
@@ -649,7 +665,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
         if self._is_converting:
             self._is_cancelled = True
             self._cancel_btn.setEnabled(False)
-            self._status_label.setText("正在中止...")
+            self._status_label.setText(t("qtool.imgconvert.aborting"))
         else:
             self.close()
 
@@ -657,7 +673,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
         import webbrowser
         import os
         plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        help_path = os.path.join(plugin_root, "Assets", "help", "图像格式转换工具", "help.html")
+        help_path = _help_path(os.path.join(plugin_root, "Assets", "help", "图像格式转换工具", "help.html"))
         if os.path.isfile(help_path):
             webbrowser.open("file:///" + help_path.replace(os.sep, "/"))
         else:
@@ -665,13 +681,13 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
 
     def _on_mode_changed(self):
         if self._mode_files.isChecked():
-            self._input_path.setPlaceholderText("选择要转换的图像文件...")
+            self._input_path.setPlaceholderText(t("qtool.imgconvert.ph_select_images"))
         else:
-            self._input_path.setPlaceholderText("选择要转换的文件夹...")
+            self._input_path.setPlaceholderText(t("qtool.imgconvert.ph_select_folder"))
         self._input_files = []
         self._input_folder = ""
         self._input_path.clear()
-        self._file_count_label.setText("已选择 0 个文件")
+        self._file_count_label.setText(t("qtool.imgconvert.selected_count", n=0))
 
     def _browse_input(self):
         if self._mode_files.isChecked():
@@ -682,9 +698,9 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
     def _browse_files(self):
         from PySide6 import QtWidgets as _QW
         files, _ = QtWidgets.QFileDialog.getOpenFileNames(
-            self, "选择要转换的图像文件",
+            self, t("qtool.imgconvert.select_images_title"),
             "",
-            "所有图像 (*.hdr *.HDR *.exr *.EXR *.png *.PNG *.jpg *.JPG *.jpeg *.JPEG *.tif *.TIF *.tiff *.TIFF *.bmp *.BMP *.webp *.WEBP *.tga *.TGA);;HDR (*.hdr *.HDR);;EXR (*.exr *.EXR);;PNG (*.png *.PNG);;JPEG (*.jpg *.jpeg);;TIFF (*.tif *.tiff)"
+            t("qtool.imgconvert.filter_all_images") + " (*.hdr *.HDR *.exr *.EXR *.png *.PNG *.jpg *.JPG *.jpeg *.JPEG *.tif *.TIF *.tiff *.TIFF *.bmp *.BMP *.webp *.WEBP *.tga *.TGA);;HDR (*.hdr *.HDR);;EXR (*.exr *.EXR);;PNG (*.png *.PNG);;JPEG (*.jpg *.jpeg);;TIFF (*.tif *.tiff)"
         )
         if files:
             self._input_files = [(f, os.path.basename(f)) for f in files]
@@ -692,12 +708,12 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
             if len(files) == 1:
                 self._input_path.setText(files[0])
             else:
-                self._input_path.setText(f"{len(files)} 个文件已选择")
-            self._file_count_label.setText(f"已选择 {len(files)} 个文件")
+                self._input_path.setText(t("qtool.imgconvert.files_selected", n=len(files)))
+            self._file_count_label.setText(t("qtool.imgconvert.selected_count", n=len(files)))
 
     def _browse_folder(self):
         folder = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "选择图像文件夹", "",
+            self, t("qtool.imgconvert.select_folder_title"), "",
             QtWidgets.QFileDialog.ShowDirsOnly | QtWidgets.QFileDialog.DontResolveSymlinks
         )
         if folder:
@@ -706,7 +722,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
             input_formats = self._get_input_formats()
             files = find_image_files(folder, input_formats)
             self._input_files = files
-            self._file_count_label.setText(f"已找到 {len(files)} 个图像文件")
+            self._file_count_label.setText(t("qtool.imgconvert.found_files", n=len(files)))
 
     def _get_input_formats(self):
         fmt_text = self._input_formats_edit.text().strip()
@@ -721,7 +737,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
 
     def _browse_output_folder(self):
         folder = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "选择输出文件夹", "",
+            self, t("qtool.imgconvert.select_output_title"), "",
             QtWidgets.QFileDialog.ShowDirsOnly | QtWidgets.QFileDialog.DontResolveSymlinks
         )
         if folder:
@@ -736,7 +752,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
             return
 
         if fmt in ('.jpg', '.jpeg'):
-            self._options_layout.addWidget(QtWidgets.QLabel("品质:"))
+            self._options_layout.addWidget(QtWidgets.QLabel(t("qtool.imgconvert.quality") + ":"))
             self._jpeg_quality = QtWidgets.QSpinBox()
             self._jpeg_quality.setRange(10, 100)
             self._jpeg_quality.setValue(95)
@@ -744,14 +760,14 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
             self._options_layout.addWidget(self._jpeg_quality)
 
         elif fmt == '.png':
-            self._options_layout.addWidget(QtWidgets.QLabel("压缩:"))
+            self._options_layout.addWidget(QtWidgets.QLabel(t("qtool.imgconvert.compression") + ":"))
             self._png_compression = QtWidgets.QSpinBox()
             self._png_compression.setRange(0, 9)
             self._png_compression.setValue(5)
             self._options_layout.addWidget(self._png_compression)
 
         elif fmt in ('.tif', '.tiff'):
-            self._options_layout.addWidget(QtWidgets.QLabel("压缩:"))
+            self._options_layout.addWidget(QtWidgets.QLabel(t("qtool.imgconvert.compression") + ":"))
             self._tiff_compression = QtWidgets.QComboBox()
             self._tiff_compression.addItems(["LZW", "NONE", "DEFLATE"])
             self._tiff_compression.setCurrentText("LZW")
@@ -765,19 +781,20 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
 
     def _convert_progress(self, current, total, filename):
         self._progress.setValue(int(current / total * 100))
-        self._status_label.setText(f"正在处理 ({current}/{total}): {filename}")
+        self._status_label.setText(t("qtool.imgconvert.processing", current=current, total=total, filename=filename))
 
     def _convert_finished(self, converted, failed, failed_files):
         self._is_converting = False
         self._ok_btn.setEnabled(True)
         self._progress.setVisible(False)
 
-        self._log(f"转换完成！成功: {converted}, 失败: {failed}")
+        self._log(t("qtool.imgconvert.convert_done_count", converted=converted, failed=failed))
         for file, error in failed_files:
             self._log(f"  ✗ {file}: {error}")
 
-        self._status_label.setText(f"完成: {converted} 成功, {failed} 失败")
-        QtWidgets.QMessageBox.information(self, "转换完成", f"成功: {converted} / {converted + failed}")
+        self._status_label.setText(t("qtool.imgconvert.status_done", converted=converted, failed=failed))
+        QtWidgets.QMessageBox.information(self, t("qtool.imgconvert.convert_done_title"),
+                                          t("qtool.imgconvert.message_done", converted=converted, total=converted + failed))
 
     def _convert(self):
         if self._is_converting:
@@ -788,7 +805,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
             self._input_files = find_image_files(self._input_folder, input_formats)
 
         if not self._input_files:
-            QtWidgets.QMessageBox.warning(self, "警告", "请选择输入文件或文件夹")
+            QtWidgets.QMessageBox.warning(self, t("qtool.imgconvert.warning"), t("qtool.imgconvert.select_input_hint"))
             return
 
         output_folder = self._output_path.text().strip()
@@ -801,7 +818,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
                 output_folder = ""
 
         if not output_folder:
-            QtWidgets.QMessageBox.warning(self, "警告", "无法确定输出文件夹，请手动指定")
+            QtWidgets.QMessageBox.warning(self, t("qtool.imgconvert.warning"), t("qtool.imgconvert.no_output_hint"))
             return
 
         fmt = self._format_combo.itemData(self._format_combo.currentIndex())
@@ -829,7 +846,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
 
         self._is_converting = True
         self._is_cancelled = False
-        self._cancel_btn.setText("中止")
+        self._cancel_btn.setText(t("qtool.imgconvert.abort"))
         self._cancel_btn.setEnabled(True)
         self._ok_btn.setEnabled(False)
         self._progress.setVisible(True)
@@ -837,17 +854,18 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
         self._log_text.clear()
         
         if self._input_folder:
-            self._log(f"开始转换文件夹: {self._input_folder}")
-        self._log(f"输出到: {output_folder}")
-        self._log(f"转换 {len(self._input_files)} 个文件 -> {fmt}")
+            self._log(t("qtool.imgconvert.log_start_folder", folder=self._input_folder))
+        self._log(t("qtool.imgconvert.log_output_to", folder=output_folder))
+        self._log(t("qtool.imgconvert.log_convert_count", n=len(self._input_files), fmt=fmt))
 
         if target_width or target_height:
             res_parts = []
             if target_width:
-                res_parts.append(f"宽={target_width}")
+                res_parts.append(t("qtool.imgconvert.res_width", v=target_width))
             if target_height:
-                res_parts.append(f"高={target_height}")
-            self._log(f"输出分辨率: {'×'.join(res_parts)} {'保持比例' if keep_aspect else '拉伸'}")
+                res_parts.append(t("qtool.imgconvert.res_height", v=target_height))
+            ratio = t("qtool.imgconvert.keep_ratio") if keep_aspect else t("qtool.imgconvert.stretch")
+            self._log(t("qtool.imgconvert.log_output_resolution", res='×'.join(res_parts), ratio=ratio))
 
         input_files = list(self._input_files)
         total = len(input_files)
@@ -865,7 +883,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
                 if safe_stem != stem:
                     new_src = os.path.join(os.path.dirname(input_file), f"{safe_stem}{input_fmt}")
                     os.rename(input_file, new_src)
-                    self._log(f"源文件已重命名: {stem}{input_fmt} -> {safe_stem}{input_fmt}")
+                    self._log(t("qtool.imgconvert.log_renamed", old=f"{stem}{input_fmt}", new=f"{safe_stem}{input_fmt}"))
                     input_file = new_src
 
                 output_subdir = os.path.join(output_folder, rel_dir) if keep_hierarchy else output_folder
@@ -873,8 +891,8 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
                 output_path = os.path.join(output_subdir, f"{safe_stem}{fmt}")
 
                 self._progress.setValue(int((i + 1) / total * 100))
-                self._status_label.setText(f"正在处理 ({i+1}/{total}): {rel_path}")
-                self._log(f"处理中: {rel_path}")
+                self._status_label.setText(t("qtool.imgconvert.processing", current=i + 1, total=total, filename=rel_path))
+                self._log(t("qtool.imgconvert.log_processing", path=rel_path))
                 if IN_MAYA:
                     try:
                         import maya.cmds as cmds
@@ -884,7 +902,7 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
                 QtWidgets.QApplication.processEvents()
 
                 if self._is_cancelled:
-                    self._log("用户中止转换")
+                    self._log(t("qtool.imgconvert.log_user_aborted"))
                     break
 
                 success, message = convert_image(
@@ -901,21 +919,22 @@ class ImageFormatConverterDialog(QtWidgets.QDialog):
         finally:
             self._is_converting = False
             self._is_cancelled = False
-            self._cancel_btn.setText("取消")
+            self._cancel_btn.setText(t("common.cancel"))
             self._cancel_btn.setEnabled(True)
             self._ok_btn.setEnabled(True)
             self._progress.setVisible(False)
             if self._is_cancelled:
-                self._log(f"已中止！成功: {converted}, 跳过: {len(input_files) - converted - failed}")
-                self._status_label.setText(f"已中止: {converted} 成功, {failed} 失败")
-                QtWidgets.QMessageBox.information(self, "已中止",
-                    f"用户中止转换\n\n成功: {converted}, 失败: {failed}")
+                self._log(t("qtool.imgconvert.aborted_count", converted=converted, skipped=len(input_files) - converted - failed))
+                self._status_label.setText(t("qtool.imgconvert.status_aborted", converted=converted, failed=failed))
+                QtWidgets.QMessageBox.information(self, t("qtool.imgconvert.aborted_title"),
+                    t("qtool.imgconvert.message_aborted", converted=converted, failed=failed))
             else:
-                self._log(f"转换完成！成功: {converted}, 失败: {failed}")
+                self._log(t("qtool.imgconvert.convert_done_count", converted=converted, failed=failed))
                 for file, error in failed_files:
                     self._log(f"  ✗ {file}: {error}")
-                self._status_label.setText(f"完成: {converted} 成功, {failed} 失败")
-                QtWidgets.QMessageBox.information(self, "转换完成", f"成功: {converted} / {converted + failed}")
+                self._status_label.setText(t("qtool.imgconvert.status_done", converted=converted, failed=failed))
+                QtWidgets.QMessageBox.information(self, t("qtool.imgconvert.convert_done_title"),
+                    t("qtool.imgconvert.message_done", converted=converted, total=converted + failed))
 
 
 def get_maya_window():
@@ -958,7 +977,7 @@ def main():
     app = QtWidgets.QApplication.instance()
     if not app:
         app = QtWidgets.QApplication(sys.argv)
-        app.setApplicationName("图像格式转换工具")
+        app.setApplicationName(t("qtool.imgconvert.app_name"))
         app.setOrganizationName("SquirrelAssetManager")
         need_exec = True
     else:
@@ -969,16 +988,16 @@ def main():
     if not ok:
         print(f"[格式转换] 依赖缺失:\n{msg}")
         if not need_exec:
-            QtWidgets.QMessageBox.warning(None, "依赖缺失", msg)
+            QtWidgets.QMessageBox.warning(None, t("qtool.imgconvert.dep_missing_title"), msg)
         else:
             # 在系统层运行时，创建一个简单的错误提示窗口
             error_dialog = QtWidgets.QDialog()
-            error_dialog.setWindowTitle("依赖缺失")
+            error_dialog.setWindowTitle(t("qtool.imgconvert.dep_missing_title"))
             error_layout = QtWidgets.QVBoxLayout(error_dialog)
             error_label = QtWidgets.QLabel(msg)
             error_label.setWordWrap(True)
             error_layout.addWidget(error_label)
-            ok_btn = QtWidgets.QPushButton("确定")
+            ok_btn = QtWidgets.QPushButton(t("common.ok"))
             ok_btn.clicked.connect(error_dialog.accept)
             error_layout.addWidget(ok_btn)
             error_dialog.exec()

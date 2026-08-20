@@ -15,6 +15,18 @@ import os
 import math
 from collections import deque
 
+# 帮助文档按界面语言选择（zh/en）
+_help_path = lambda p: p
+try:
+    from .i18n import help_path as _hpath
+    _help_path = _hpath
+except ImportError:
+    try:
+        from squirrel_asset_manager.utils.i18n import help_path as _hpath
+        _help_path = _hpath
+    except ImportError:
+        pass
+
 # ============================================================
 # Maya 环境检测（先检测，稍后初始化
 # ============================================================
@@ -2469,7 +2481,7 @@ class MainWindow(QMainWindow):
         """打开使用帮助"""
         import webbrowser
         plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        help_path = os.path.join(plugin_root, "Assets", "help", "预览ma节点连接", "help.html")
+        help_path = _help_path(os.path.join(plugin_root, "Assets", "help", "预览ma节点连接", "help.html"))
         if os.path.isfile(help_path):
             webbrowser.open("file:///" + help_path.replace(os.sep, "/"))
         else:

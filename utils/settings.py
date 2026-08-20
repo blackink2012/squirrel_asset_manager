@@ -19,6 +19,7 @@ class SettingsManager:
         "font_size": 13,
         "thumb_size": 180,
         "default_view": "icon",
+        "language": "zh",
         "last_library_path": "",
         "model_library_path": "",
         "light_path": "",

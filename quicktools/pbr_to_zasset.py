@@ -14,6 +14,25 @@ from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# ── i18n 翻译层 ──
+_T = None
+_help_path = lambda p: p
+try:
+    from utils.i18n import t as _T, help_path as _hpath
+    _help_path = _hpath
+except ImportError:
+    try:
+        from squirrel_asset_manager.utils.i18n import t as _T, help_path as _hpath
+        _help_path = _hpath
+    except ImportError:
+        _T = None
+
+def t(key, **kwargs):
+    if _T is not None:
+        return _T(key, **kwargs)
+    return key.format(**kwargs) if kwargs else key
+
+
 try:
     import maya.cmds as cmds
     import maya.mel as mel
@@ -218,7 +237,7 @@ def read_source_metadata(asset_folder, name_fallbacks, config):
                         continue
                     
                     if processor == 'split_comma':
-                        processed = [t.strip() for t in raw_value.split(',') if t.strip()]
+                        processed = [item.strip() for item in raw_value.split(',') if item.strip()]
                     elif processor == 'first_line':
                         processed = raw_value.split('\n')[0].strip()
                     else:
@@ -774,11 +793,11 @@ def create_material(material_name, textures, config, existing_shader=None):
             exclusive = recipe.get('exclusive', [])
             optional = recipe.get('optional', False)
 
-            if exclusive and any(t in available_types for t in exclusive):
+            if exclusive and any(tag in available_types for tag in exclusive):
                 continue
-            if requires and not all(t in available_types for t in requires):
+            if requires and not all(tag in available_types for tag in requires):
                 continue
-            if requires_any and not any(t in available_types for t in requires_any):
+            if requires_any and not any(tag in available_types for tag in requires_any):
                 continue
             if not requires and not requires_any and not optional:
                 continue
@@ -1269,7 +1288,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
     
     def __init__(self, parent=None):
         super(PBRToZAssetDialog, self).__init__(parent)
-        self.setWindowTitle("PBR贴图转资产")
+        self.setWindowTitle(t("qtool.pbr.title"))
         self.setMinimumSize(1010, 760)
         self.setStyleSheet("""
             QDialog { background-color: #2a2a2a;  }
@@ -1314,7 +1333,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         if getattr(self, '_is_converting', False):
             self._is_cancelled = True
             self._cancel_btn.setEnabled(False)
-            self._status_label.setText("正在中止...")
+            self._status_label.setText(t("qtool.pbr.cancelling"))
             try:
                 import maya.cmds as _cmds
                 _cmds.refresh()
@@ -1327,7 +1346,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         import webbrowser
         import os
         plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        help_path = os.path.join(plugin_root, "Assets", "help", "pbr_to_zasset", "help.html")
+        help_path = _help_path(os.path.join(plugin_root, "Assets", "help", "pbr_to_zasset", "help.html"))
         if os.path.isfile(help_path):
             webbrowser.open("file:///" + help_path.replace(os.sep, "/"))
         else:
@@ -1356,66 +1375,65 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         left_scroll.setWidget(left_widget)
         
         # 输入文件夹选择
-        input_group = QtWidgets.QGroupBox("贴图文件夹")
+        input_group = QtWidgets.QGroupBox(t("qtool.pbr.input_group"))
         input_layout = QtWidgets.QHBoxLayout(input_group)
         input_layout.setContentsMargins(8, 8, 8, 8)
         
         self._input_path = QtWidgets.QLineEdit()
-        self._input_path.setPlaceholderText("选择包含PBR贴图的文件夹（勾选批量则选择父文件夹）...")
+        self._input_path.setPlaceholderText(t("qtool.pbr.input_placeholder"))
         input_layout.addWidget(self._input_path, 1)
         
-        browse_btn = QtWidgets.QPushButton("浏览...")
+        browse_btn = QtWidgets.QPushButton(t("common.browse"))
         browse_btn.clicked.connect(self._browse_input_folder)
         input_layout.addWidget(browse_btn)
         
         left_layout.addWidget(input_group)
         
         # 输出文件夹选择
-        output_group = QtWidgets.QGroupBox("输出位置")
+        output_group = QtWidgets.QGroupBox(t("qtool.pbr.output_group"))
         output_layout = QtWidgets.QHBoxLayout(output_group)
         output_layout.setContentsMargins(8, 8, 8, 8)
         
         self._output_path = QtWidgets.QLineEdit()
-        self._output_path.setPlaceholderText("选择资产输出文件夹...")
+        self._output_path.setPlaceholderText(t("qtool.pbr.output_placeholder"))
         output_layout.addWidget(self._output_path, 1)
         
-        output_browse_btn = QtWidgets.QPushButton("浏览...")
+        output_browse_btn = QtWidgets.QPushButton(t("common.browse"))
         output_browse_btn.clicked.connect(self._browse_output_folder)
         output_layout.addWidget(output_browse_btn)
         
         left_layout.addWidget(output_group)
         
         # 选项
-        options_group = QtWidgets.QGroupBox("转换选项")
+        options_group = QtWidgets.QGroupBox(t("qtool.pbr.options_group"))
         options_layout = QtWidgets.QVBoxLayout(options_group)
         options_layout.setContentsMargins(8, 8, 8, 8)
         
-        self._export_zasset = QtWidgets.QCheckBox("导出.zasset资产文件")
+        self._export_zasset = QtWidgets.QCheckBox(t("qtool.pbr.export_zasset"))
         self._export_zasset.setChecked(True)
         options_layout.addWidget(self._export_zasset)
         
-        self._batch_mode = QtWidgets.QCheckBox("批量模式（子文件夹作为独立资产）")
-        self._batch_mode.setToolTip("选择父文件夹后，将每个子文件夹作为一个独立的贴图资产处理")
+        self._batch_mode = QtWidgets.QCheckBox(t("qtool.pbr.batch_mode"))
+        self._batch_mode.setToolTip(t("qtool.pbr.batch_mode_tip"))
         options_layout.addWidget(self._batch_mode)
 
         # ── 递归扫描选项 ──
-        self._recursive_scan = QtWidgets.QCheckBox("递归扫描子文件夹中的贴图")
+        self._recursive_scan = QtWidgets.QCheckBox(t("qtool.pbr.recursive_scan"))
         self._recursive_scan.setToolTip(
-            "开启后扫描子文件夹内部的贴图文件（如 tex/ 目录下的贴图）"
+            t("qtool.pbr.recursive_scan_tip")
         )
         self._recursive_scan.toggled.connect(self._on_recursive_toggled)
         options_layout.addWidget(self._recursive_scan)
 
         rec_row = QtWidgets.QHBoxLayout()
-        rec_label = QtWidgets.QLabel("模式:")
+        rec_label = QtWidgets.QLabel(t("qtool.pbr.mode_label"))
         rec_label.setStyleSheet("color: #909090; font-size: 13px;")
         rec_label.setFixedWidth(36)
         rec_row.addWidget(rec_label)
         self._recursive_mode = QtWidgets.QComboBox()
-        self._recursive_mode.addItems(["自动递归全部子文件夹", "手动指定子文件夹名"])
+        self._recursive_mode.addItems([t("qtool.pbr.rec_mode_auto"), t("qtool.pbr.rec_mode_manual")])
         self._recursive_mode.setToolTip(
-            "自动 — 递归所有子文件夹（含嵌套）\n"
-            "手动 — 只递归下方指定的文件夹名"
+            t("qtool.pbr.rec_mode_tip")
         )
         rec_row.addWidget(self._recursive_mode, 1)
         rec_row.setContentsMargins(0, 0, 0, 0)
@@ -1426,13 +1444,13 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         options_layout.addWidget(rec_widget)
 
         rec_row2 = QtWidgets.QHBoxLayout()
-        rec_label2 = QtWidgets.QLabel("文件夹:")
+        rec_label2 = QtWidgets.QLabel(t("qtool.pbr.folder_label"))
         rec_label2.setStyleSheet("color: #909090; font-size: 13px;")
         rec_label2.setFixedWidth(36)
         rec_row2.addWidget(rec_label2)
         self._recursive_dirs_edit = QtWidgets.QLineEdit()
-        self._recursive_dirs_edit.setPlaceholderText("手动时填写，逗号分隔（如 tex, textures）")
-        self._recursive_dirs_edit.setToolTip("只递归这些名称的子文件夹")
+        self._recursive_dirs_edit.setPlaceholderText(t("qtool.pbr.rec_dirs_placeholder"))
+        self._recursive_dirs_edit.setToolTip(t("qtool.pbr.rec_dirs_tip"))
         rec_row2.addWidget(self._recursive_dirs_edit, 1)
         rec_row2.setContentsMargins(0, 0, 0, 0)
         rec_widget2 = QtWidgets.QWidget()
@@ -1442,13 +1460,13 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         options_layout.addWidget(rec_widget2)
 
         rec_row3 = QtWidgets.QHBoxLayout()
-        rec_label3 = QtWidgets.QLabel("排除:")
+        rec_label3 = QtWidgets.QLabel(t("qtool.pbr.exclude_label"))
         rec_label3.setStyleSheet("color: #909090; font-size: 13px;")
         rec_label3.setFixedWidth(36)
         rec_row3.addWidget(rec_label3)
         self._exclude_dirs_edit = QtWidgets.QLineEdit()
-        self._exclude_dirs_edit.setPlaceholderText("排除的文件夹，逗号分隔（如 Thumbs, previews）")
-        self._exclude_dirs_edit.setToolTip("递归时跳过这些名称的文件夹")
+        self._exclude_dirs_edit.setPlaceholderText(t("qtool.pbr.exclude_placeholder"))
+        self._exclude_dirs_edit.setToolTip(t("qtool.pbr.exclude_tip"))
         rec_row3.addWidget(self._exclude_dirs_edit, 1)
         rec_row3.setContentsMargins(0, 0, 0, 0)
         rec_widget3 = QtWidgets.QWidget()
@@ -1457,9 +1475,9 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         self._recursive_row3 = rec_widget3
         options_layout.addWidget(rec_widget3)
 
-        self._import_to_category = QtWidgets.QCheckBox("转换后导入当前分类")
+        self._import_to_category = QtWidgets.QCheckBox(t("qtool.pbr.import_category"))
         self._import_to_category.setChecked(False)
-        self._import_to_category.setToolTip("转换完成后将zasset文件拷贝到当前资产库分类文件夹（只拷贝zasset，不拷贝文件夹结构）")
+        self._import_to_category.setToolTip(t("qtool.pbr.import_category_tip"))
         options_layout.addWidget(self._import_to_category)
         
         # ── 精度选项 ──
@@ -1468,19 +1486,19 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         res_sep.setStyleSheet("color: #3a3a3a;")
         options_layout.addWidget(res_sep)
         
-        res_label = QtWidgets.QLabel("多精度贴图:")
+        res_label = QtWidgets.QLabel(t("qtool.pbr.res_label"))
         res_label.setStyleSheet("color: #5294e2; font-weight: bold;")
         options_layout.addWidget(res_label)
         
-        self._pack_all_res = QtWidgets.QCheckBox("打包所有精度（贴图按精度存入子目录）")
+        self._pack_all_res = QtWidgets.QCheckBox(t("qtool.pbr.pack_all_res"))
         self._pack_all_res.setChecked(True)
-        self._pack_all_res.setToolTip("勾选后将所有精度的贴图打包进.zasset（textures/2k/、textures/4k/等），导入时可选")
+        self._pack_all_res.setToolTip(t("qtool.pbr.pack_all_res_tip"))
         options_layout.addWidget(self._pack_all_res)
         
         left_layout.addWidget(options_group)
         
         # ── 文件路由配置 ──
-        routing_group = QtWidgets.QGroupBox("文件路由配置")
+        routing_group = QtWidgets.QGroupBox(t("qtool.pbr.routing_group"))
         routing_layout = QtWidgets.QVBoxLayout(routing_group)
         routing_layout.setContentsMargins(8, 8, 8, 8)
         routing_layout.setSpacing(4)
@@ -1492,11 +1510,11 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         
         routing_btn_layout = QtWidgets.QHBoxLayout()
         routing_btn_layout.setSpacing(6)
-        add_route_btn = QtWidgets.QPushButton("+ 添加路由")
+        add_route_btn = QtWidgets.QPushButton(t("qtool.pbr.add_route"))
         add_route_btn.setStyleSheet("font-size: 13px; padding: 5px 12px;")
         add_route_btn.clicked.connect(self._add_routing_row)
         routing_btn_layout.addWidget(add_route_btn)
-        save_routing_btn = QtWidgets.QPushButton("保存路由")
+        save_routing_btn = QtWidgets.QPushButton(t("qtool.pbr.save_routing"))
         save_routing_btn.setObjectName("okBtn")
         save_routing_btn.clicked.connect(self._save_routing_config)
         routing_btn_layout.addWidget(save_routing_btn)
@@ -1506,13 +1524,13 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         left_layout.addWidget(routing_group)
         
         # 元数据源配置
-        meta_group = QtWidgets.QGroupBox("元数据源配置")
+        meta_group = QtWidgets.QGroupBox(t("qtool.pbr.meta_group"))
         meta_layout = QtWidgets.QVBoxLayout(meta_group)
         meta_layout.setContentsMargins(8, 8, 8, 8)
         meta_layout.setSpacing(6)
         
         # ── 缩略图搜索路径 ──
-        thumb_label = QtWidgets.QLabel("缩略图搜索路径:")
+        thumb_label = QtWidgets.QLabel(t("qtool.pbr.thumb_paths_label"))
         thumb_label.setStyleSheet("color: #5294e2; font-weight: bold;")
         meta_layout.addWidget(thumb_label)
         
@@ -1520,7 +1538,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         self._thumb_paths_layout.setSpacing(3)
         meta_layout.addLayout(self._thumb_paths_layout)
         
-        thumb_add_btn = QtWidgets.QPushButton("+ 添加路径")
+        thumb_add_btn = QtWidgets.QPushButton(t("qtool.pbr.add_path"))
         thumb_add_btn.setStyleSheet("font-size: 13px; padding: 5px 12px;")
         thumb_add_btn.clicked.connect(lambda: self._add_thumb_path_row())
         meta_layout.addWidget(thumb_add_btn)
@@ -1532,7 +1550,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         meta_layout.addWidget(sep)
         
         # ── 元数据源 ──
-        source_label = QtWidgets.QLabel("元数据源:")
+        source_label = QtWidgets.QLabel(t("qtool.pbr.source_label"))
         source_label.setStyleSheet("color: #5294e2; font-weight: bold;")
         meta_layout.addWidget(source_label)
         
@@ -1552,12 +1570,12 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         
         meta_btn_layout = QtWidgets.QHBoxLayout()
         meta_btn_layout.setSpacing(6)
-        add_source_btn = QtWidgets.QPushButton("+ 添加源")
+        add_source_btn = QtWidgets.QPushButton(t("qtool.pbr.add_source"))
         add_source_btn.setStyleSheet("font-size: 13px; padding: 4px 10px;")
         add_source_btn.clicked.connect(self._add_meta_source)
         meta_btn_layout.addWidget(add_source_btn)
         meta_btn_layout.addStretch()
-        save_meta_btn = QtWidgets.QPushButton("保存配置")
+        save_meta_btn = QtWidgets.QPushButton(t("qtool.pbr.save_config"))
         save_meta_btn.setObjectName("okBtn")
         save_meta_btn.clicked.connect(self._save_meta_config)
         meta_btn_layout.addWidget(save_meta_btn)
@@ -1574,25 +1592,25 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         right_layout.setSpacing(12)
         
         # 材质预览
-        preview_group = QtWidgets.QGroupBox("识别到的材质")
+        preview_group = QtWidgets.QGroupBox(t("qtool.pbr.preview_group"))
         preview_layout = QtWidgets.QVBoxLayout(preview_group)
         preview_layout.setContentsMargins(8, 8, 8, 8)
         
         preview_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
         
         self._material_tree = QtWidgets.QTreeWidget()
-        self._material_tree.setHeaderLabel("材质和贴图")
+        self._material_tree.setHeaderLabel(t("qtool.pbr.material_header"))
         self._material_tree.setMinimumHeight(150)
         preview_splitter.addWidget(self._material_tree)
         
         self._preview_tree = QtWidgets.QTreeWidget()
-        self._preview_tree.setHeaderLabel(".zasset 结构预览")
+        self._preview_tree.setHeaderLabel(t("qtool.pbr.preview_header"))
         self._preview_tree.setMinimumHeight(120)
         preview_splitter.addWidget(self._preview_tree)
         
         preview_layout.addWidget(preview_splitter, 1)
         
-        self._scan_btn = QtWidgets.QPushButton("扫描贴图")
+        self._scan_btn = QtWidgets.QPushButton(t("qtool.pbr.scan_btn"))
         self._scan_btn.clicked.connect(self._scan_textures)
         preview_layout.addWidget(self._scan_btn)
         
@@ -1604,7 +1622,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         right_layout.addWidget(self._progress)
         
         # 状态栏
-        self._status_label = QtWidgets.QLabel("就绪")
+        self._status_label = QtWidgets.QLabel(t("qtool.pbr.ready"))
         self._status_label.setStyleSheet("color: #808080; font-size: 12px;")
         right_layout.addWidget(self._status_label)
         main_splitter.addWidget(right_widget)
@@ -1618,7 +1636,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         
         help_btn = QtWidgets.QPushButton("?")
         help_btn.setFixedSize(34, 34)
-        help_btn.setToolTip("使用帮助")
+        help_btn.setToolTip(t("qtool.pbr.help_tip"))
         help_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #ffa502; border: none;"
             "font-size: 18px; font-weight: bold; border-radius: 4px; }"
@@ -1627,11 +1645,11 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         help_btn.clicked.connect(self._on_help)
         btn_layout.addWidget(help_btn)
         
-        self._cancel_btn = QtWidgets.QPushButton("取消")
+        self._cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         self._cancel_btn.clicked.connect(self._on_cancel)
         btn_layout.addWidget(self._cancel_btn)
         
-        self._ok_btn = QtWidgets.QPushButton("转换")
+        self._ok_btn = QtWidgets.QPushButton(t("qtool.pbr.convert_btn"))
         self._ok_btn.setObjectName("okBtn")
         self._ok_btn.setFixedWidth(180)
         self._ok_btn.clicked.connect(self._convert)
@@ -1642,7 +1660,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
     def _browse_input_folder(self):
         """浏览输入文件夹"""
         folder = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "选择贴图文件夹", "", 
+            self, t("qtool.pbr.input_dialog_title"), "", 
             QtWidgets.QFileDialog.ShowDirsOnly | QtWidgets.QFileDialog.DontResolveSymlinks
         )
         if folder:
@@ -1651,7 +1669,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
     def _browse_output_folder(self):
         """浏览输出文件夹"""
         folder = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "选择输出文件夹", "", 
+            self, t("qtool.pbr.output_dialog_title"), "", 
             QtWidgets.QFileDialog.ShowDirsOnly | QtWidgets.QFileDialog.DontResolveSymlinks
         )
         if folder:
@@ -1686,14 +1704,14 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         layout.setContentsMargins(6, 4, 6, 4)
         layout.setSpacing(6)
         
-        layout.addWidget(QtWidgets.QLabel("文件夹:"))
+        layout.addWidget(QtWidgets.QLabel(t("qtool.pbr.folder_label")))
         folder_edit = QtWidgets.QLineEdit(folder_name)
         folder_edit.setObjectName("route_folder")
         folder_edit.setPlaceholderText("textures / root")
         folder_edit.setFixedWidth(140)
         layout.addWidget(folder_edit)
         
-        layout.addWidget(QtWidgets.QLabel("扩展名:"))
+        layout.addWidget(QtWidgets.QLabel(t("qtool.pbr.extensions_label")))
         exts_edit = QtWidgets.QLineEdit(exts_text)
         exts_edit.setObjectName("route_exts")
         exts_edit.setPlaceholderText(".jpg .png .exr")
@@ -1738,9 +1756,9 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         try:
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=2, ensure_ascii=False)
-            self._status_label.setText("路由配置已保存")
+            self._status_label.setText(t("msg.routing_saved"))
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "保存失败", f"无法保存配置:\n{e}")
+            QtWidgets.QMessageBox.warning(self, t("msg.save_failed_title"), t("msg.save_failed_body", e=e))
     
     def _rebuild_meta_ui(self):
         """从配置重建元数据源UI和缩略图路径"""
@@ -1774,18 +1792,18 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         
         header = QtWidgets.QHBoxLayout()
         idx = self._meta_container_layout.count() + 1
-        title = QtWidgets.QLabel(f"源 {idx}")
+        title = QtWidgets.QLabel(t("wp.source_title", idx=idx))
         title.setStyleSheet("color: #5294e2; font-weight: bold;")
         header.addWidget(title)
         header.addStretch()
-        del_btn = QtWidgets.QPushButton("删除")
+        del_btn = QtWidgets.QPushButton(t("common.delete"))
         del_btn.setStyleSheet("color: #e06060; font-size: 11px; padding: 2px 8px;")
         del_btn.clicked.connect(lambda: (frame.deleteLater(), None))
         header.addWidget(del_btn)
         layout.addLayout(header)
         
         pattern_layout = QtWidgets.QHBoxLayout()
-        pattern_layout.addWidget(QtWidgets.QLabel("文件路径模板:"))
+        pattern_layout.addWidget(QtWidgets.QLabel(t("wp.file_pattern_label")))
         pattern_edit = QtWidgets.QLineEdit(data.get('file_pattern', ''))
         pattern_edit.setObjectName("meta_pattern")
         pattern_edit.setPlaceholderText("{folderName}_ma_fileDependencies/{folderName}.zooInfo")
@@ -1793,7 +1811,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         layout.addLayout(pattern_layout)
         
         fmt_layout = QtWidgets.QHBoxLayout()
-        fmt_layout.addWidget(QtWidgets.QLabel("文件格式:"))
+        fmt_layout.addWidget(QtWidgets.QLabel(t("wp.file_format_label")))
         fmt_combo = QtWidgets.QComboBox()
         fmt_combo.setObjectName("meta_format")
         fmt_combo.addItems(["json", "txt"])
@@ -1803,7 +1821,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         fmt_layout.addStretch()
         layout.addLayout(fmt_layout)
         
-        mapping_label = QtWidgets.QLabel("字段映射:")
+        mapping_label = QtWidgets.QLabel(t("wp.field_mapping_label"))
         mapping_label.setStyleSheet("color: #909090; font-size: 11px;")
         layout.addWidget(mapping_label)
         
@@ -1812,7 +1830,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         mapping_layout.setSpacing(2)
         layout.addLayout(mapping_layout)
         
-        add_field_btn = QtWidgets.QPushButton("+ 添加字段映射")
+        add_field_btn = QtWidgets.QPushButton(t("wp.add_field_mapping"))
         add_field_btn.setStyleSheet("font-size: 13px; padding: 4px 10px;")
         add_field_btn.clicked.connect(
             lambda: self._add_meta_field_row(mapping_layout)
@@ -1839,7 +1857,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         
         src_edit = QtWidgets.QLineEdit(source)
         src_edit.setObjectName("field_source")
-        src_edit.setPlaceholderText("源字段")
+        src_edit.setPlaceholderText(t("wp.source_field_ph"))
         src_edit.setFixedWidth(130)
         row_layout.addWidget(src_edit)
         
@@ -1850,7 +1868,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         
         tgt_edit = QtWidgets.QLineEdit(target)
         tgt_edit.setObjectName("field_target")
-        tgt_edit.setPlaceholderText("目标字段")
+        tgt_edit.setPlaceholderText(t("wp.target_field_ph"))
         tgt_edit.setFixedWidth(130)
         row_layout.addWidget(tgt_edit)
         
@@ -1858,11 +1876,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         proc_combo.setObjectName("field_processor")
         proc_combo.addItems(["none", "split_comma", "first_line"])
         proc_combo.setCurrentText(processor if processor else "none")
-        proc_combo.setToolTip(
-            "none — 不做处理，值是什么就用什么（推荐，适用大多数情况）\n"
-            "split_comma — 按逗号分割字符串为列表（如 \"a,b,c\" → [\"a\",\"b\",\"c\"]）\n"
-            "first_line — 只取文本第一行（用于多行文本只需标题）"
-        )
+        proc_combo.setToolTip(t("wp.processor_tip"))
         row_layout.addWidget(proc_combo)
         
         del_btn = QtWidgets.QPushButton("×")
@@ -1939,9 +1953,9 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         try:
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=2, ensure_ascii=False)
-            self._status_label.setText("配置已保存")
+            self._status_label.setText(t("msg.config_saved"))
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "保存失败", f"无法保存配置:\n{e}")
+            QtWidgets.QMessageBox.warning(self, t("msg.save_failed_title"), t("msg.save_failed_body", e=e))
     
     def _on_recursive_toggled(self, checked):
         """递归扫描复选框切换"""
@@ -1964,7 +1978,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         """扫描贴图"""
         folder_path = self._input_path.text()
         if not folder_path or not os.path.exists(folder_path):
-            QtWidgets.QMessageBox.warning(self, "警告", "请选择有效的贴图文件夹")
+            QtWidgets.QMessageBox.warning(self, t("common.warning"), t("msg.select_valid_folder"))
             return
 
         import logging
@@ -1974,7 +1988,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         log.debug(f"config texture_type_rules: {len(self.config.get('texture_type_rules', {}))} 条")
         log.debug(f"config file_routing: {list(self.config.get('file_routing', {}).keys())}")
 
-        self._status_label.setText("正在扫描...")
+        self._status_label.setText(t("msg.scanning"))
         QtWidgets.QApplication.processEvents()
         
         self._batch_results = []
@@ -1989,7 +2003,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
                          if os.path.isdir(os.path.join(folder_path, f))]
             subfolders.sort()
             if not subfolders:
-                self._status_label.setText("未发现子文件夹")
+                self._status_label.setText(t("msg.no_subfolders"))
                 self._update_material_tree()
                 self._update_preview_tree(folder_path)
                 return
@@ -2003,22 +2017,22 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
                         self._resolution_map[f"{sub}/{mat_name}"] = res_map[mat_name]
             
             total_assets = len(self._batch_results)
-            total_tex = sum(len(t) for _, _, t in self._batch_results)
-            self._status_label.setText(f"批量发现 {total_assets} 个资产，{total_tex} 张贴图")
+            total_tex = sum(len(info) for _, _, info in self._batch_results)
+            self._status_label.setText(t("msg.batch_found", assets=total_assets, tex=total_tex))
             log.debug(f"批量扫描结果: {total_assets} 个资产")
         else:
             self.textures, self._resolution_map = scan_textures_resolution_aware(folder_path, self.config, rec_dirs, exc_dirs)
             if self.textures:
                 count = len(self.textures)
-                total_tex = sum(len(t) for t in self.textures.values())
+                total_tex = sum(len(info) for info in self.textures.values())
                 res_count = sum(1 for v in self._resolution_map.values() if v.get('resolutions'))
                 log.debug(f"扫描结果: {count} 个材质, {total_tex} 张贴图, {res_count} 个多精度")
                 if res_count:
-                    self._status_label.setText(f"发现 {count} 个材质，{total_tex} 张贴图（含 {res_count} 个多精度材质）")
+                    self._status_label.setText(t("msg.found_with_res", count=count, tex=total_tex, res=res_count))
                 else:
-                    self._status_label.setText(f"发现 {count} 个材质，{total_tex} 张贴图")
+                    self._status_label.setText(t("msg.found", count=count, tex=total_tex))
             else:
-                self._status_label.setText("未发现有效的PBR贴图")
+                self._status_label.setText(t("msg.no_valid_textures"))
                 log.debug("扫描结果: 未发现任何贴图")
         
         self._update_material_tree()
@@ -2059,7 +2073,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         resolutions = res_info.get('resolutions', [])
         if resolutions:
             default = res_info.get('default_res', resolutions[0])
-            label = f" [{', '.join(resolutions)}] 默认:{default}"
+            label = t("wp.default_label", resolutions=', '.join(resolutions), default=default)
             current_text = tree_item.text(0)
             tree_item.setText(0, current_text + label)
             tree_item.setForeground(0, QtGui.QColor("#e67e22"))
@@ -2068,7 +2082,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         """更新 .zasset 打包结构预览树"""
         self._preview_tree.clear()
         
-        root_item = QtWidgets.QTreeWidgetItem([".zasset 内部结构"])
+        root_item = QtWidgets.QTreeWidgetItem([t("wp.zasset_internal")])
         root_item.setForeground(0, QtGui.QColor("#5294e2"))
         self._preview_tree.addTopLevelItem(root_item)
         
@@ -2105,7 +2119,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
                     all_res.add(r)
             
             for res in sorted(all_res, key=lambda x: _res_key(x)):
-                res_item = QtWidgets.QTreeWidgetItem([f"{res}/  (贴图)"])
+                res_item = QtWidgets.QTreeWidgetItem([t("wp.res_textures", res=res)])
                 res_item.setForeground(0, QtGui.QColor("#e67e22"))
                 textures_item.addChild(res_item)
             
@@ -2150,7 +2164,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
 
         has_data = bool(self.textures) or bool(self._batch_results)
         if not has_data:
-            QtWidgets.QMessageBox.warning(self, "警告", "请先扫描贴图")
+            QtWidgets.QMessageBox.warning(self, t("common.warning"), t("msg.scan_first"))
             return
         
         if self._export_zasset.isChecked() and not self._output_path.text():
@@ -2162,12 +2176,12 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
             if self._input_path.text():
                 output_folder = self._input_path.text().strip()
             else:
-                QtWidgets.QMessageBox.warning(self, "警告", "无法确定输出文件夹，请手动指定")
+                QtWidgets.QMessageBox.warning(self, t("common.warning"), t("msg.cannot_determine_output"))
                 return
 
         self._is_converting = True
         self._is_cancelled = False
-        self._cancel_btn.setText("中止")
+        self._cancel_btn.setText(t("common.abort"))
         self._cancel_btn.setEnabled(True)
         self._ok_btn.setEnabled(False)
         self._scan_btn.setEnabled(False)
@@ -2192,7 +2206,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
             for i, (subfolder_name, pbr_mat_name, tex_info) in enumerate(items):
                 # material_name 用于显示和 .zasset 命名（批量模式用子文件夹名）
                 material_name = subfolder_name if subfolder_name else pbr_mat_name
-                self._status_label.setText(f"正在处理: {material_name}")
+                self._status_label.setText(t("msg.processing", material=material_name))
                 self._progress.setValue(i + 1)
                 if IN_MAYA:
                     try:
@@ -2277,27 +2291,27 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
                     fail_count += 1
         finally:
             self._is_converting = False
-            self._cancel_btn.setText("取消")
+            self._cancel_btn.setText(t("common.cancel"))
             self._cancel_btn.setEnabled(True)
             self._progress.setVisible(False)
             self._ok_btn.setEnabled(True)
             self._scan_btn.setEnabled(True)
 
             if getattr(self, '_is_cancelled', False):
-                self._status_label.setText(f"已中止: {success_count} 成功, {fail_count} 失败")
-                QtWidgets.QMessageBox.information(self, "已中止",
-                    f"用户中止转换\n\n成功: {success_count}, 失败: {fail_count}")
+                self._status_label.setText(t("msg.abort_final", ok=success_count, fail=fail_count))
+                QtWidgets.QMessageBox.information(self, t("msg.user_aborted_title"),
+                    t("msg.user_aborted_body", ok=success_count, fail=fail_count))
             elif errors:
                 error_msg = "\n".join(errors[:10])
                 if len(errors) > 10:
-                    error_msg += f"\n... 还有 {len(errors) - 10} 个错误"
-                QtWidgets.QMessageBox.warning(self, "转换完成", 
-                    f"成功: {success_count}, 失败: {fail_count}\n\n错误详情:\n{error_msg}")
+                    error_msg += "\n" + t("msg.more_errors", n=len(errors) - 10)
+                QtWidgets.QMessageBox.warning(self, t("msg.convert_done_title"), 
+                    t("msg.convert_done_with_errors", ok=success_count, fail=fail_count, errors=error_msg))
             else:
-                QtWidgets.QMessageBox.information(self, "转换完成", 
-                    f"成功转换 {success_count} 个材质")
+                QtWidgets.QMessageBox.information(self, t("msg.convert_done_title"), 
+                    t("msg.convert_success_body", count=success_count))
             
-            self._status_label.setText(f"完成: {success_count} 成功, {fail_count} 失败")
+            self._status_label.setText(t("msg.convert_final", ok=success_count, fail=fail_count))
 
             if getattr(self, '_import_to_category', None) and self._import_to_category.isChecked():
                 if output_folder:
@@ -2308,7 +2322,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
                         imported = _copy_zassets_to_category(output_folder, category_path)
                         if imported:
                             self._status_label.setText(
-                                f"完成: {success_count} 成功, {fail_count} 失败 | 已导入 {imported} 个到当前分类")
+                                t("msg.convert_final_imported", ok=success_count, fail=fail_count, imported=imported))
                             print(f"[PBR Tool] 已导入 {imported} 个zasset到: {category_path}")
                         else:
                             print("[PBR Tool] 未找到zasset文件或导入失败")

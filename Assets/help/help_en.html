@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaterialManagementPro User Guide</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+  display: flex; justify-content: center;
+}
+.wrapper { display: flex; max-width: 1080px; width: 100%; }
+.sidebar {
+  width: 220px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #f5f5f5; padding: 24px 16px; flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+.sidebar h2 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; border: none; padding: 0; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; }
+.sidebar a:hover { background: #e0e0e0; color: #000; text-decoration: none; }
+.sidebar a.sub { padding-left: 20px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 800px; min-width: 0; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 20px 0 8px; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0 8px 24px; }
+li { margin: 4px 0; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+pre { background: #f8f8f8; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0; border: 1px solid #e0e0e0; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; }
+td { background: #fff; font-size: 13px; }
+img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #ddd; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; }
+.badge-red { background: #fdecea; color: #e74c3c; }
+.badge-orange { background: #fef5e7; color: #e67e22; }
+.badge-blue { background: #eaf2f8; color: #2980b9; }
+.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h2>Contents</h2>
+  <a href="#overview">1. Plugin Overview</a>
+  <a href="#export">2. Export Assets</a>
+  <a href="#export-modes" class="sub">2.1 Three Export Modes</a>
+  <a href="#export-thumb" class="sub">2.2 Three Thumbnail Sources</a>
+  <a href="#export-formats" class="sub">2.3 Supported Export Formats</a>
+  <a href="#export-collect" class="sub">2.4 Collect Associated Files</a>
+  <a href="#export-timeline" class="sub">2.5 Timeline Animation Export</a>
+  <a href="#import">3. Import Assets</a>
+  <a href="#import-external" class="sub">3.1 Import from External Files</a>
+  <a href="#import-scene" class="sub">3.2 Import from Library to Scene</a>
+  <a href="#import-mcm" class="sub">3.3 MCM Material Matching</a>
+  <a href="#import-manage" class="sub">3.4 Asset Management Operations</a>
+  <a href="#ai">4. AI Analysis</a>
+  <a href="#faq">5. FAQ &amp; Pitfalls</a>
+</nav>
+
+<div class="content">
+
+<h1>MaterialManagementPro User Guide</h1>
+
+<img src="base_UI.png" alt="Plugin main interface">
+
+<h2 id="overview">1. Plugin Overview</h2>
+
+<p>MaterialManagementPro is a material and asset management plugin for Maya 2025. The plugin folder is named <code>squirrel_asset_manager</code>.</p>
+
+<h3>Dual Library Architecture</h3>
+<table>
+<tr><th>Tab</th><th>Purpose</th><th>Storage Location</th></tr>
+<tr><td><b>Category Library</b></td><td>Long-term categorized asset library, organized by category</td><td>System-level directory <code>AssetLibrary/category_library/</code></td></tr>
+<tr><td><b>Project Library</b></td><td>Assets specific to the current project, isolated per project</td><td>In-project <code>AssetLibrary/project_library/</code></td></tr>
+</table>
+<p>The two libraries are<b>completely independent</b>; assets cannot be dragged, dropped, or copied across libraries.</p>
+
+<h3>Six Sub-libraries</h3>
+<p>Each library contains 6 sub-libraries: <b>Materials, Models, Textures, Lights, Scenes, HDR</b>. Each sub-library can have its own customized category hierarchy.</p>
+
+<h3>Asset Format</h3>
+<p>All assets are stored uniformly as <code>.zasset</code> folders, containing metadata (<code>meta.json</code>), thumbnails (<code>thumb.sicon</code> / <code>thumb.mp4</code>), material data (<code>node.zmetal</code>), lighting data (<code>node.zlight</code>), geometry (<code>node.ma/fbx/abc...</code>), textures (<code>textures/</code> directory) and optional associated files (<code>associated/</code>). One folder is one complete asset.</p>
+
+<h2 id="export">2. Export Assets</h2>
+<p>Export is the process of packaging materials, models, or objects from the Maya scene into a <code>.zasset</code> asset. Click the <b>"Export Asset"</b> button to open the export dialog (see the "?" help in the dialog for detailed format descriptions).</p>
+
+<h3 id="export-modes">2.1 Three Export Modes</h3>
+<table>
+<tr><th>Mode</th><th>Use Case</th><th>Behavior</th></tr>
+<tr><td><span class="badge badge-blue">Single Asset</span></td><td>Merge 1 or more selected objects into 1 asset</td><td>Opens a dialog → specify name/category → interactive screenshot → export. Does not automatically hide unselected objects; isolate the view manually</td></tr>
+<tr><td><span class="badge badge-orange">Fully Automatic</span></td><td>Export N selected objects, each as its own asset</td><td>Interactive framing on the first asset → automatically reuses the framing frame on subsequent ones → export all. Auto-isolates and frame-fits the model</td></tr>
+<tr><td><span class="badge badge-red">Semi-automatic</span></td><td>Export N selected objects, each independently</td><td>Shows a screenshot UI for each asset → confirm manually → next. Auto-isolates and frame-fits the model</td></tr>
+</table>
+
+<div class="note"><b>Single Asset Mode:</b> Does not automatically hide unselected objects. To isolate the view, do it manually (press Shift+I to isolate), then press Ctrl+Shift+H to restore after the screenshot.</div>
+
+<h3 id="export-thumb">2.2 Three Thumbnail Sources</h3>
+<table>
+<tr><th>Source</th><th>Speed</th><th>Quality</th><th>Best For</th></tr>
+<tr><td><span class="badge badge-blue">Screen Capture</span></td><td>Fastest</td><td>Viewport screenshot</td><td>Most assets such as models and textures</td></tr>
+<tr><td><span class="badge badge-orange">Maya Playblast</span></td><td>Fast</td><td>Viewport playblast</td><td>Assets that need an animation preview</td></tr>
+<tr><td><span class="badge badge-red">Render</span></td><td>Slowest</td><td>Arnold render</td><td>High-quality materials/scenes</td></tr>
+</table>
+<div class="note"><b>Timeline:</b> Playblast/render + timeline → MP4 animation. Thumbnails are generated uniformly after all assets are exported, without interrupting geometry export.</div>
+
+<h3 id="export-formats">2.3 Supported Export Formats</h3>
+<table>
+<tr><th>Category</th><th>Formats</th><th>Description</th></tr>
+<tr><td>Geometry</td><td>ma / mb / fbx / obj / usd</td><td>Standard modeling formats. References are kept un-baked when exporting .ma/.mb</td></tr>
+<tr><td>Cache</td><td>abc (Alembic)</td><td>Animation cache, supports timeline and keyframe ranges</td></tr>
+<tr><td>Proxy</td><td>ass / rs / vrscene / vrmesh</td><td>Arnold / Redshift / V-Ray renderer proxy formats</td></tr>
+<tr><td>Nodes</td><td>.zmetal / .zlight / .mcm</td><td>Material node preset + light preset + material mapping (topology matching)</td></tr>
+<tr><td>Textures</td><td>textures/</td><td>Checked by default; packages the material's associated textures into the asset. Uncheck to skip packaging</td></tr>
+</table>
+
+<h3 id="export-collect">2.4 Collect Associated Files</h3>
+<p>A <b>"Collect Associated Files"</b> section has been added at the top right of the export dialog. When checked, it automatically scans the selected objects' associated nodes and copies them to the <code>associated/</code> directory:</p>
+
+<table>
+<tr><th>Category</th><th>Supported Nodes</th><th>Collected Content</th></tr>
+<tr><td>Cache</td><td>AlembicNode / gpuCache / cacheFile / VRayVolumeGrid / aiVolume / RedshiftVolumeShape</td><td>.abc .gpu .mc .vdb volume caches</td></tr>
+<tr><td>Proxy</td><td>aiStandIn / VRayProxy / VRayMesh / VRayScene / RedshiftProxyMesh / mayaUsdProxyShape</td><td>.ass .vrmesh .vrscene .rs .usd files</td></tr>
+<tr><td>Reference</td><td>Maya reference nodes</td><td>.ma/.mb reference source files (only the references the selected objects belong to)</td></tr>
+</table>
+
+<div class="note"><b>Frame sequences:</b> RedshiftProxyMesh (<code>####</code> format) and VRayVolumeGrid (<code>#</code> format) frame sequences are automatically detected and fully copied frame by frame.</div>
+
+<div class="note"><b>Collect vs. Export:</b> Collecting associated files <b>copies</b> files already on disk and is very fast; exported abc/ass/rs/vrscene are <b>re-baked</b> and generated. Both can be checked at the same time.</div>
+
+<h3 id="export-timeline">2.5 Timeline Animation Export</h3>
+<p>Three frame ranges: <b>Current Frame</b> (still frame), <b>Timeline</b> (playback range), <b>Keyframes</b> (the object's keyframe range). Timeline/keyframes apply to abc/usd/ass/rs/vrmesh. Render + timeline composites frames into an MP4 (⚠️ this may take several minutes; Maya temporarily becoming unresponsive is normal).</p>
+
+<h2 id="import">3. Import Assets</h2>
+
+<img src="input_UI.png" alt="Import interface">
+
+<h3 id="import-external">3.1 Import from External Files</h3>
+<div class="step">
+<ol>
+<li>Toolbar <b>"Import" → "Import from File"</b> (or "Import from Folder")</li>
+<li>Select a Maya file or a texture file; a <code>.zasset</code> is created automatically and added to the current category</li>
+<li>When importing a folder, files are grouped automatically by name, each group producing one .zasset</li>
+</ol>
+</div>
+
+<h3 id="import-scene">3.2 Import from Library to Scene</h3>
+<p>Right-click an asset to open its menu:</p>
+<table>
+<tr><th>Menu Item</th><th>Effect</th></tr>
+<tr><td><b>Import to Scene</b></td><td>Automatically imports using the most suitable format</td></tr>
+<tr><td><b>Import → .zmetal</b></td><td>Rebuilds the complete shading network (nodes, attributes, connections, textures). The material name retains its original name</td></tr>
+<tr><td><b>Import Light → Choose Renderer</b></td><td>Rebuilds the light node network from .zlight (including textures/IES/HDR). Supports Arnold / V-Ray / Redshift / Maya native, chosen among four</td></tr>
+<tr><td><b>Import → .mcm</b></td><td>Imports the material and automatically matches it to the selected objects (see 3.3)</td></tr>
+<tr><td><b>Import → .ma/.fbx/.obj/...</b></td><td>Imports geometry in the specified format</td></tr>
+<tr><td><b>Import → .ass/.rs/.vrscene/.vrmesh</b></td><td>Creates a renderer proxy reference node</td></tr>
+<tr><td><b>Import Geometry</b></td><td>(For assets with variants) Imports geometry by LOD level/version</td></tr>
+<tr><td><b>🔍 Preview Nodes</b></td><td>Previews the .zmetal or .ma node content in the scene</td></tr>
+</table>
+
+<div class="note"><b>.zmetal principle:</b> Records the complete information of the Maya material network. On import, the entire shading network is rebuilt in the scene. The material can be restored even when the original Maya file no longer exists.</div>
+
+<div class="note"><b>.zlight principle:</b> A renderer-independent light preset format. Records the light's common parameters (color/intensity/exposure/color temperature, etc.) plus the full upstream node network (textures/IES/checker, etc.). On import, choose the target renderer and the corresponding light type is created automatically. The same .zlight can be used across Arnold/V-Ray/Redshift/Maya native.</div>
+
+<h3 id="import-mcm">3.3 MCM Material Matching</h3>
+<p><b>.mcm</b> records an object's topology features (<b>vertex count, face count, edge count</b>). On import, it matches precisely by these 3D features and assigns the material automatically.</p>
+
+<div class="step">
+<b>Typical scenario:</b> Formats such as abc/obj do not contain material data. After importing, the object has no material → select the object → right-click <b>"Import → .mcm"</b><br>
+<ol>
+<li>First import the .zmetal (rebuilds the material network)</li>
+<li>Compute the selected object's vertex/face/edge counts</li>
+<li>Find the original object matching the 3D features exactly in the .mcm</li>
+<li>Assign the material to the selected object automatically (including face-level assignment)</li>
+</ol>
+</div>
+
+<div class="note"><b>Prerequisite:</b> The target object must be selected in Maya. The vertex/face/edge counts must be identical to the original model (no triangulation, merged points, etc.). The .mcm checkbox must be checked when exporting the asset.</div>
+
+<h3 id="import-manage">3.4 Asset Management Operations</h3>
+<ul>
+<li><b>Copy/Paste:</b> Paste across categories. Must be done through the plugin menu</li>
+<li><b>Rename:</b> Modify the name in the right-side property panel, then press Enter. Do not rename the .zasset folder directly</li>
+<li><b>Delete:</b> Requires a second confirmation</li>
+<li><b>Export .zasset:</b> Copies it to a specified folder for cross-library migration or backup</li>
+<li><b>Update Asset:</b> After modifying the model, right-click "Update Asset" to append an LOD, create a new version, or fully replace</li>
+<li><b>🧠 AI Analyze Thumbnail:</b> Right-click → AI Analyze Thumbnail, automatically identifies asset type/name/category/tags</li>
+</ul>
+
+<div class="warn"><b>⚠️ Not allowed:</b> Manually copy/move/rename .zasset folders. The plugin manages assets with a database; manual operations cause assets to become invisible.</div>
+
+<h2 id="ai">4. AI Analysis</h2>
+<p>Based on the local Ollama vision model (qwen3-vl:8b), it intelligently analyzes asset thumbnails and automatically generates:</p>
+<ul>
+<li><b>Readable name</b> — a friendly display name for the asset</li>
+<li><b>Suggested category</b> — recommended sub-category based on image content</li>
+<li><b>Tags</b> — keyword tags such as material/color/usage</li>
+<li><b>Notes</b> — a short description</li>
+</ul>
+
+<div class="step">
+<b>How to use:</b>
+<ol>
+<li>Select an asset → Toolbar <b>"🤖 AI Tools"</b> → choose model/language/review options → start analysis</li>
+<li>Or right-click the asset thumbnail → <b>"🧠 AI Analyze Thumbnail"</b></li>
+<li>When analysis finishes, a results window pops up where you can edit and review</li>
+<li>Check <b>"Move to the analyzed category"</b> (checked by default): on apply, the asset is automatically moved to the AI-suggested category directory</li>
+<li>Click <b>"Apply"</b> to write the metadata/move the asset</li>
+</ol>
+</div>
+
+<div class="note"><b>Prerequisite:</b> You need to install <a href="https://ollama.com">Ollama</a> and pull the model with <code>ollama pull qwen3-vl:8b</code>. Chinese and English analysis are both supported.</div>
+
+<h2 id="faq">5. FAQ</h2>
+
+<h3>❌ Manually copying a .zasset folder</h3>
+<p>Copied assets do not show up in the plugin. <b>Correct:</b> Right-click → Copy → Paste.</p>
+
+<h3>❌ Renaming .zasset directly</h3>
+<p>The asset disappears. <b>Correct:</b> Change the name in the property panel and press Enter.</p>
+
+<h3>❌ Deleting the plugin folder</h3>
+<p>Assets under the category all disappear. <b>Correct:</b> Delete them one by one inside the plugin.</p>
+
+<h3>❌ Dragging across libraries</h3>
+<p>Category and Project are independent. <b>Correct:</b> Export the .zasset → import it into the target library.</p>
+
+<h3>❌ Maya freezes after Timeline + Render</h3>
+<p>This is the normal rendering process; wait for it to finish. If you are in a hurry, choose playblast.</p>
+
+<h3>❌ Importing abc/obj with no material</h3>
+<p>Select the object → right-click → <b>Import → .mcm</b> (the asset must contain a .mcm).</p>
+
+<h3>❌ MCM matching fails</h3>
+<p>The vertex/face/edge counts do not match the original model (perhaps it has been triangulated or had points merged). Ensure the topology is completely identical.</p>
+
+<h3>❌ Wrong texture path after import</h3>
+<p>Re-export the asset (textures are automatically redirected to the project's sourceimages directory).</p>
+
+<h3>❌ The exported .ma file is huge</h3>
+<p>This is normal. Referenced objects keep their reference relationship on export (<code>preserveReferences</code>) and are not baked into the file. To bake the referenced content, import the reference in Maya first (File → Import Reference).</p>
+
+<h3>❌ "Collect Associated Files" collected no proxies</h3>
+<p>Make sure the object is actually connected to cache/proxy nodes. V-Ray requires the corresponding VRayMesh/VRayScene nodes, Redshift requires RedshiftProxyMesh, and USD requires mayaUsdProxyShape.</p>
+
+<div class="footer">
+MaterialManagementPro v2.0 — Maya 2025 Material/Asset Management Plugin
+</div>
+
+</div><!-- content -->
+</div><!-- wrapper -->
+</body>
+</html>

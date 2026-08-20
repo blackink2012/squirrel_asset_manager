@@ -1,6 +1,12 @@
 from ..utils.maya_utils import get_qt_modules
 from ..utils.settings import SettingsManager
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 # QAction 位置兼容：PySide6 在 QtGui，PySide2 在 QtWidgets
@@ -101,7 +107,7 @@ class SearchBarWidget(QtWidgets.QWidget):
 
         # --- 搜索输入框 ---
         self._search_input = QtWidgets.QLineEdit()
-        self._search_input.setPlaceholderText("搜索名称、标签...")
+        self._search_input.setPlaceholderText(t("search_bar.search_placeholder"))
         self._search_input.setClearButtonEnabled(True)  # 内置清空按钮
         self._search_input.setStyleSheet(f"""
             QLineEdit {{
@@ -120,7 +126,7 @@ class SearchBarWidget(QtWidgets.QWidget):
 
         # --- 取消搜索按钮 ---
         self._cancel_btn = QtWidgets.QPushButton("✕")
-        self._cancel_btn.setToolTip("取消搜索")
+        self._cancel_btn.setToolTip(t("search_bar.cancel_search"))
         self._cancel_btn.setFixedSize(btn_size, btn_size)
         self._cancel_btn.setStyleSheet(f"""
             QPushButton {{
@@ -137,7 +143,7 @@ class SearchBarWidget(QtWidgets.QWidget):
         layout.addWidget(self._cancel_btn)
 
         # --- 标签筛选按钮 ---
-        self._tag_btn = QtWidgets.QPushButton("按标签选择")
+        self._tag_btn = QtWidgets.QPushButton(t("search_bar.tag_select"))
         self._tag_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: #3a3a3a;
@@ -155,7 +161,7 @@ class SearchBarWidget(QtWidgets.QWidget):
         layout.addWidget(self._tag_btn)
 
         # --- 标签弹出菜单 ---
-        self._tag_menu = QtWidgets.QMenu("按标签选择", self)  # 标题影响撕离窗口标题
+        self._tag_menu = QtWidgets.QMenu(t("search_bar.tag_select"), self)  # 标题影响撕离窗口标题
         self._tag_menu.setTearOffEnabled(True)  # 可撕离，独立窗口方便多选
         sm = SettingsManager()
         sm.load()
@@ -204,7 +210,7 @@ class SearchBarWidget(QtWidgets.QWidget):
         if not valid:
             self._tag_menu.clear()
             self._tag_sep = self._tag_menu.addSeparator()
-            self._clear_action = self._tag_menu.addAction("清除所有标签筛选")
+            self._clear_action = self._tag_menu.addAction(t("search_bar.clear_all_tag_filters"))
             self._clear_action.triggered.connect(self._clear_all_tags)
         else:
             # 清除上次的标签 actions（分隔线前的所有 action）
@@ -216,7 +222,7 @@ class SearchBarWidget(QtWidgets.QWidget):
         # ── 重建标签列表 ──
         self._tag_actions = []
         if not self._common_tags:
-            na = _QAction("(无可用标签)", self._tag_menu)
+            na = _QAction(t("search_bar.no_available_tags"), self._tag_menu)
             na.setEnabled(False)
             self._tag_actions.append(na)
             self._tag_menu.insertAction(self._tag_sep, na)
@@ -249,13 +255,13 @@ class SearchBarWidget(QtWidgets.QWidget):
             self._active_tags.discard(tag)
 
         if self._active_tags:
-            self._tag_btn.setText("按标签选择(%d)" % len(self._active_tags))
+            self._tag_btn.setText(t("search_bar.tag_select_with_count", count=len(self._active_tags)))
             self.tagFilterChanged.emit(sorted(self._active_tags))
             self._search_input.blockSignals(True)
             self._search_input.setText(" ".join(sorted(self._active_tags)))
             self._search_input.blockSignals(False)
         else:
-            self._tag_btn.setText("按标签选择")
+            self._tag_btn.setText(t("search_bar.tag_select"))
             self._search_input.blockSignals(True)
             self._search_input.clear()
             self._search_input.blockSignals(False)
@@ -264,7 +270,7 @@ class SearchBarWidget(QtWidgets.QWidget):
     def _clear_all_tags(self):
         """清除所有标签筛选"""
         self._active_tags.clear()
-        self._tag_btn.setText("按标签选择")
+        self._tag_btn.setText(t("search_bar.tag_select"))
         self._rebuild_tag_menu()
         self._search_input.blockSignals(True)
         self._search_input.clear()
@@ -294,7 +300,7 @@ class SearchBarWidget(QtWidgets.QWidget):
         tags = list(tags) if tags else []
         if tags:
             self._active_tags = set(tags)
-            self._tag_btn.setText("按标签选择(%d)" % len(tags))
+            self._tag_btn.setText(t("search_bar.tag_select_with_count", count=len(tags)))
             self._search_input.blockSignals(True)
             self._search_input.setText(" ".join(tags))
             self._search_input.blockSignals(False)

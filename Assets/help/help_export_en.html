@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Export Assets — User Guide</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+  display: flex; justify-content: center;
+}
+.wrapper { display: flex; max-width: 1080px; width: 100%; }
+.sidebar {
+  width: 220px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #f5f5f5; padding: 24px 16px; flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+.sidebar h3 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; }
+.sidebar a:hover { background: #e0e0e0; color: #000; text-decoration: none; }
+.sidebar a.sub { padding-left: 20px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 800px; min-width: 0; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 20px 0 8px; }
+p, li { margin: 6px 0; }
+ol, ul { margin: 8px 0 8px 24px; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; }
+td { background: #fff; font-size: 13px; }
+img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #ddd; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.ui-elem { background: #f8f8f8; border-radius: 6px; padding: 10px 14px; margin: 6px 0; border: 1px solid #eee; }
+.ui-elem strong { color: #2980b9; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h3>Contents</h3>
+  <a href="#overview">Interface Overview</a>
+  <a href="#left-panel">Left Panel</a>
+  <a href="#left-panel" class="sub">Export Button</a>
+  <a href="#left-panel" class="sub">Export Modes</a>
+  <a href="#left-panel" class="sub">Thumbnail Source</a>
+  <a href="#left-panel" class="sub">Screenshot Delay</a>
+  <a href="#right-panel">Right Panel</a>
+  <a href="#right-panel" class="sub">Collect Associated Files</a>
+  <a href="#right-panel" class="sub">Asset Name &amp; Tags</a>
+  <a href="#right-panel" class="sub">Material/Node Formats</a>
+  <a href="#right-panel" class="sub">Geometry Formats</a>
+  <a href="#right-panel" class="sub">Animation Export</a>
+  <a href="#right-panel" class="sub">Cache Formats</a>
+  <a href="#right-panel" class="sub">Proxy Formats</a>
+  <a href="#flow">Full Export Flow</a>
+  <a href="#collect">Associated File Collection Details</a>
+  <a href="#collect" class="sub">Supported Nodes &amp; Formats</a>
+  <a href="#collect" class="sub">Frame Sequence Handling</a>
+  <a href="#variants">LOD &amp; Version Management</a>
+  <a href="#variant-concept" class="sub">Concept</a>
+  <a href="#variant-add-lod" class="sub">Appending an LOD</a>
+  <a href="#variant-new-ver" class="sub">Creating a New Version</a>
+  <a href="#variant-import" class="sub">Importing Variant Geometry</a>
+  <a href="#variant-material" class="sub">Version-Independent Materials</a>
+  <a href="#variant-delete" class="sub">Deleting a Version/LOD</a>
+  <a href="#tips">Common Errors</a>
+</nav>
+
+<div class="content">
+
+<h1>Export Assets — Interface Guide</h1>
+
+<h2 id="overview">Interface Overview</h2>
+<img src="out_UI.png" alt="Export asset dialog">
+<p>The export dialog (780×760) is split into <b>two columns</b>: the left controls the flow, the right configures the content.</p>
+
+<h2 id="left-panel">Left Panel — Export Controls</h2>
+
+<div class="ui-elem">
+<strong>Export Asset</strong> (blue button)<br>Click to start the export. The dialog is non-modal, so you can operate other UI while exporting.
+</div>
+
+<div class="ui-elem">
+<strong>Export Mode</strong> (three radio buttons)<br>
+<table>
+<tr><th>Option</th><th>Description</th></tr>
+<tr><td>Fully Automatic</td><td>With multiple objects, each is exported independently. After the first framing it is reused automatically; no manual screenshots are needed throughout</td></tr>
+<tr><td>Semi-automatic</td><td>Each object is exported independently, and a screenshot UI pops up for each to adjust the camera manually</td></tr>
+<tr><td>Single Asset</td><td>No matter how many objects are selected, all are merged into one asset. Unselected objects are not hidden automatically; isolate the view manually</td></tr>
+</table>
+</div>
+
+<div class="ui-elem">
+<strong>Thumbnail Source</strong> (three radio buttons)<br>
+<table>
+<tr><th>Option</th><th>Speed</th><th>Best For</th></tr>
+<tr><td>Screen Capture</td><td>Fastest</td><td>Viewport screenshot, suitable for most assets</td></tr>
+<tr><td>Maya Playblast</td><td>Fast</td><td>Playblast, ideal for animation previews</td></tr>
+<tr><td>Render</td><td>Slowest</td><td>Arnold render, highest quality</td></tr>
+</table>
+</div>
+
+<div class="ui-elem">
+<strong>Screenshot Delay</strong> (fully automatic mode only)<br>0–60 seconds. Wait N seconds after each asset exports before taking the screenshot. 0 = no delay.
+</div>
+
+<h2 id="right-panel">Right Panel — Export Content</h2>
+
+<h3>Collect Associated Files</h3>
+<div class="ui-elem"><strong>Collect caches/proxies/references loaded in the scene</strong> — when checked, automatically scans the caches (Alembic/gpuCache/nCache), proxies (Arnold/V-Ray/Redshift/USD) and Maya references associated with the selected objects, and copies them to the <code>associated/</code> directory.</div>
+<div class="note">When checked, V-Ray .vrmesh/.vrscene, Redshift .rs and USD .usd proxy files do not need to be re-exported — they are copied directly from disk, which is extremely fast.</div>
+
+<div class="ui-elem"><strong>Textures textures/</strong> — checked by default; collects the texture files associated with the materials into the <code>textures/</code> directory. Uncheck it to skip packaging textures, suitable for pure-geometry exports or when textures are managed externally.</div>
+
+<div class="ui-elem"><strong>Export materials only (skip geometry/proxies)</strong> — when checked, only material nodes and textures are exported; geometry formats and proxy formats are not exported.</div>
+
+<div class="ui-elem"><strong>Asset Name</strong> — input field, defaults to the selected object's name. The asset is stored as <code>{name}.zasset</code> in the category folder.</div>
+<div class="ui-elem"><strong>Display Name</strong> — optional. A friendly display name shown in the UI.</div>
+<div class="ui-elem"><strong>Tags</strong> — comma-separated (e.g. <code>metal, highlights</code>). Used for searching and filtering.</div>
+
+<div class="note">The name, display name, and tags also update the name and tags of any existing asset of the same name imported into this category.</div>
+
+<h3>Material / Node Formats</h3>
+<div class="ui-elem"><strong>Material preset .zmetal</strong> — when checked, exports the Maya material node data. With multiple materials you can choose "Merge" or export them separately.</div>
+<div class="ui-elem"><strong>Light preset .zlight</strong> — when checked, exports renderer-independent light data (color/intensity/exposure/color temperature + upstream texture/IES/HDR node networks). On import you can choose Arnold / V-Ray / Redshift / Maya native, and the corresponding light nodes are created automatically. The same .zlight can be used across renderers.</div>
+<div class="ui-elem"><strong>Material mapping .mcm</strong> — records the object's vertex/face/edge counts for automatic model matching on import. Only available when .zmetal is checked.</div>
+
+<h3>Geometry Formats</h3>
+<table>
+<tr><th>Format</th><th>Extension</th><th>Description</th></tr>
+<tr><td>Maya ASCII</td><td>.ma</td><td>Maya native, readable text. Referenced objects keep their reference relationship and are not baked</td></tr>
+<tr><td>Maya Binary</td><td>.mb</td><td>Maya native, binary. Referenced objects keep their reference relationship and are not baked</td></tr>
+<tr><td>FBX</td><td>.fbx</td><td>Universal exchange format</td></tr>
+<tr><td>OBJ</td><td>.obj</td><td>Classic polygon format</td></tr>
+<tr><td>USD</td><td>.usd</td><td>Pixar Universal Scene Description</td></tr>
+</table>
+
+<h3>Animation Export</h3>
+<p>Determines the frame range for abc/usd/ass/rs/vrmesh:</p>
+<ul>
+<li><b>Current Frame</b> — still-frame asset</li>
+<li><b>Timeline</b> — full animation (playback range). Also triggers MP4 animated thumbnail generation</li>
+<li><b>Keyframes</b> — the object's keyframe range</li>
+</ul>
+<div class="warn">Timeline + Render: rendering is executed uniformly after the assets are exported. Maya may become temporarily unresponsive — this is normal rendering, please wait.</div>
+
+<h3>Cache Formats</h3>
+<p>Alembic (.abc) — animation cache, supports vertex animation and timeline export.</p>
+
+<h3>Proxy Formats</h3>
+<table>
+<tr><th>Format</th><th>Extension</th><th>Renderer</th></tr>
+<tr><td>Arnold</td><td>.ass</td><td>Arnold</td></tr>
+<tr><td>Redshift</td><td>.rs</td><td>Redshift</td></tr>
+<tr><td>V-Ray Scene</td><td>.vrscene</td><td>V-Ray</td></tr>
+<tr><td>V-Ray Mesh</td><td>.vrmesh</td><td>V-Ray</td></tr>
+</table>
+
+<h2 id="flow">Full Export Flow</h2>
+<div class="step">
+<ol>
+<li><b>Select the objects to export</b> in the Maya scene</li>
+<li>Click the <b>Export</b> button on the toolbar</li>
+<li>Choose the <b>Export Mode</b> and <b>Thumbnail Source</b></li>
+<li>Check "Collect Associated Files" to automatically package caches/proxies/references in the scene</li>
+<li>Configure the export content on the right (geometry/cache/proxy formats)</li>
+<li>For animation export, choose <b>"Timeline"</b> or <b>"Keyframes"</b></li>
+<li>Enter the asset name and tags</li>
+<li>Click <b>"Export Asset"</b></li>
+<li>Take the screenshot as prompted</li>
+<li>Export completes, and the asset appears in the grid</li>
+</ol>
+</div>
+
+<div class="note">
+<b>Thumbnail generation timing:</b> Screen capture generates the thumbnail immediately in the screenshot UI; playblast/render are generated uniformly after all assets are exported, without interrupting geometry export.
+</div>
+
+<div class="note">
+<b>Single Asset export:</b> In single-asset mode the unselected objects are not hidden automatically. To isolate the view, do it manually (press Shift+I to isolate), then restore after taking the screenshot.
+</div>
+
+<h2 id="collect">Associated File Collection Details</h2>
+
+<p>After checking "Collect Associated Files", the system automatically scans the selected objects' associated nodes and collects the files into the <code>associated/</code> directory.</p>
+
+<h3>Supported Nodes &amp; Formats</h3>
+<table>
+<tr><th>Node Type</th><th>Format</th><th>Collected Content</th></tr>
+<tr><td>AlembicNode</td><td>.abc</td><td>Alembic cache files</td></tr>
+<tr><td>gpuCache</td><td>.gpu</td><td>GPU cache files</td></tr>
+<tr><td>cacheFile</td><td>.mc/.xml/.abc</td><td>nCache files</td></tr>
+<tr><td>VRayVolumeGrid</td><td>.vdb</td><td>V-Ray VDB volume files (supports <code>#</code> frame sequences)</td></tr>
+<tr><td>aiVolume</td><td>.vdb</td><td>Arnold VDB volume files</td></tr>
+<tr><td>RedshiftVolumeShape</td><td>.vdb</td><td>Redshift VDB volume files</td></tr>
+<tr><td>aiStandIn</td><td>.ass</td><td>Arnold proxy files</td></tr>
+<tr><td>VRayProxy</td><td>.vrmesh</td><td>V-Ray legacy proxies</td></tr>
+<tr><td>VRayMesh</td><td>.vrmesh</td><td>V-Ray 5+ proxies</td></tr>
+<tr><td>VRayScene</td><td>.vrscene</td><td>V-Ray scene proxies</td></tr>
+<tr><td>RedshiftProxyMesh</td><td>.rs</td><td>Redshift proxies (supports <code>####</code> frame sequences)</td></tr>
+<tr><td>mayaUsdProxyShape</td><td>.usd/.usda/.usdc</td><td>USD scene proxies</td></tr>
+<tr><td>reference</td><td>.ma/.mb</td><td>Maya reference files</td></tr>
+</table>
+
+<h3>Frame Sequence Handling</h3>
+<p>The following formats automatically recognize frame sequences and copy all files frame by frame:</p>
+<ul>
+<li><b>RedshiftProxyMesh</b> — <code>####</code> format (e.g. <code>pPlatonic1_####.rs</code>)</li>
+<li><b>VRayVolumeGrid</b> — <code>#</code> format (e.g. <code>Aerial explosion_#.vdb</code>)</li>
+</ul>
+
+<h3>.zasset Output Structure</h3>
+<pre><code>MyAsset.zasset/
+├── meta.json
+├── node.ma
+├── node.zmetal
+├── node.zlight              ← light preset (lights category only)
+├── textures/
+│   └── MatName/
+│       └── diffuse.png
+├── associated/          ← collected associations (optional)
+│   ├── caches/
+│   ├── proxies/
+│   └── references/
+└── thumb.sicon</code></pre>
+
+<h2 id="variants">LOD &amp; Version Management</h2>
+
+<h3 id="variant-concept">Concept</h3>
+<p><b>LOD</b> (level of detail) and <b>Version</b> are the two core variant dimensions, and <b>LODs belong to a version</b>:</p>
+
+<ul>
+<li><b>Version</b> — content iterations of the same asset (v1=base version → v2=damaged version); materials and textures are shared across all versions</li>
+<li><b>LOD</b> — geometric detail changes within the same version (lod0=high detail → lod1=medium detail → lod2=low detail)</li>
+</ul>
+
+<p>Example directory structure:</p>
+<pre><code>SciFi_Crate.zasset/
+├── meta.json           # metadata (shared)
+├── node.zmetal          # material nodes (shared)
+├── textures/            # textures (shared by all variants)
+└── variants/            # variants directory
+    ├── v1/              # version 1 — base version
+    │   ├── lod0/        #   high detail (15,420 faces)
+    │   ├── lod1/        #   medium detail (5,020 faces)
+    │   └── lod2/        #   low detail (1,200 faces)
+    └── v2/              # version 2 — optimized version
+        ├── lod0/        #   high detail (16,800 faces)
+        └── lod1/        #   medium detail (5,500 faces)</code></pre>
+
+<h3 id="variant-add-lod">Append an LOD — add a detail level to an existing version</h3>
+
+<div class="step">
+<ol>
+<li><b>Select the decimated geometry</b> in the Maya viewport (e.g. the lod1 model)</li>
+<li>Right-click the asset thumbnail → <b>"Update Asset"</b></li>
+<li>In the export dialog, <b>check a geometry format</b> (ma / fbx, etc.)</li>
+<li>Click "Export Asset"</li>
+<li>In the pop-up dialog, choose <b>"Append as LOD"</b></li>
+<li>The system automatically detects the face count and writes it to <code>variants/{version}/lod{N}/</code></li>
+</ol>
+</div>
+
+<div class="note">
+<b>Note:</b> Before appending an LOD, make sure a geometry format (ma/fbx/obj, etc.) is checked in the "Update Asset" dialog. With multiple versions, after clicking "Append as LOD" a version selector appears where you can choose which version to append the LOD to.
+</div>
+
+<h3 id="variant-new-ver">Create a New Version — use when the model content changes</h3>
+
+<div class="step">
+<ol>
+<li>Modify the model (add damage/change UVs, etc.)</li>
+<li><b>Select the modified model</b> in the Maya viewport</li>
+<li>Right-click the asset → <b>"Update Asset"</b></li>
+<li>Check a geometry format → click "Export Asset"</li>
+<li>Choose <b>"Create New Version"</b></li>
+<li><code>variants/v2/lod0/</code> is created automatically; you can continue appending lod1 to v2 later</li>
+</ol>
+</div>
+
+<div class="note">
+<b>Versions and materials:</b> When creating a new version, if the <b>.zmetal material format is checked</b>, the system exports the materials and textures together to <code>variants/{version}/node.zmetal</code> and <code>variants/{version}/textures/</code>, giving the version independent materials. If unchecked, all versions share the root-level materials.
+</div>
+
+<h3 id="variant-material">Version-Independent Materials</h3>
+
+<p>When different versions need different materials/textures (e.g. v2 adds a damaged texture):</p>
+
+<div class="step">
+<ol>
+<li>Set up the new version's material and textures in Maya</li>
+<li>Select the modified model</li>
+<li>Right-click the asset → <b>"Update Asset"</b></li>
+<li><b>Check the .zmetal material format</b> + a geometry format</li>
+<li>Click Export → choose <b>"Create New Version"</b></li>
+<li>Materials and textures are written to <code>variants/v2/</code> automatically</li>
+</ol>
+</div>
+
+<p>Directory structure:</p>
+<pre><code>SciFi_Crate.zasset/
+├── node.zmetal          # v1 material (root-level, compatible with legacy assets)
+├── textures/            # v1 textures
+└── variants/
+    ├── v1/
+    │   └── lod0/node.ma  # geometry only, uses the root-level material
+    └── v2/
+        ├── node.zmetal   # v2 independent material
+        ├── textures/     # v2 independent textures
+        └── lod0/node.ma</code></pre>
+
+<p>On import, versions with independent materials show an <b>"Import {version number} version materials"</b> entry under the "Switch Version" submenu of the right-click menu; clicking it imports that version's independent materials. Versions without independent materials fall back to the root-level materials.</p>
+
+<h3 id="variant-delete">Delete a Version / LOD</h3>
+
+<p>The "Import Geometry" submenu of the right-click menu provides deletion functions at the bottom:</p>
+
+<table>
+<tr><th>Menu Location</th><th>Action</th><th>Effect</th></tr>
+<tr><td><b>LOD Level → 🗑 Delete {level}</b></td><td>Deletes a single LOD</td><td>Removes the <code>variants/{version}/{lodN}/</code> directory</td></tr>
+<tr><td><b>Switch Version → 🗑 Delete {version number}</b></td><td>Deletes an entire version</td><td>Removes the <code>variants/{version}/</code> directory and all its LODs and materials</td></tr>
+</table>
+
+<div class="warn">
+<b>Deletion cannot be undone!</b> A confirmation dialog appears before deletion. Deleting a version also removes all LODs and independent material files under that version. When all versions are deleted, the variant system is automatically disabled.
+</div>
+
+<h3 id="variant-import">Import Variant Geometry</h3>
+
+<p>Right-clicking an asset that has variants additionally shows <b>"📦 Import Geometry"</b> in the menu:</p>
+
+<table>
+<tr><th>Menu Item</th><th>Description</th></tr>
+<tr><td><b>LOD Level</b></td><td>Lists all LODs of the current version (including face counts); click to import directly</td></tr>
+<tr><td><b>Switch Version</b></td><td>Lists all available versions; after selecting, imports with that version's default LOD. Versions with independent materials additionally show "Import Version Materials"</td></tr>
+<tr><td><b>Choose Version and LOD...</b></td><td>Opens a full selection dialog where you can choose both the version and the LOD level</td></tr>
+</table>
+
+<p>Menu rules:</p>
+<ul>
+<li>Only 1 version → "Switch Version" is not shown; that version is used directly</li>
+<li>Only 1 LOD → the "LOD Level" submenu is not shown; it imports directly</li>
+<li>No variants → "Import Geometry" is not shown; original behavior is retained</li>
+</ul>
+
+<div class="warn">
+<b>Before importing:</b> Importing geometry loads the model into the current Maya scene. To replace an existing model, delete the old model manually first.
+</div>
+
+<h3 id="variant-compare">Replace Asset vs. Append Variant</h3>
+
+<p>When updating an asset there are three options:</p>
+<table>
+<tr><th>Option</th><th>Use Case</th><th>Result</th></tr>
+<tr><td><b>Append as LOD</b></td><td>You made a decimated version and need to add it to an existing version</td><td>Writes to <code>variants/{version}/lod{N}/</code>; with multiple versions a pop-up lets you choose the target version</td></tr>
+<tr><td><b>Create New Version</b></td><td>Model content changes (damage/UVs/new details)</td><td>Writes to <code>variants/v{N}/lod0/</code>; if .zmetal is checked, independent materials are written too</td></tr>
+<tr><td><b>Replace Asset</b></td><td>Fix bugs, fully overwrite the old asset</td><td>Overwrites the entire .zasset folder and preserves the UUID</td></tr>
+</table>
+
+<h2 id="tips">Common Errors</h2>
+<p><b>❌ No geometry:</b> Make sure at least one format is checked</p>
+<p><b>❌ Timeline + Render freezes:</b> This is normal; wait for it to finish or switch to playblast</p>
+<p><b>❌ Missing format:</b> Confirm the corresponding checkbox was checked when exporting</p>
+<p><b>❌ "Update Asset" does not show the LOD/version dialog:</b> Check whether a geometry format (ma/fbx/obj, etc.) is checked; the dialog only appears when geometry is being exported</p>
+<p><b>❌ Nothing happens after clicking LOD:</b> Make sure you have <b>selected the geometry objects to export</b> in the Maya viewport before clicking OK</p>
+<p><b>❌ Reference files are baked into .ma:</b> This is normal. Maya exports with the <code>preserveReferences</code> flag to keep the reference relationship; the referenced source files are backed up in <code>associated/references/</code></p>
+<p><b>❌ Objects disappear in single-asset mode:</b> Clicking "Single Asset" does not hide objects automatically. To isolate the view, operate the view manually</p>
+
+</div>
+</div>
+</body>
+</html>

@@ -16,6 +16,12 @@ import os
 from ..utils.maya_utils import get_qt_modules
 from ..utils.settings import SettingsManager, apply_font_size_to_widget
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
@@ -32,7 +38,7 @@ class VariantImportDialog(QtWidgets.QDialog):
         self._selected_version = ""
         self._selected_lod = ""
 
-        self.setWindowTitle("导入变体几何体")
+        self.setWindowTitle(t("dialog.variant_import.title"))
         self.setMinimumWidth(400)
         self.setModal(True)
 
@@ -65,13 +71,13 @@ class VariantImportDialog(QtWidgets.QDialog):
 
         # ── 标题 ──
         asset_name = os.path.splitext(os.path.basename(self._zasset_path))[0]
-        title = QtWidgets.QLabel(f"导入资产：{asset_name}")
+        title = QtWidgets.QLabel(t("dialog.variant_import.import_asset", asset=asset_name))
         title.setStyleSheet("font-weight: bold; font-size: 14px;")
         layout.addWidget(title)
 
         versions = self._variants.get("versions", [])
         if not versions:
-            label = QtWidgets.QLabel("该资产不包含变体数据")
+            label = QtWidgets.QLabel(t("dialog.variant_import.no_variants"))
             label.setStyleSheet("color: #888;")
             layout.addWidget(label)
             # 无变体时禁用确认
@@ -81,7 +87,7 @@ class VariantImportDialog(QtWidgets.QDialog):
             return
 
         # ── 版本选择 ──
-        ver_label = QtWidgets.QLabel("版本：")
+        ver_label = QtWidgets.QLabel(t("dialog.variant_import.version"))
         ver_label.setStyleSheet("font-weight: bold; margin-top: 4px;")
         layout.addWidget(ver_label)
 
@@ -112,7 +118,7 @@ class VariantImportDialog(QtWidgets.QDialog):
         layout.addLayout(ver_layout)
 
         # ── LOD 选择 ──
-        lod_label = QtWidgets.QLabel("LOD 精度：")
+        lod_label = QtWidgets.QLabel(t("dialog.variant_import.lod_precision"))
         lod_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
         layout.addWidget(lod_label)
 
@@ -150,14 +156,14 @@ class VariantImportDialog(QtWidgets.QDialog):
                 break
 
         if not ver:
-            label = QtWidgets.QLabel("该版本无可用 LOD")
+            label = QtWidgets.QLabel(t("dialog.variant_import.no_lod"))
             label.setStyleSheet("color: #888; padding-left: 20px;")
             self._lod_layout.addWidget(label)
             return
 
         lods = ver.get("lods", [])
         if not lods:
-            label = QtWidgets.QLabel("该版本无可用 LOD")
+            label = QtWidgets.QLabel(t("dialog.variant_import.no_lod"))
             label.setStyleSheet("color: #888; padding-left: 20px;")
             self._lod_layout.addWidget(label)
             return
@@ -173,7 +179,7 @@ class VariantImportDialog(QtWidgets.QDialog):
             if stats:
                 tris = stats.get("triangles", 0)
                 verts = stats.get("vertices", 0)
-                text += f"  —  {tris:,}面 / {verts:,}点"
+                text += t("dialog.variant_import.stats", tris=tris, verts=verts)
             if formats_list:
                 text += f"  [{', '.join(formats_list)}]"
 

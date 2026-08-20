@@ -34,6 +34,12 @@ try:
 except ImportError:
     from PySide2 import QtCore, QtGui, QtWidgets
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 
 class ThumbnailCaptureOverlay(_OriginalCaptureTool):
     """
@@ -134,7 +140,7 @@ class ThumbnailCaptureOverlay(_OriginalCaptureTool):
             return
         self.record_timer.stop()
         self.is_recording = False
-        self.toolbar.record_btn.setText("🎥 录屏")
+        self.toolbar.record_btn.setText(t("capture.record"))
         self.toolbar.record_btn.setStyleSheet("")
         self.update()
 

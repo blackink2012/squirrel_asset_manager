@@ -14,6 +14,12 @@ NameConflictDialog — 同名资产冲突处理对话框
 from ..utils.maya_utils import get_qt_modules
 from ..utils.settings import SettingsManager, apply_font_size_to_widget
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
@@ -27,7 +33,7 @@ class NameConflictDialog(QtWidgets.QDialog):
 
     def __init__(self, asset_name: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("资产名冲突")
+        self.setWindowTitle(t("dialog.name_conflict.title"))
         self.setMinimumWidth(420)
         self.setModal(True)
 
@@ -54,8 +60,7 @@ class NameConflictDialog(QtWidgets.QDialog):
         header.addWidget(icon_lbl)
 
         info_lbl = QtWidgets.QLabel(
-            f"资产「<b>{asset_name}</b>」的同名文件夹已存在，\n"
-            "继续导出将会覆盖已有文件。"
+            t("dialog.name_conflict.override_warning", name=asset_name)
         )
         info_lbl.setWordWrap(True)
         header.addWidget(info_lbl, 1)
@@ -68,31 +73,31 @@ class NameConflictDialog(QtWidgets.QDialog):
         layout.addWidget(sep)
 
         # ── 请选择处理方式 ──
-        prompt = QtWidgets.QLabel("请选择处理方式：")
+        prompt = QtWidgets.QLabel(t("dialog.name_conflict.choose_method"))
         prompt.setStyleSheet("font-weight: bold; font-size: 13px;")
         layout.addWidget(prompt)
 
         # ── 自动重命名 Radio ──
-        self._auto_radio = QtWidgets.QRadioButton("自动重命名（追加 _001, _002 …）")
+        self._auto_radio = QtWidgets.QRadioButton(t("dialog.name_conflict.auto_rename"))
         self._auto_radio.setChecked(True)
         layout.addWidget(self._auto_radio)
 
         # ── 手动输入 Radio + 输入框 ──
-        self._manual_radio = QtWidgets.QRadioButton("手动输入新名称：")
+        self._manual_radio = QtWidgets.QRadioButton(t("dialog.name_conflict.manual_name"))
 
         manual_layout = QtWidgets.QHBoxLayout()
         manual_layout.addSpacing(24)
         manual_layout.addWidget(self._manual_radio)
 
         self._name_edit = QtWidgets.QLineEdit()
-        self._name_edit.setPlaceholderText("输入新的资产名称…")
+        self._name_edit.setPlaceholderText(t("dialog.name_conflict.new_name_input"))
         self._name_edit.setEnabled(False)
         self._name_edit.setMinimumWidth(180)
         manual_layout.addWidget(self._name_edit, 1)
         layout.addLayout(manual_layout)
 
         # ── 记住选择 CheckBox ──
-        self._remember_cb = QtWidgets.QCheckBox("记住我的选择，以后同名时不再提示")
+        self._remember_cb = QtWidgets.QCheckBox(t("dialog.name_conflict.remember_choice"))
         layout.addWidget(self._remember_cb)
 
         layout.addStretch()
@@ -100,9 +105,9 @@ class NameConflictDialog(QtWidgets.QDialog):
         # ── 按钮 ──
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
-        self._ok_btn = QtWidgets.QPushButton("确定")
+        self._ok_btn = QtWidgets.QPushButton(t("common.ok"))
         self._ok_btn.setDefault(True)
-        self._cancel_btn = QtWidgets.QPushButton("取消")
+        self._cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         btn_layout.addWidget(self._ok_btn)
         btn_layout.addWidget(self._cancel_btn)
         layout.addLayout(btn_layout)
@@ -128,8 +133,8 @@ class NameConflictDialog(QtWidgets.QDialog):
         else:
             name = self._name_edit.text().strip()
             if not name:
-                QtWidgets.QMessageBox.warning(self, "输入错误",
-                    "请输入新的资产名称。")
+                QtWidgets.QMessageBox.warning(self, t("dialog.name_conflict.input_error"),
+                    t("dialog.name_conflict.input_name_prompt"))
                 self._name_edit.setFocus()
                 return
             self._result_mode = self.MODE_MANUAL

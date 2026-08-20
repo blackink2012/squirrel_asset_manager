@@ -1,3 +1,9 @@
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 from ..utils.maya_utils import get_qt_modules
 
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
@@ -91,7 +97,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
 
     def _setup_ui(self):
         total = len(self._results)
-        self.setWindowTitle(f'批量 AI 分析结果 — {total} 个资产')
+        self.setWindowTitle(t('dialog.ai_batch_results.title', n=total))
         self.setMinimumSize(1140, 500)
         self.resize(1240, min(700, 200 + total * 200))
         self.setStyleSheet(_STYLE)
@@ -101,15 +107,15 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         root.setSpacing(12)
 
         top_row = QtWidgets.QHBoxLayout()
-        top_label = QtWidgets.QLabel(f'共 {total} 个资产分析完成，可编辑后勾选应用：')
+        top_label = QtWidgets.QLabel(t('dialog.ai_batch_results.summary', n=total))
         top_label.setStyleSheet('color: #ffffff; font-size: 14px;')
         top_row.addWidget(top_label)
         top_row.addStretch()
-        select_all = QtWidgets.QPushButton('全选')
+        select_all = QtWidgets.QPushButton(t('common.select_all'))
         select_all.setObjectName('selectAllBtn')
         select_all.clicked.connect(self._select_all)
         top_row.addWidget(select_all)
-        deselect_all = QtWidgets.QPushButton('取消全选')
+        deselect_all = QtWidgets.QPushButton(t('btn.deselect_all'))
         deselect_all.setObjectName('deselectAllBtn')
         deselect_all.clicked.connect(self._deselect_all)
         top_row.addWidget(deselect_all)
@@ -162,7 +168,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         self._preview_name.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         right_layout.addWidget(self._preview_name)
 
-        self._preview_info = QtWidgets.QLabel('点击左侧资产查看缩略图')
+        self._preview_info = QtWidgets.QLabel(t('dialog.ai_batch_results.click_hint'))
         self._preview_info.setStyleSheet('color: #808080; font-size: 13px;')
         self._preview_info.setWordWrap(True)
         self._preview_info.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
@@ -177,15 +183,15 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         # 底部按钮
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.setSpacing(10)
-        self._move_cb = QtWidgets.QCheckBox('移动到分析出的分类')
+        self._move_cb = QtWidgets.QCheckBox(t('dialog.ai_batch_results.move_to_category'))
         self._move_cb.setChecked(True)
-        self._move_cb.setToolTip('勾选后, 应用结果的资产将移动到 AI 分析出的分类目录下')
+        self._move_cb.setToolTip(t('dialog.ai_batch_results.move_to_category.tooltip'))
         btn_row.addWidget(self._move_cb)
         btn_row.addStretch()
-        cancel_btn = QtWidgets.QPushButton('取消')
+        cancel_btn = QtWidgets.QPushButton(t('common.cancel'))
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
-        self._apply_btn = QtWidgets.QPushButton(f'应用选中的资产 ({total} 个)')
+        self._apply_btn = QtWidgets.QPushButton(t('dialog.ai_batch_results.apply_selected', n=total))
         self._apply_btn.setObjectName('applyBtn')
         self._apply_btn.clicked.connect(self._on_apply)
         btn_row.addWidget(self._apply_btn)
@@ -230,7 +236,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         fields.addLayout(name_row)
 
         name_cn = QtWidgets.QLineEdit(result.get('name_cn', ''))
-        name_cn.setPlaceholderText('易读名')
+        name_cn.setPlaceholderText(t('label.readable_name'))
         name_cn.setMaximumHeight(32)
         name_cn.setStyleSheet('font-size: 13px;')
         name_cn.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
@@ -240,14 +246,14 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         mid_row.setSpacing(6)
 
         cat_edit = QtWidgets.QLineEdit(result.get('sub_category', ''))
-        cat_edit.setPlaceholderText('子分类')
+        cat_edit.setPlaceholderText(t('label.sub_category'))
         cat_edit.setMaximumHeight(30)
         cat_edit.setStyleSheet('font-size: 13px;')
         cat_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
         mid_row.addWidget(cat_edit)
 
         tags_edit = QtWidgets.QLineEdit(', '.join(result.get('tags', [])))
-        tags_edit.setPlaceholderText('标签')
+        tags_edit.setPlaceholderText(t('label.tags'))
         tags_edit.setMaximumHeight(30)
         tags_edit.setStyleSheet('font-size: 13px;')
         tags_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
@@ -255,7 +261,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         fields.addLayout(mid_row)
 
         notes_edit = QtWidgets.QLineEdit(result.get('notes', ''))
-        notes_edit.setPlaceholderText('注释')
+        notes_edit.setPlaceholderText(t('label.notes'))
         notes_edit.setMaximumHeight(30)
         notes_edit.setStyleSheet('font-size: 13px;')
         notes_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
@@ -312,21 +318,21 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
                                  QtCore.Qt.TransformationMode.SmoothTransformation)
                 self._preview_thumb.setPixmap(pix)
             else:
-                self._preview_thumb.setText('无缩略图')
+                self._preview_thumb.setText(t('dialog.ai_batch_results.no_thumbnail'))
         else:
-            self._preview_thumb.setText('无缩略图')
+            self._preview_thumb.setText(t('dialog.ai_batch_results.no_thumbnail'))
 
         self._preview_name.setText(result.get('name_cn', '') or material.get('name', ''))
         lines = []
         cat = result.get('sub_category', '')
         if cat:
-            lines.append(f'分类: {cat}')
+            lines.append(t('label.category_with_value', value=cat))
         tags = result.get('tags', [])
         if tags:
-            lines.append(f'标签: {", ".join(tags)}')
+            lines.append(t('label.tags_with_value', value=", ".join(tags)))
         notes = result.get('notes', '')
         if notes:
-            lines.append(f'注释: {notes[:120]}')
+            lines.append(t('label.notes_with_value', value=notes[:120]))
         self._preview_info.setText('\n'.join(lines))
 
     def _select_all(self):
@@ -339,12 +345,13 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
 
     def _update_apply_btn_text(self):
         count = sum(1 for cb in self._checkboxes.values() if cb.isChecked())
-        self._apply_btn.setText(f'应用选中的资产 ({count} 个)')
+        self._apply_btn.setText(t('dialog.ai_batch_results.apply_selected', n=count))
 
     def _on_apply(self):
         checked_indices = [i for i, cb in self._checkboxes.items() if cb.isChecked()]
         if not checked_indices:
-            QtWidgets.QMessageBox.information(self, '提示', '没有选中任何资产')
+            QtWidgets.QMessageBox.information(self, t('dialog.ai_batch_results.no_selection_title'),
+                                              t('dialog.ai_batch_results.no_selection_msg'))
             return
 
         selected_results = []
@@ -397,7 +404,7 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setWindowTitle('AI 分析配置')
+        self.setWindowTitle(t('dialog.ai_analysis_config.title'))
         self.setFixedSize(380, 280)
         self.setStyleSheet(_STYLE)
 
@@ -405,14 +412,14 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        title = QtWidgets.QLabel('请选择 AI 分析参数')
+        title = QtWidgets.QLabel(t('dialog.ai_analysis_config.prompt'))
         title.setStyleSheet('color: #ffffff; font-size: 15px; font-weight: bold;')
         layout.addWidget(title)
 
         layout.addSpacing(4)
 
         lang_layout = QtWidgets.QHBoxLayout()
-        lang_label = QtWidgets.QLabel('输出语言:')
+        lang_label = QtWidgets.QLabel(t('label.output_language'))
         lang_label.setFixedWidth(80)
         lang_layout.addWidget(lang_label)
         self._lang_combo = QtWidgets.QComboBox()
@@ -422,7 +429,7 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         layout.addLayout(lang_layout)
 
         model_layout = QtWidgets.QHBoxLayout()
-        model_label = QtWidgets.QLabel('AI 模型:')
+        model_label = QtWidgets.QLabel(t('label.ai_model'))
         model_label.setFixedWidth(80)
         model_layout.addWidget(model_label)
         self._model_combo = QtWidgets.QComboBox()
@@ -438,12 +445,12 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         model_layout.addWidget(self._model_combo, 1)
         layout.addLayout(model_layout)
 
-        self._review_cb = QtWidgets.QCheckBox('分析完成后弹出窗口供我审查和编辑')
+        self._review_cb = QtWidgets.QCheckBox(t('dialog.ai_analysis_config.review_after'))
         self._review_cb.setChecked(True)
         layout.addWidget(self._review_cb)
 
-        self._translate_tags_cb = QtWidgets.QCheckBox('翻译原有 tag 到目标语言')
-        self._translate_tags_cb.setToolTip('勾选后，资产原有的 tag 将被翻译到所选的目标语言后再合并')
+        self._translate_tags_cb = QtWidgets.QCheckBox(t('dialog.ai_analysis_config.translate_tags'))
+        self._translate_tags_cb.setToolTip(t('dialog.ai_analysis_config.translate_tags.tooltip'))
         layout.addWidget(self._translate_tags_cb)
 
         layout.addSpacing(6)
@@ -452,11 +459,11 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         btn_layout.setSpacing(10)
         btn_layout.addStretch()
 
-        cancel_btn = QtWidgets.QPushButton('取消')
+        cancel_btn = QtWidgets.QPushButton(t('common.cancel'))
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        start_btn = QtWidgets.QPushButton('开始分析')
+        start_btn = QtWidgets.QPushButton(t('dialog.ai_analysis_config.start'))
         start_btn.setObjectName('applyBtn')
         start_btn.clicked.connect(self._on_confirm)
         btn_layout.addWidget(start_btn)
@@ -492,7 +499,7 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         self._setup_ui()
     
     def _setup_ui(self):
-        self.setWindowTitle('AI 分析结果')
+        self.setWindowTitle(t('dialog.ai_analysis.title'))
         self.setFixedSize(500, 520)
         self.setStyleSheet("""
             QDialog { background-color: #252525; }
@@ -549,12 +556,12 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         self._thumb_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         header_layout.addWidget(self._thumb_label)
         
-        info_group = QtWidgets.QGroupBox('资产信息')
+        info_group = QtWidgets.QGroupBox(t('dialog.ai_analysis.asset_info'))
         info_layout = QtWidgets.QVBoxLayout(info_group)
         info_layout.setContentsMargins(10, 10, 10, 10)
         
         name_layout = QtWidgets.QHBoxLayout()
-        name_label = QtWidgets.QLabel('原始名称:')
+        name_label = QtWidgets.QLabel(t('label.original_name'))
         name_label.setFixedWidth(70)
         self._original_name = QtWidgets.QLabel('')
         self._original_name.setStyleSheet('color: #ffffff;')
@@ -563,7 +570,7 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         info_layout.addLayout(name_layout)
         
         sub_lib_layout = QtWidgets.QHBoxLayout()
-        sub_lib_label = QtWidgets.QLabel('顶级分类:')
+        sub_lib_label = QtWidgets.QLabel(t('label.top_category'))
         sub_lib_label.setFixedWidth(70)
         self._sub_library = QtWidgets.QLabel('')
         self._sub_library.setStyleSheet('color: #ffffff;')
@@ -574,43 +581,43 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         header_layout.addWidget(info_group)
         layout.addLayout(header_layout)
         
-        result_group = QtWidgets.QGroupBox('AI 分析结果')
+        result_group = QtWidgets.QGroupBox(t('dialog.ai_analysis.result'))
         result_layout = QtWidgets.QVBoxLayout(result_group)
         result_layout.setContentsMargins(10, 10, 10, 10)
         result_layout.setSpacing(10)
         
         name_cn_layout = QtWidgets.QHBoxLayout()
-        name_cn_label = QtWidgets.QLabel('易读名:')
+        name_cn_label = QtWidgets.QLabel(t('label.readable_name') + ':')
         name_cn_label.setFixedWidth(70)
         self._name_cn_edit = QtWidgets.QLineEdit()
-        self._name_cn_edit.setPlaceholderText('AI 分析的易读名称')
+        self._name_cn_edit.setPlaceholderText(t('dialog.ai_analysis.name_cn_placeholder'))
         name_cn_layout.addWidget(name_cn_label)
         name_cn_layout.addWidget(self._name_cn_edit)
         result_layout.addLayout(name_cn_layout)
         
         category_layout = QtWidgets.QHBoxLayout()
-        category_label = QtWidgets.QLabel('建议分类:')
+        category_label = QtWidgets.QLabel(t('label.suggested_category'))
         category_label.setFixedWidth(70)
         self._category_edit = QtWidgets.QLineEdit()
-        self._category_edit.setPlaceholderText('建议的子分类')
+        self._category_edit.setPlaceholderText(t('dialog.ai_analysis.category_placeholder'))
         category_layout.addWidget(category_label)
         category_layout.addWidget(self._category_edit)
         result_layout.addLayout(category_layout)
         
         tags_layout = QtWidgets.QHBoxLayout()
-        tags_label = QtWidgets.QLabel('标签:')
+        tags_label = QtWidgets.QLabel(t('label.tags'))
         tags_label.setFixedWidth(70)
         self._tags_edit = QtWidgets.QLineEdit()
-        self._tags_edit.setPlaceholderText('用逗号分隔的标签')
+        self._tags_edit.setPlaceholderText(t('dialog.ai_analysis.tags_placeholder'))
         tags_layout.addWidget(tags_label)
         tags_layout.addWidget(self._tags_edit)
         result_layout.addLayout(tags_layout)
         
         notes_layout = QtWidgets.QVBoxLayout()
-        notes_label = QtWidgets.QLabel('注释:')
+        notes_label = QtWidgets.QLabel(t('label.notes'))
         self._notes_edit = QtWidgets.QTextEdit()
         self._notes_edit.setFixedHeight(80)
-        self._notes_edit.setPlaceholderText('AI 分析的注释描述')
+        self._notes_edit.setPlaceholderText(t('dialog.ai_analysis.notes_placeholder'))
         notes_layout.addWidget(notes_label)
         notes_layout.addWidget(self._notes_edit)
         result_layout.addLayout(notes_layout)
@@ -619,17 +626,17 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         
         button_layout = QtWidgets.QHBoxLayout()
         button_layout.setSpacing(10)
-        self._move_cb = QtWidgets.QCheckBox('移动到分析出的分类')
+        self._move_cb = QtWidgets.QCheckBox(t('dialog.ai_analysis.move_to_category'))
         self._move_cb.setChecked(True)
-        self._move_cb.setToolTip('勾选后, 应用结果时将资产移动到 AI 分析出的分类目录下')
+        self._move_cb.setToolTip(t('dialog.ai_analysis.move_to_category.tooltip'))
         button_layout.addWidget(self._move_cb)
         button_layout.addStretch()
 
-        cancel_btn = QtWidgets.QPushButton('取消')
+        cancel_btn = QtWidgets.QPushButton(t('common.cancel'))
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
 
-        apply_btn = QtWidgets.QPushButton('应用到元数据')
+        apply_btn = QtWidgets.QPushButton(t('dialog.ai_analysis.apply'))
         apply_btn.setObjectName('applyBtn')
         apply_btn.clicked.connect(self._on_apply)
         button_layout.addWidget(apply_btn)

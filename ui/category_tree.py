@@ -5,6 +5,12 @@ from ..utils.maya_utils import get_qt_modules, qt_exec
 from ..utils.mock_data import DEFAULT_CATEGORIES
 from ..utils.settings import SettingsManager
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 # config.json 路径（与 manager.py 保持一致）
 _CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             "Assets", "preset", "config.json")
@@ -257,7 +263,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
 
         layout.addWidget(self._tree)
 
-        add_btn = QtWidgets.QPushButton("+ \u6dfb\u52a0\u5206\u7c7b")
+        add_btn = QtWidgets.QPushButton(t("category_tree.add_category"))
         add_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -479,46 +485,46 @@ class CategoryTreeWidget(QtWidgets.QWidget):
             if cat_id != "all":
                 # 子库根（depth==0）或子分类（depth>0）均可添加子分类
                 rl = item.data(0, QtCore.Qt.ItemDataRole.UserRole + 3)
-                menu.addAction("+ \u6dfb\u52a0\u5b50\u5206\u7c7b").triggered.connect(
+                menu.addAction(t("category_tree.add_sub_category")).triggered.connect(
                     lambda checked=False, cid=cat_id, root_lib=rl: self._on_add_child_category(cid, root_lib)
                 )
                 menu.addSeparator()
-                menu.addAction("\ud83d\udcc2 \u6253\u5f00\u6587\u4ef6\u5939").triggered.connect(
+                menu.addAction("\ud83d\udcc2 " + t("common.open_folder")).triggered.connect(
                     lambda checked=False, cid=cat_id: self.openFolderRequested.emit(cid)
                 )
                 menu.addSeparator()
-                menu.addAction("\u2795 \u79fb\u52a8\u5230...").triggered.connect(
+                menu.addAction(t("category_tree.move_to")).triggered.connect(
                     lambda checked=False, cid=cat_id: self._on_move_category(cid)
                 )
                 menu.addSeparator()
-                menu.addAction("编辑").triggered.connect(
+                menu.addAction(t("common.edit")).triggered.connect(
                     lambda checked=False, cid=cat_id: self._on_edit_category(cid)
                 )
                 # 核心顶级分类不可删除
                 if cat_id not in _CORE_SUB_LIBS:
-                    menu.addAction("\u5220\u9664\u5206\u7c7b").triggered.connect(
+                    menu.addAction(t("category_tree.delete_category")).triggered.connect(
                         lambda checked=False, cid=cat_id: self._on_delete_category(cid)
                     )
                 if is_parent:
                     menu.addSeparator()
-                    menu.addAction("\u5168\u90e8\u5c55\u5f00").triggered.connect(
+                    menu.addAction(t("common.expand_all")).triggered.connect(
                         lambda checked=False, it=item: self._tree.expandItem(it)
                     )
-                    menu.addAction("\u5168\u90e8\u6298\u53e0").triggered.connect(
+                    menu.addAction(t("common.collapse_all")).triggered.connect(
                         lambda checked=False, it=item: self._tree.collapseItem(it)
                     )
             else:
                 # 从当前树实例的 currentItem 提取 root_lib（比 global _current_root_lib 更准）
                 curr = self._tree.currentItem()
                 all_rl = curr.data(0, QtCore.Qt.ItemDataRole.UserRole + 3) if curr else None
-                menu.addAction("+ \u6dfb\u52a0\u9876\u7ea7\u5206\u7c7b").triggered.connect(
+                menu.addAction(t("category_tree.add_top_category")).triggered.connect(
                     lambda checked=False, root_lib=all_rl: self._on_add_category(root_lib=root_lib)
                 )
         else:
             # 从当前树实例的 currentItem 提取 root_lib
             curr = self._tree.currentItem()
             blank_rl = curr.data(0, QtCore.Qt.ItemDataRole.UserRole + 3) if curr else None
-            menu.addAction("+ \u6dfb\u52a0\u9876\u7ea7\u5206\u7c7b").triggered.connect(
+            menu.addAction(t("category_tree.add_top_category")).triggered.connect(
                 lambda checked=False, root_lib=blank_rl: self._on_add_category(root_lib=root_lib)
             )
 
@@ -526,7 +532,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
 
     def _on_add_category(self, parent_id=None, root_lib=None):
         """添加分类：双输入对话框 → 中文名 + 英文 ID"""
-        title = f"\u6dfb\u52a0\u5b50\u5206\u7c7b\u5230 {parent_id}" if parent_id else "\u6dfb\u52a0\u9876\u7ea7\u5206\u7c7b"
+        title = t("category_tree.add_sub_category_to", parent_id=parent_id) if parent_id else t("category_tree.add_top_category")
 
         # 自定义双输入对话框
         dialog = QtWidgets.QDialog(self)
@@ -538,11 +544,11 @@ class CategoryTreeWidget(QtWidgets.QWidget):
 
         # 第一行：文件夹名（唯一标识）
         id_layout = QtWidgets.QHBoxLayout()
-        id_label = QtWidgets.QLabel("\u6587\u4ef6\u5939\u540d:")
+        id_label = QtWidgets.QLabel(t("category_tree.folder_name") + ":")
         id_label.setFixedWidth(80)
         id_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         id_input = QtWidgets.QLineEdit()
-        id_input.setPlaceholderText("\u5982\uff1ametal_copper")
+        id_input.setPlaceholderText(t("category_tree.folder_name_example"))
         id_input.setStyleSheet("background-color: #333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px; color: #e0e0e0;")
         id_layout.addWidget(id_label)
         id_layout.addWidget(id_input)
@@ -550,11 +556,11 @@ class CategoryTreeWidget(QtWidgets.QWidget):
 
         # 第二行：易读名（可选）
         cn_layout = QtWidgets.QHBoxLayout()
-        cn_label = QtWidgets.QLabel("\u6613\u8bfb\u540d:")
+        cn_label = QtWidgets.QLabel(t("category_tree.readable_name") + ":")
         cn_label.setFixedWidth(80)
         cn_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         cn_input = QtWidgets.QLineEdit()
-        cn_input.setPlaceholderText("\u5982\uff1a\u94dc\uff08\u4e0d\u586b\u5219\u7528\u6587\u4ef6\u5939\u540d\uff09")
+        cn_input.setPlaceholderText(t("category_tree.readable_name_example"))
         cn_input.setStyleSheet("background-color: #333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px; color: #e0e0e0;")
         cn_layout.addWidget(cn_label)
         cn_layout.addWidget(cn_input)
@@ -565,7 +571,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         # 确保类型始终是合法子库以适配个性化右键菜单
         if parent_id is None:
             type_layout = QtWidgets.QHBoxLayout()
-            type_label = QtWidgets.QLabel("\u7c7b\u578b(type):")
+            type_label = QtWidgets.QLabel(t("category_tree.type") + "(type):")
             type_label.setFixedWidth(80)
             type_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
             type_combo = QtWidgets.QComboBox()
@@ -590,10 +596,10 @@ class CategoryTreeWidget(QtWidgets.QWidget):
 
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
-        cancel_btn = QtWidgets.QPushButton("\u53d6\u6d88")
+        cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         cancel_btn.setStyleSheet("QPushButton { background-color: #3a3a3a; color: #a0a0a0; border: none; padding: 6px 16px; border-radius: 4px; } QPushButton:hover { color: #e0e0e0; }")
         cancel_btn.clicked.connect(dialog.reject)
-        ok_btn = QtWidgets.QPushButton("\u786e\u5b9a")
+        ok_btn = QtWidgets.QPushButton(t("common.ok"))
         ok_btn.setStyleSheet("QPushButton { background-color: #5294e2; color: #fff; border: none; padding: 6px 16px; border-radius: 4px; } QPushButton:hover { background-color: #6ab0ff; }")
         ok_btn.clicked.connect(dialog.accept)
         btn_layout.addWidget(cancel_btn)
@@ -606,7 +612,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         name_cn = cn_input.text().strip()
         cat_id = id_input.text().strip()
         if not cat_id:
-            QtWidgets.QMessageBox.warning(self, "\u63d0\u793a", "\u6587\u4ef6\u5939\u540d\u4e0d\u80fd\u4e3a\u7a7a")
+            QtWidgets.QMessageBox.warning(self, t("common.tip"), t("category_tree.folder_name_required"))
             return
         # 易读名为空则用文件夹名
         if not name_cn:
@@ -624,36 +630,36 @@ class CategoryTreeWidget(QtWidgets.QWidget):
     def _show_top_level_category_dialog(self, root_lib):
         """独立对话框 + 独立信号，与 categoryAdded/on_category_added 完全隔离"""
         dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle("\u6dfb\u52a0\u9876\u7ea7\u5206\u7c7b")
+        dialog.setWindowTitle(t("category_tree.add_top_category"))
         dialog.setFixedSize(380, 150)
         dialog.setStyleSheet("background-color: #2a2a2a;")
         layout = QtWidgets.QVBoxLayout(dialog)
         layout.setSpacing(8)
 
         id_layout = QtWidgets.QHBoxLayout()
-        id_label = QtWidgets.QLabel("\u6587\u4ef6\u5939\u540d:")
+        id_label = QtWidgets.QLabel(t("category_tree.folder_name") + ":")
         id_label.setFixedWidth(80)
         id_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         id_input = QtWidgets.QLineEdit()
-        id_input.setPlaceholderText("\u5982\uff1ametal_copper")
+        id_input.setPlaceholderText(t("category_tree.folder_name_example"))
         id_input.setStyleSheet("background-color: #333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px; color: #e0e0e0;")
         id_layout.addWidget(id_label)
         id_layout.addWidget(id_input)
         layout.addLayout(id_layout)
 
         cn_layout = QtWidgets.QHBoxLayout()
-        cn_label = QtWidgets.QLabel("\u6613\u8bfb\u540d:")
+        cn_label = QtWidgets.QLabel(t("category_tree.readable_name") + ":")
         cn_label.setFixedWidth(80)
         cn_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         cn_input = QtWidgets.QLineEdit()
-        cn_input.setPlaceholderText("\u5982\uff1a\u94dc\uff08\u4e0d\u586b\u5219\u7528\u6587\u4ef6\u5939\u540d\uff09")
+        cn_input.setPlaceholderText(t("category_tree.readable_name_example"))
         cn_input.setStyleSheet("background-color: #333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px; color: #e0e0e0;")
         cn_layout.addWidget(cn_label)
         cn_layout.addWidget(cn_input)
         layout.addLayout(cn_layout)
 
         type_layout = QtWidgets.QHBoxLayout()
-        type_label = QtWidgets.QLabel("\u7c7b\u578b(type):")
+        type_label = QtWidgets.QLabel(t("category_tree.type") + "(type):")
         type_label.setFixedWidth(80)
         type_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         type_combo = QtWidgets.QComboBox()
@@ -679,10 +685,10 @@ class CategoryTreeWidget(QtWidgets.QWidget):
 
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
-        cancel_btn = QtWidgets.QPushButton("\u53d6\u6d88")
+        cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         cancel_btn.setStyleSheet("QPushButton { background-color: #3a3a3a; color: #a0a0a0; border: none; padding: 6px 16px; border-radius: 4px; } QPushButton:hover { color: #e0e0e0; }")
         cancel_btn.clicked.connect(dialog.reject)
-        ok_btn = QtWidgets.QPushButton("\u786e\u5b9a")
+        ok_btn = QtWidgets.QPushButton(t("common.ok"))
         ok_btn.setStyleSheet("QPushButton { background-color: #5294e2; color: #fff; border: none; padding: 6px 16px; border-radius: 4px; } QPushButton:hover { background-color: #6ab0ff; }")
         ok_btn.clicked.connect(dialog.accept)
         btn_layout.addWidget(cancel_btn)
@@ -696,7 +702,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         cat_id = id_input.text().strip()
         cat_type = type_combo.currentData()
         if not cat_id:
-            QtWidgets.QMessageBox.warning(self, "\u63d0\u793a", "\u6587\u4ef6\u5939\u540d\u4e0d\u80fd\u4e3a\u7a7a")
+            QtWidgets.QMessageBox.warning(self, t("common.tip"), t("category_tree.folder_name_required"))
             return
         if not name_cn:
             name_cn = cat_id
@@ -709,14 +715,14 @@ class CategoryTreeWidget(QtWidgets.QWidget):
             return
 
         dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle("编辑分类")
+        dialog.setWindowTitle(t("category_tree.edit_category"))
         dialog.setFixedSize(380, 180)
         dialog.setStyleSheet("background-color: #2a2a2a;")
         layout = QtWidgets.QVBoxLayout(dialog)
         layout.setSpacing(8)
 
         id_layout = QtWidgets.QHBoxLayout()
-        id_label = QtWidgets.QLabel("文件夹名:")
+        id_label = QtWidgets.QLabel(t("category_tree.folder_name") + ":")
         id_label.setFixedWidth(80)
         id_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         id_input = QtWidgets.QLineEdit(cat_id)
@@ -727,7 +733,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         layout.addLayout(id_layout)
 
         cn_layout = QtWidgets.QHBoxLayout()
-        cn_label = QtWidgets.QLabel("易读名:")
+        cn_label = QtWidgets.QLabel(t("category_tree.readable_name") + ":")
         cn_label.setFixedWidth(80)
         cn_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         cn_input = QtWidgets.QLineEdit(cat.get("name_cn") or cat.get("name") or cat_id)
@@ -737,7 +743,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         layout.addLayout(cn_layout)
 
         type_layout = QtWidgets.QHBoxLayout()
-        type_label = QtWidgets.QLabel("类型(type):")
+        type_label = QtWidgets.QLabel(t("category_tree.type") + "(type):")
         type_label.setFixedWidth(80)
         type_label.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         type_combo = QtWidgets.QComboBox()
@@ -764,10 +770,10 @@ class CategoryTreeWidget(QtWidgets.QWidget):
 
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
-        cancel_btn = QtWidgets.QPushButton("取消")
+        cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         cancel_btn.setStyleSheet("QPushButton { background-color: #3a3a3a; color: #a0a0a0; border: none; padding: 6px 16px; border-radius: 4px; } QPushButton:hover { color: #e0e0e0; }")
         cancel_btn.clicked.connect(dialog.reject)
-        ok_btn = QtWidgets.QPushButton("确定")
+        ok_btn = QtWidgets.QPushButton(t("common.ok"))
         ok_btn.setStyleSheet("QPushButton { background-color: #5294e2; color: #fff; border: none; padding: 6px 16px; border-radius: 4px; } QPushButton:hover { background-color: #6ab0ff; }")
         ok_btn.clicked.connect(dialog.accept)
         btn_layout.addWidget(cancel_btn)
@@ -797,12 +803,12 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         display_name = cat.get("name_cn", cat_id)
 
         # \u2500\u2500 \u7b2c\u4e00\u7ea7\u786e\u8ba4\uff1a\u7b80\u5355\u8be2\u95ee \u2500\u2500
-        msg1 = f"\u786e\u5b9a\u8981\u5220\u9664\u5206\u7c7b \"{display_name}\" \u5417\uff1f"
+        msg1 = t("category_tree.delete_confirm_1", name=display_name)
         if child_count > 0:
-            msg1 += f"\n\u5b83\u5305\u542b {child_count} \u4e2a\u5b50\u5206\u7c7b\uff0c\u5b50\u5206\u7c7b\u4e5f\u4f1a\u88ab\u5220\u9664\u3002"
-        msg1 += "\n\u26a0\ufe0f \u8be5\u5206\u7c7b\u4e0b\u7684\u8d44\u4ea7\u5c06\u88ab\u4e00\u5e76\u5220\u9664\uff01"
+            msg1 += t("category_tree.delete_confirm_children", count=child_count)
+        msg1 += t("category_tree.delete_confirm_assets")
         reply1 = QtWidgets.QMessageBox.question(
-            self, "\u5220\u9664\u5206\u7c7b", msg1,
+            self, t("category_tree.delete_category"), msg1,
             QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
         )
         if reply1 != QtWidgets.QMessageBox.StandardButton.Yes:
@@ -810,14 +816,14 @@ class CategoryTreeWidget(QtWidgets.QWidget):
 
         # \u2500\u2500 \u7b2c\u4e8c\u7ea7\u786e\u8ba4\uff1a\u5f3a\u8b66\u544a\uff0c\u9ed8\u8ba4\u6309\u94ae\u4e3a No \u2500\u2500
         asset_count = cat.get("material_count", 0)
-        msg2 = f"\u26a0\ufe0f  \u6b64\u64cd\u4f5c\u4e0d\u53ef\u64a4\u9500\uff01\n\n\u5c06\u6c38\u4e45\u5220\u9664\u5206\u7c7b \"{display_name}\""
+        msg2 = t("category_tree.delete_warning_1", name=display_name)
         if child_count > 0:
-            msg2 += f" \u53ca\u5176 {child_count} \u4e2a\u5b50\u5206\u7c7b"
+            msg2 += t("category_tree.delete_warning_children", count=child_count)
         if asset_count > 0:
-            msg2 += f"\n\n\u8be5\u5206\u7c7b\u4e0b\u6709 {asset_count} \u4e2a\u8d44\u4ea7\uff0c\u5b83\u4eec\u5c06\u88ab\u4e00\u5e76\u5220\u9664\uff01"
-        msg2 += "\n\n\u786e\u8ba4\u7ee7\u7eed\u5220\u9664\uff1f"
+            msg2 += t("category_tree.delete_warning_assets", count=asset_count)
+        msg2 += t("category_tree.delete_warning_confirm")
         reply2 = QtWidgets.QMessageBox.warning(
-            self, "\u26a0\ufe0f \u6700\u7ec8\u786e\u8ba4\u5220\u9664", msg2,
+            self, t("category_tree.delete_final_confirm"), msg2,
             QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
             QtWidgets.QMessageBox.StandardButton.No  # \u9ed8\u8ba4\u805a\u7126 No \u9632\u6b62\u8bef\u64cd\u4f5c
         )
@@ -842,13 +848,13 @@ class CategoryTreeWidget(QtWidgets.QWidget):
     def _on_move_category(self, cat_id):
         """移动到 → 选择新父级"""
         # 收集所有分类作为目标
-        targets = [("根目录", "all")]
+        targets = [(t("common.root_directory"), "all")]
         for c in self._categories:
             if c["id"] != cat_id:
                 targets.append((c.get("name_cn", c["id"]), c["id"]))
-        names = [t[0] for t in targets]
+        names = [t0[0] for t0 in targets]  # 用 t0 避免覆盖 i18n 函数 t
         name, ok = QtWidgets.QInputDialog.getItem(
-            self, f"\u79fb\u52a8 {cat_id} \u5230", "\u9009\u62e9\u76ee\u6807\u5206\u7c7b:",
+            self, t("category_tree.move_to", cat_id=cat_id), t("category_tree.select_target_category"),
             names, 0, False
         )
         if ok and name:

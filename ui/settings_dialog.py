@@ -7,6 +7,14 @@ from ..utils.json_handler import JSONHandler
 from ..utils.settings import apply_font_size_to_widget
 from .name_conflict_dialog import NameConflictDialog
 
+try:
+    from ..utils.i18n import t, help_path as _i18n_help_path
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+    def _i18n_help_path(p):
+        return p
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
@@ -44,7 +52,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def __init__(self, parent=None, current_settings=None, material_manager=None):
         super(SettingsDialog, self).__init__(parent)
-        self.setWindowTitle("设置")
+        self.setWindowTitle(t("dialog.settings.title"))
         self.setMinimumSize(960, 750)
         self.setStyleSheet("background-color: #2a2a2a;")
 
@@ -98,14 +106,14 @@ class SettingsDialog(QtWidgets.QDialog):
             QTabBar::tab:hover { color: #d0d0d0; }
         """)
 
-        self._tab_widget.addTab(self._create_general_tab(), "常规")
-        self._tab_widget.addTab(self._create_export_defaults_tab(), "导出默认值")
-        self._tab_widget.addTab(self._create_context_menu_tab(), "右键菜单")
-        self._tab_widget.addTab(self._create_formats_tab(), "支持格式")
-        self._tab_widget.addTab(self._create_texture_suffixes_tab(), "贴图后缀")
-        self._tab_widget.addTab(self._create_tags_tab(), "常用标签")
-        self._tab_widget.addTab(self._create_subs_tab(), "子库与分类")
-        self._tab_widget.addTab(self._create_advanced_tab(), "高级配置")
+        self._tab_widget.addTab(self._create_general_tab(), t("tab.general"))
+        self._tab_widget.addTab(self._create_export_defaults_tab(), t("tab.export_defaults"))
+        self._tab_widget.addTab(self._create_context_menu_tab(), t("tab.context_menu"))
+        self._tab_widget.addTab(self._create_formats_tab(), t("tab.supported_formats"))
+        self._tab_widget.addTab(self._create_texture_suffixes_tab(), t("tab.texture_suffixes"))
+        self._tab_widget.addTab(self._create_tags_tab(), t("tab.common_tags"))
+        self._tab_widget.addTab(self._create_subs_tab(), t("tab.sub_libraries"))
+        self._tab_widget.addTab(self._create_advanced_tab(), t("tab.advanced"))
 
         # 将标签页放入滚动区域
         scroll = QtWidgets.QScrollArea()
@@ -115,7 +123,7 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.addWidget(scroll, 1)
 
         # 全局解锁复选框（默认锁定，常规标签页除外）
-        self._unlock_cb = QtWidgets.QCheckBox("解锁全部配置")
+        self._unlock_cb = QtWidgets.QCheckBox(t("label.unlock_all"))
         self._unlock_cb.setStyleSheet("QCheckBox { color:#909090; font-size:11px; }")
         self._unlock_cb.stateChanged.connect(self._on_unlock_changed)
         layout.addWidget(self._unlock_cb)
@@ -126,7 +134,7 @@ class SettingsDialog(QtWidgets.QDialog):
         # 按钮
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.setSpacing(10)
-        restore_btn = QtWidgets.QPushButton("恢复默认设置")
+        restore_btn = QtWidgets.QPushButton(t("common.restore_default"))
         restore_btn.setStyleSheet(
             "QPushButton { background-color: transparent; color: #909090; border: 1px solid #4a4a4a; "
             "padding: 8px 16px; font-size: 13px; border-radius: 4px; }"
@@ -138,7 +146,7 @@ class SettingsDialog(QtWidgets.QDialog):
         help_btn = QtWidgets.QPushButton("?")
         help_btn.setFixedWidth(32)
         help_btn.setMinimumHeight(32)
-        help_btn.setToolTip("设置帮助")
+        help_btn.setToolTip(t("tooltip.settings_help"))
         help_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #ffa502; border: none; "
             "font-size: 16px; font-weight: bold; border-radius: 4px; }"
@@ -149,7 +157,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         btn_layout.addStretch()
 
-        cancel_btn = QtWidgets.QPushButton("取消")
+        cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         cancel_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #a0a0a0; border: none; "
             "padding: 9px 24px; font-size: 13px; border-radius: 4px; }"
@@ -158,7 +166,7 @@ class SettingsDialog(QtWidgets.QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        apply_btn = QtWidgets.QPushButton("应用")
+        apply_btn = QtWidgets.QPushButton(t("common.apply"))
         apply_btn.setStyleSheet(
             "QPushButton { background-color: #2d6a4f; color: #e0e0e0; border: none; "
             "padding: 9px 24px; font-size: 13px; border-radius: 4px; }"
@@ -167,7 +175,7 @@ class SettingsDialog(QtWidgets.QDialog):
         apply_btn.clicked.connect(self._on_apply)
         btn_layout.addWidget(apply_btn)
 
-        ok_btn = QtWidgets.QPushButton("确定")
+        ok_btn = QtWidgets.QPushButton(t("common.ok"))
         ok_btn.setStyleSheet(
             "QPushButton { background-color: #5294e2; color: #ffffff; border: none; "
             "padding: 9px 24px; font-size: 13px; border-radius: 4px; }"
@@ -185,10 +193,10 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
 
-        g1 = self._group("字体大小")
+        g1 = self._group(t("group.font_size"))
         g1l = QtWidgets.QVBoxLayout(g1)
         fr = QtWidgets.QHBoxLayout()
-        fr.addWidget(self._lb("全局字体大小:"))
+        fr.addWidget(self._lb(t("label.global_font_size:")))
         self._font_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self._font_slider.setRange(10, 24)
         self._font_slider.setValue(self._settings.get("font_size", 13))
@@ -201,10 +209,10 @@ class SettingsDialog(QtWidgets.QDialog):
         g1l.addLayout(fr)
         layout.addWidget(g1)
 
-        g2 = self._group("默认视图")
+        g2 = self._group(t("group.default_view"))
         g2l = QtWidgets.QHBoxLayout(g2)
-        self._view_icon = QtWidgets.QRadioButton("图标网格")
-        self._view_list = QtWidgets.QRadioButton("列表视图")
+        self._view_icon = QtWidgets.QRadioButton(t("radio.view_icon"))
+        self._view_list = QtWidgets.QRadioButton(t("radio.view_list"))
         dv = self._settings.get("default_view", "icon")
         self._view_icon.setChecked(dv == "icon")
         self._view_list.setChecked(dv == "list")
@@ -215,10 +223,31 @@ class SettingsDialog(QtWidgets.QDialog):
         g2l.addStretch()
         layout.addWidget(g2)
 
-        g3 = self._group("缩略图")
+        # ── 界面语言 ──
+        g_lang = self._group(t("group.language"))
+        g_lang_l = QtWidgets.QHBoxLayout(g_lang)
+        g_lang_l.addWidget(self._lb(t("label.language:")))
+        self._lang_combo = QtWidgets.QComboBox()
+        self._lang_combo.addItem("中文", "zh")
+        self._lang_combo.addItem("English", "en")
+        self._lang_combo.setStyleSheet(
+            "QComboBox { background:#2a2a2a; color:#d0d0d0; border:1px solid #4a4a4a; border-radius:4px; "
+            "padding:4px 10px; font-size:13px; }"
+            "QComboBox::drop-down { border:none; }"
+            "QComboBox QAbstractItemView { background:#2a2a2a; color:#d0d0d0; "
+            "selection-background-color:#2a4a6a; }")
+        current = self._settings.get("language", "zh")
+        _idx = self._lang_combo.findData(current)
+        if _idx >= 0:
+            self._lang_combo.setCurrentIndex(_idx)
+        g_lang_l.addWidget(self._lang_combo)
+        g_lang_l.addStretch()
+        layout.addWidget(g_lang)
+
+        g3 = self._group(t("group.thumbnails"))
         g3l = QtWidgets.QVBoxLayout(g3)
         tr = QtWidgets.QHBoxLayout()
-        tr.addWidget(self._lb("默认缩略图大小:"))
+        tr.addWidget(self._lb(t("label.default_thumb_size:")))
         self._thumb_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self._thumb_slider.setRange(100, 1024)
         self._thumb_slider.setValue(self._settings.get("thumb_size", 180))
@@ -230,7 +259,7 @@ class SettingsDialog(QtWidgets.QDialog):
         g3l.addLayout(tr)
         layout.addWidget(g3)
 
-        g4 = self._group("资产库管理")
+        g4 = self._group(t("group.library_management"))
         g4l = QtWidgets.QVBoxLayout(g4)
 
         # ── 库列表 ──
@@ -249,22 +278,22 @@ class SettingsDialog(QtWidgets.QDialog):
                      "padding:5px 14px; font-size:12px; border-radius:4px; }"
                      "QPushButton:hover { background:#4a4a4a; }")
 
-        add_btn = QtWidgets.QPushButton("+ 添加资产库")
+        add_btn = QtWidgets.QPushButton(t("btn.add_library"))
         add_btn.setStyleSheet(btn_style)
         add_btn.clicked.connect(self._on_add_library)
         btn_row.addWidget(add_btn)
 
-        create_btn = QtWidgets.QPushButton("+ 创建资产库")
+        create_btn = QtWidgets.QPushButton(t("btn.create_library"))
         create_btn.setStyleSheet(btn_style)
         create_btn.clicked.connect(self._on_create_library)
         btn_row.addWidget(create_btn)
 
-        rm_btn = QtWidgets.QPushButton("- 删除选中")
+        rm_btn = QtWidgets.QPushButton(t("btn.remove_selected"))
         rm_btn.setStyleSheet(btn_style)
         rm_btn.clicked.connect(self._on_remove_library)
         btn_row.addWidget(rm_btn)
 
-        set_default_btn = QtWidgets.QPushButton("☆ 设为默认")
+        set_default_btn = QtWidgets.QPushButton(t("btn.set_default"))
         set_default_btn.setStyleSheet(btn_style)
         set_default_btn.clicked.connect(self._on_set_default_library)
         btn_row.addWidget(set_default_btn)
@@ -275,16 +304,16 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.addWidget(g4)
 
         # ── 同名冲突处理 ──
-        g5 = self._group("同名冲突处理")
+        g5 = self._group(t("group.name_conflict"))
         g5l = QtWidgets.QVBoxLayout(g5)
         g5l.setSpacing(6)
 
         policy = self._config.get("name_conflict_policy", {})
         current_mode = policy.get("mode", NameConflictDialog.MODE_PROMPT)
 
-        self._conflict_prompt_rb = QtWidgets.QRadioButton("每次询问（导出时遇到同名资产询问如何处理）")
-        self._conflict_auto_rb = QtWidgets.QRadioButton("自动重命名（追加 _001, _002 …）")
-        self._conflict_manual_rb = QtWidgets.QRadioButton("手动输入（弹出对话框手动输入新名称）")
+        self._conflict_prompt_rb = QtWidgets.QRadioButton(t("radio.conflict_prompt"))
+        self._conflict_auto_rb = QtWidgets.QRadioButton(t("radio.conflict_auto"))
+        self._conflict_manual_rb = QtWidgets.QRadioButton(t("radio.conflict_manual"))
 
         for rb in [self._conflict_prompt_rb, self._conflict_auto_rb, self._conflict_manual_rb]:
             rb.setStyleSheet("QRadioButton { color: #d0d0d0; font-size: 13px; }")
@@ -299,11 +328,11 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.addWidget(g5)
 
         # ── 贴图导入策略 ──
-        g6 = self._group("贴图导入策略")
+        g6 = self._group(t("group.texture_import_policy"))
         g6l = QtWidgets.QVBoxLayout(g6)
-        self._tex_policy_copy = QtWidgets.QRadioButton("拷贝贴图到项目 — 将贴图拷贝到工程 sourceimages/ 目录")
-        self._tex_policy_asset = QtWidgets.QRadioButton("当前资产目录 — 不拷贝，直接读取 .zasset 内的贴图")
-        self._tex_policy_source = QtWidgets.QRadioButton("源文件目录 — 不修改贴图路径，保持导出时的原始路径")
+        self._tex_policy_copy = QtWidgets.QRadioButton(t("radio.tex_policy_copy"))
+        self._tex_policy_asset = QtWidgets.QRadioButton(t("radio.tex_policy_asset"))
+        self._tex_policy_source = QtWidgets.QRadioButton(t("radio.tex_policy_source"))
         g6l.addWidget(self._tex_policy_copy)
         g6l.addWidget(self._tex_policy_asset)
         g6l.addWidget(self._tex_policy_source)
@@ -316,14 +345,14 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.addWidget(g6)
 
         # ── 依赖文件导入策略 ──
-        g7 = self._group("依赖文件导入策略")
+        g7 = self._group(t("group.dep_import_policy"))
         g7l = QtWidgets.QVBoxLayout(g7)
         self._dep_policy_copy = QtWidgets.QRadioButton(
-            "拷贝到项目 — 将依赖文件拷贝到工程对应目录")
+            t("radio.dep_policy_copy"))
         self._dep_policy_asset = QtWidgets.QRadioButton(
-            "当前资产目录 — 不拷贝，直接读取 .zasset 内的依赖文件")
+            t("radio.dep_policy_asset"))
         self._dep_policy_source = QtWidgets.QRadioButton(
-            "源文件目录 — 不修改依赖文件路径，保持导出时的原始路径")
+            t("radio.dep_policy_source"))
         g7l.addWidget(self._dep_policy_copy)
         g7l.addWidget(self._dep_policy_asset)
         g7l.addWidget(self._dep_policy_source)
@@ -343,19 +372,19 @@ class SettingsDialog(QtWidgets.QDialog):
     _EXPORT_ASSET_TYPES = ["materials", "models", "lights", "textures", "scenes", "hdr", "ani"]
 
     _EXPORT_FIELDS = [
-        ("zmetal", "材质节点 (.zmetal)", "material"),
-        ("zmetal_merge", "合并材质 (.zmetal_merge)", "material"),
-        ("mcm", "材质→模型映射 (.mcm)", "material"),
+        ("zmetal", t("export.label.zmetal"), "material"),
+        ("zmetal_merge", t("export.label.zmetal_merge"), "material"),
+        ("mcm", t("export.label.mcm"), "material"),
         ("ma", "Maya ASCII (.ma)", "geometry"),
         ("mb", "Maya Binary (.mb)", "geometry"),
         ("fbx", "FBX (.fbx)", "geometry"),
         ("obj", "OBJ (.obj)", "geometry"),
         ("usd", "USD (.usd)", "geometry"),
-        ("abc", "Alembic (.abc)", "cache"),
-        ("arnold", "Arnold (.ass)", "proxy"),
-        ("vray", "V-Ray (.vrscene)", "proxy"),
-        ("redshift", "Redshift (.rs)", "proxy"),
-        ("vrmesh", "V-Ray 代理 (.vrmesh)", "proxy"),
+        ("abc", t("export.label.abc"), "cache"),
+        ("arnold", t("export.label.arnold"), "proxy"),
+        ("vray", t("export.label.vray"), "proxy"),
+        ("redshift", t("export.label.redshift"), "proxy"),
+        ("vrmesh", t("export.label.vrmesh"), "proxy"),
     ]
 
     def _create_export_defaults_tab(self):
@@ -377,7 +406,7 @@ class SettingsDialog(QtWidgets.QDialog):
         right.setSpacing(8)
 
         # 材质格式
-        mat_group = self._group("材质格式")
+        mat_group = self._group(t("group.material_formats"))
         mat_layout = QtWidgets.QVBoxLayout(mat_group)
         self._export_cbs = {}
         for key, label, category in self._EXPORT_FIELDS:
@@ -389,7 +418,7 @@ class SettingsDialog(QtWidgets.QDialog):
         right.addWidget(mat_group)
 
         # 几何体格式
-        geo_group = self._group("几何体格式")
+        geo_group = self._group(t("group.geometry_formats"))
         geo_layout = QtWidgets.QVBoxLayout(geo_group)
         for key, label, category in self._EXPORT_FIELDS:
             if category == "geometry":
@@ -400,7 +429,7 @@ class SettingsDialog(QtWidgets.QDialog):
         right.addWidget(geo_group)
 
         # 缓存与代理格式
-        other_group = self._group("缓存与代理")
+        other_group = self._group(t("group.cache_proxy"))
         other_layout = QtWidgets.QVBoxLayout(other_group)
         for key, label, category in self._EXPORT_FIELDS:
             if category in ("cache", "proxy"):
@@ -411,23 +440,23 @@ class SettingsDialog(QtWidgets.QDialog):
         right.addWidget(other_group)
 
         # 收集关联文件
-        collect_group = self._group("收集关联文件")
+        collect_group = self._group(t("group.collect_associated"))
         collect_layout = QtWidgets.QVBoxLayout(collect_group)
-        cb_collect = QtWidgets.QCheckBox("收集场景中已挂载的缓存/代理/引用文件")
+        cb_collect = QtWidgets.QCheckBox(t("checkbox.collect_associated"))
         cb_collect.setStyleSheet("QCheckBox { color:#d0d0d0; font-size:13px; }")
         collect_layout.addWidget(cb_collect)
         self._export_cbs["collect_associated"] = cb_collect
 
-        cb_textures = QtWidgets.QCheckBox("贴图 textures/")
+        cb_textures = QtWidgets.QCheckBox(t("checkbox.collect_textures"))
         cb_textures.setStyleSheet("QCheckBox { color:#d0d0d0; font-size:13px; }")
         collect_layout.addWidget(cb_textures)
         self._export_cbs["textures"] = cb_textures
         right.addWidget(collect_group)
 
         # 仅导出材质
-        mat_only_group = self._group("导出选项")
+        mat_only_group = self._group(t("group.export_options"))
         mat_only_layout = QtWidgets.QVBoxLayout(mat_only_group)
-        cb_mat_only = QtWidgets.QCheckBox("仅导出材质（跳过几何体/代理）")
+        cb_mat_only = QtWidgets.QCheckBox(t("checkbox.export_material_only"))
         cb_mat_only.setStyleSheet("QCheckBox { color:#d0d0d0; font-size:13px; }")
         mat_only_layout.addWidget(cb_mat_only)
         self._export_cbs["material_only"] = cb_mat_only
@@ -453,73 +482,73 @@ class SettingsDialog(QtWidgets.QDialog):
     # ── 右键菜单标签页 ────────────────────────────
 
     _CONTEXT_MENU_ITEMS = [
-        ("import", "导入"),
-        ("import_geometry", "导入几何体"),
-        ("add_reference", "添加引用"),
-        ("favorites", "收藏夹"),
-        ("select_all", "全选"),
-        ("duplicate", "复制"),
-        ("open_folder", "打开文件夹"),
-        ("move_to", "移动到"),
-        ("copy_to", "复制到"),
-        ("edit", "编辑"),
-        ("create_asset", "创建资产"),
-        ("update_thumbnail", "更新缩略图"),
-        ("update_asset", "更新资产"),
-        ("delete", "删除"),
-        ("preview_node", "预览节点"),
-        ("ai_analysis", "AI 分析缩略图"),
-        ("apply_material", "应用材质到选中对象"),
-        ("create_material", "创建材质"),
-        ("import_texture", "导入贴图"),
-        ("assign_texture", "指定贴图到材质"),
-        ("apply_light", "应用灯光参数到选中灯光"),
-        ("create_dome_light", "创建环境光"),
+        ("import", t("ctx_menu.import")),
+        ("import_geometry", t("ctx_menu.import_geometry")),
+        ("add_reference", t("ctx_menu.add_reference")),
+        ("favorites", t("ctx_menu.favorites")),
+        ("select_all", t("ctx_menu.select_all")),
+        ("duplicate", t("ctx_menu.duplicate")),
+        ("open_folder", t("ctx_menu.open_folder")),
+        ("move_to", t("ctx_menu.move_to")),
+        ("copy_to", t("ctx_menu.copy_to")),
+        ("edit", t("ctx_menu.edit")),
+        ("create_asset", t("ctx_menu.create_asset")),
+        ("update_thumbnail", t("ctx_menu.update_thumbnail")),
+        ("update_asset", t("ctx_menu.update_asset")),
+        ("delete", t("ctx_menu.delete")),
+        ("preview_node", t("ctx_menu.preview_node")),
+        ("ai_analysis", t("ctx_menu.ai_analysis")),
+        ("apply_material", t("ctx_menu.apply_material")),
+        ("create_material", t("ctx_menu.create_material")),
+        ("import_texture", t("ctx_menu.import_texture")),
+        ("assign_texture", t("ctx_menu.assign_texture")),
+        ("apply_light", t("ctx_menu.apply_light")),
+        ("create_dome_light", t("ctx_menu.create_dome_light")),
     ]
 
     # 双击命令 — 各子库可选命令列表（仅导入/创建资产相关）
     _DOUBLE_CLICK_ITEMS = {
         "materials": [
-            ("none", "无操作"),
-            ("import", "导入"),
-            ("apply_material", "应用材质到选中对象"),
+            ("none", t("ctx_menu.none")),
+            ("import", t("ctx_menu.import")),
+            ("apply_material", t("ctx_menu.apply_material")),
         ],
         "models": [
-            ("none", "无操作"),
-            ("import", "导入"),
+            ("none", t("ctx_menu.none")),
+            ("import", t("ctx_menu.import")),
         ],
         "lights": [
-            ("none", "无操作"),
-            ("import", "导入"),
-            ("apply_light", "应用灯光参数到选中灯光"),
+            ("none", t("ctx_menu.none")),
+            ("import", t("ctx_menu.import")),
+            ("apply_light", t("ctx_menu.apply_light")),
         ],
         "textures": [
-            ("none", "无操作"),
-            ("import", "导入"),
-            ("import_texture", "导入贴图"),
-            ("create_material", "创建材质"),
-            ("apply_material", "应用材质到选中对象"),
-            ("assign_texture", "指定贴图到材质"),
+            ("none", t("ctx_menu.none")),
+            ("import", t("ctx_menu.import")),
+            ("import_texture", t("ctx_menu.import_texture")),
+            ("create_material", t("ctx_menu.create_material")),
+            ("apply_material", t("ctx_menu.apply_material")),
+            ("assign_texture", t("ctx_menu.assign_texture")),
         ],
         "hdr": [
-            ("none", "无操作"),
-            ("import", "导入"),
-            ("create_dome_light", "创建环境光"),
-            ("assign_texture", "指定贴图"),
+            ("none", t("ctx_menu.none")),
+            ("import", t("ctx_menu.import")),
+            ("create_dome_light", t("ctx_menu.create_dome_light")),
+            ("assign_texture", t("ctx_menu.assign_texture_only")),
         ],
         "scenes": [
-            ("none", "无操作"),
-            ("import", "导入"),
+            ("none", t("ctx_menu.none")),
+            ("import", t("ctx_menu.import")),
         ],
         "ani": [
-            ("none", "无操作"),
-            ("import", "导入"),
+            ("none", t("ctx_menu.none")),
+            ("import", t("ctx_menu.import")),
         ],
     }
     # 自定义库通用双击命令
     _DOUBLE_CLICK_ITEMS_GENERIC = [
-        ("none", "无操作"),
-        ("import", "导入"),
+        ("none", t("ctx_menu.none")),
+        ("import", t("ctx_menu.import")),
     ]
 
     # 双击命令的子选项定义 — 有二级菜单的命令映射其可选子项
@@ -528,10 +557,10 @@ class SettingsDialog(QtWidgets.QDialog):
             "ma", "mb", "fbx", "obj", "usd", "abc",
             "ass", "vrscene", "rs", "vrmesh",
         ],
-        "import_texture": ["全部"],
+        "import_texture": [t("option.all")],
         # create_material 和 create_dome_light 在运行时从 config.json 和 HDR_ligt/ 动态读取
     }
-    # import_texture 固定为"导入全部"
+    # import_texture 固定为 "导入全部"
 
     def _create_context_menu_tab(self):
         w = QtWidgets.QWidget()
@@ -557,7 +586,7 @@ class SettingsDialog(QtWidgets.QDialog):
         right.setSpacing(8)
 
         # ── 右键菜单区域 ──
-        ctx_tip = QtWidgets.QLabel("勾选要在右键菜单中显示的项目，取消勾选则隐藏")
+        ctx_tip = QtWidgets.QLabel(t("label.ctx_tip"))
         ctx_tip.setStyleSheet("color:#707070;font-size:11px;")
         right.addWidget(ctx_tip)
 
@@ -576,7 +605,7 @@ class SettingsDialog(QtWidgets.QDialog):
         right.addWidget(sep)
 
         # ── 双击命令区域 ──
-        dc_tip = QtWidgets.QLabel("选择双击缩略图时要执行的命令（单选）")
+        dc_tip = QtWidgets.QLabel(t("label.dc_tip"))
         dc_tip.setStyleSheet("color:#e0a030;font-size:11px;font-weight:bold;")
         right.addWidget(dc_tip)
 
@@ -591,7 +620,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self._dc_option_widget = QtWidgets.QWidget()
         opt_layout = QtWidgets.QHBoxLayout(self._dc_option_widget)
         opt_layout.setContentsMargins(0, 0, 0, 0)
-        opt_label = QtWidgets.QLabel("子选项: ")
+        opt_label = QtWidgets.QLabel(t("label.sub_option:"))
         opt_label.setStyleSheet("color:#b0b0b0;font-size:12px;")
         self._dc_option_combo = QtWidgets.QComboBox()
         self._dc_option_combo.setStyleSheet(
@@ -818,17 +847,8 @@ class SettingsDialog(QtWidgets.QDialog):
         """全局解锁时弹出警告"""
         if state:
             reply = QtWidgets.QMessageBox.warning(
-                self, "⚠ 配置修改警告",
-                "除非你知道自己在改什么，否则不要修改！\n\n"
-                "以下标签页将被解锁：\n"
-                "• 导出默认值 — 每种资产类型的导出格式\n"
-                "• 右键菜单 — 各子库右键菜单项的显示/隐藏\n"
-                "• 支持格式 — 资产库可识别的文件扩展名\n"
-                "• 贴图后缀 — 导入时识别贴图通道类型的别名\n"
-                "• 常用标签 — 各子库的预置标签列表\n"
-                "• 子库与分类 — 子库及默认子分类配置\n"
-                "• 高级配置 — 几何体/图像扩展名和材质节点类型\n\n"
-                "错误的配置可能导致资产库功能异常。",
+                self, t("msg.unlock_warning_title"),
+                t("msg.unlock_warning_text"),
                 QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
                 QtWidgets.QMessageBox.StandardButton.No,
             )
@@ -879,7 +899,7 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        tip = QtWidgets.QLabel("每行一个文件扩展名，修改后请点击「应用」")
+        tip = QtWidgets.QLabel(t("label.formats_tip"))
         tip.setStyleSheet("color:#707070;font-size:11px;")
         layout.addWidget(tip)
 
@@ -917,13 +937,13 @@ class SettingsDialog(QtWidgets.QDialog):
             "padding:8px; color:#e0e0e0; font-size:12px; font-family:monospace; }")
         right.addWidget(self._tex_aliases_edit, 1)
 
-        tip = QtWidgets.QLabel("每行一个贴图名，对应 JSON 中该类型的 aliases")
+        tip = QtWidgets.QLabel(t("label.tex_suffixes_tip"))
         tip.setStyleSheet("color:#707070;font-size:11px;")
         right.addWidget(tip)
 
         # 恢复默认按钮
         btn_row = QtWidgets.QHBoxLayout()
-        default_btn = QtWidgets.QPushButton("恢复默认")
+        default_btn = QtWidgets.QPushButton(t("common.restore_default"))
         default_btn.setStyleSheet(
             "QPushButton { background:transparent; color:#5294e2; border:1px solid #5294e2; "
             "padding:6px 14px; font-size:12px; border-radius:4px; }"
@@ -1028,7 +1048,7 @@ class SettingsDialog(QtWidgets.QDialog):
             "padding:8px; color:#e0e0e0; font-size:12px; }")
         right.addWidget(self._tags_edit, 1)
 
-        tag_tip = QtWidgets.QLabel("每行一个标签，用换行分隔")
+        tag_tip = QtWidgets.QLabel(t("label.tags_tip"))
         tag_tip.setStyleSheet("color:#707070;font-size:11px;")
         right.addWidget(tag_tip)
         layout.addLayout(right, 1)
@@ -1073,7 +1093,7 @@ class SettingsDialog(QtWidgets.QDialog):
         right.setSpacing(8)
 
         # 读取当前分类文件夹按钮
-        sync_btn = QtWidgets.QPushButton("读取当前分类文件夹")
+        sync_btn = QtWidgets.QPushButton(t("btn.sync_categories"))
         sync_btn.setStyleSheet(
             "QPushButton { background:#4a8c4a; color:#fff; border:none; padding:6px 12px; "
             "border-radius:4px; font-size:12px; }"
@@ -1083,7 +1103,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # 子库ID
         id_row = QtWidgets.QHBoxLayout()
-        id_label = QtWidgets.QLabel("子库ID:")
+        id_label = QtWidgets.QLabel(t("label.sub_id:"))
         id_label.setStyleSheet("color:#909090;font-size:12px;")
         id_row.addWidget(id_label)
         self._sub_id_edit = QtWidgets.QLineEdit()
@@ -1095,7 +1115,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # 显示名
         name_row = QtWidgets.QHBoxLayout()
-        name_label = QtWidgets.QLabel("显示名:")
+        name_label = QtWidgets.QLabel(t("label.display_name:"))
         name_label.setStyleSheet("color:#909090;font-size:12px;")
         name_row.addWidget(name_label)
         self._sub_name_edit = QtWidgets.QLineEdit()
@@ -1106,7 +1126,7 @@ class SettingsDialog(QtWidgets.QDialog):
         right.addLayout(name_row)
 
         # 默认分类
-        cat_label = QtWidgets.QLabel("默认分类列表（每行一个，格式: id 名称）")
+        cat_label = QtWidgets.QLabel(t("label.default_categories"))
         cat_label.setStyleSheet("color:#707070;font-size:11px;")
         right.addWidget(cat_label)
 
@@ -1167,7 +1187,7 @@ class SettingsDialog(QtWidgets.QDialog):
                 # 如果 ID 变更，重命名字典 key
                 if new_key and new_key != prev_key:
                     if new_key in self._subs_data:
-                        QtWidgets.QMessageBox.warning(self, "提示", f"子库ID「{new_key}」已存在")
+                        QtWidgets.QMessageBox.warning(self, t("msg.notice"), t("msg.sub_id_exists", id=new_key))
                     else:
                         self._subs_data[new_key] = self._subs_data.pop(prev_key)
                         item = self._sub_lib_list.item(prev_row)
@@ -1185,18 +1205,16 @@ class SettingsDialog(QtWidgets.QDialog):
     def _on_sync_categories(self):
         """从当前库的实际文件夹结构同步分类到设置"""
         if not self._material_manager:
-            QtWidgets.QMessageBox.warning(self, "提示", "无法获取资产管理器")
+            QtWidgets.QMessageBox.warning(self, t("msg.notice"), t("msg.no_asset_manager"))
             return
         library_path = self._material_manager.get_library_path()
         if not library_path:
-            QtWidgets.QMessageBox.warning(self, "提示", "请先加载资产库")
+            QtWidgets.QMessageBox.warning(self, t("msg.notice"), t("msg.load_library_first"))
             return
 
         reply = QtWidgets.QMessageBox.question(
-            self, "同步确认",
-            "将从当前资产库的实际文件夹结构读取分类，并覆盖设置中的「默认分类列表」。\n\n"
-            "此操作不会删除或修改磁盘上的任何文件夹，仅更新配置文件。\n\n"
-            "是否继续？",
+            self, t("msg.sync_confirm_title"),
+            t("msg.sync_confirm_text"),
             QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
             QtWidgets.QMessageBox.StandardButton.No,
         )
@@ -1209,7 +1227,7 @@ class SettingsDialog(QtWidgets.QDialog):
         try:
             categories = self._material_manager.get_category_tree()
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "提示", f"读取分类失败: {str(e)}")
+            QtWidgets.QMessageBox.warning(self, t("msg.notice"), t("msg.read_categories_failed", error=str(e)))
             return
 
         for cat in categories:
@@ -1236,14 +1254,14 @@ class SettingsDialog(QtWidgets.QDialog):
         if self._sub_lib_list.count() > 0:
             self._sub_lib_list.setCurrentRow(0)
 
-        QtWidgets.QMessageBox.information(self, "成功", "分类已从当前资产库同步")
+        QtWidgets.QMessageBox.information(self, t("msg.success"), t("msg.categories_synced"))
 
     # ── 高级配置标签页 ────────────────────────────
 
     _ADV_KEYS = [
-        ("geometry_extensions", "几何体扩展名（导入时识别几何体文件）"),
-        ("image_extensions", "图像/贴图扩展名（导入时识别贴图文件）"),
-        ("material_node_types", "材质节点类型（导出时识别材质节点）"),
+        ("geometry_extensions", t("adv.label.geometry_extensions")),
+        ("image_extensions", t("adv.label.image_extensions")),
+        ("material_node_types", t("adv.label.material_node_types")),
     ]
 
     def _create_advanced_tab(self):
@@ -1264,7 +1282,7 @@ class SettingsDialog(QtWidgets.QDialog):
         right = QtWidgets.QVBoxLayout()
         right.setSpacing(6)
 
-        tip = QtWidgets.QLabel("每行一个，修改后请点击「应用」")
+        tip = QtWidgets.QLabel(t("label.adv_tip"))
         tip.setStyleSheet("color:#707070;font-size:11px;")
         right.addWidget(tip)
 
@@ -1335,7 +1353,7 @@ class SettingsDialog(QtWidgets.QDialog):
         for i, lib in enumerate(libs):
             name = lib.get("name", os.path.basename(lib["path"]))
             path = lib["path"]
-            suffix = "  [默认]" if name == default_name or i == 0 else ""
+            suffix = f"  {t('label.default_suffix')}" if name == default_name or i == 0 else ""
             self._lib_list.addItem(f"{name} — {path}{suffix}")
             if name == default_name:
                 default_idx = i
@@ -1345,11 +1363,11 @@ class SettingsDialog(QtWidgets.QDialog):
     def _on_add_library(self):
         """添加新资产库"""
         path = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "选择资产库目录", os.path.expanduser("~"))
+            self, t("filedialog.select_library_dir"), os.path.expanduser("~"))
         if not path:
             return
         name, ok = QtWidgets.QInputDialog.getText(
-            self, "资产库名称", "请输入该资产库的显示名称:", text=os.path.basename(path))
+            self, t("inputdlg.library_name"), t("inputdlg.library_display_name"), text=os.path.basename(path))
         if not ok or not name.strip():
             name = os.path.basename(path)
         self._lib_data.append({"name": name.strip(), "path": path})
@@ -1359,22 +1377,22 @@ class SettingsDialog(QtWidgets.QDialog):
         """创建新的标准资产库"""
         # 选择父目录
         parent_dir = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "选择资产库创建位置", os.path.expanduser("~"))
+            self, t("filedialog.select_create_location"), os.path.expanduser("~"))
         if not parent_dir:
             return
 
         # 输入资产库名称
         default_name = "SquirrelLib"
         name, ok = QtWidgets.QInputDialog.getText(
-            self, "创建资产库", "请输入资产库名称:", text=default_name)
+            self, t("inputdlg.create_library"), t("inputdlg.library_name_prompt"), text=default_name)
         if not ok or not name.strip():
             name = default_name
 
         lib_path = os.path.join(parent_dir, name.strip())
         if os.path.exists(lib_path):
             QtWidgets.QMessageBox.warning(
-                self, "目录已存在",
-                f"目录已存在: {lib_path}\n请选择其他位置或使用其他名称。")
+                self, t("msg.dir_exists"),
+                t("msg.dir_exists_text", path=lib_path))
             return
 
         # 创建资产库
@@ -1406,8 +1424,8 @@ class SettingsDialog(QtWidgets.QDialog):
                 })
 
             QtWidgets.QMessageBox.information(
-                self, "创建成功",
-                f"资产库已创建: {lib_path}")
+                self, t("msg.create_success"),
+                t("msg.create_success_text", path=lib_path))
 
             # 添加到库列表
             self._lib_data.append({"name": name.strip(), "path": lib_path})
@@ -1415,8 +1433,8 @@ class SettingsDialog(QtWidgets.QDialog):
 
         except Exception as e:
             QtWidgets.QMessageBox.critical(
-                self, "创建失败",
-                f"创建资产库失败: {e}")
+                self, t("msg.create_failed"),
+                t("msg.create_failed_text", error=e))
 
     def _on_remove_library(self):
         """删除选中的库（至少保留1个）"""
@@ -1424,7 +1442,7 @@ class SettingsDialog(QtWidgets.QDialog):
         if row < 0:
             return
         if len(self._lib_data) <= 1:
-            QtWidgets.QMessageBox.warning(self, "无法删除", "至少保留一个资产库。")
+            QtWidgets.QMessageBox.warning(self, t("msg.cannot_delete"), t("msg.keep_one_library"))
             return
         del self._lib_data[row]
         self._populate_library_list()
@@ -1442,7 +1460,7 @@ class SettingsDialog(QtWidgets.QDialog):
         """打开设置帮助"""
         import webbrowser
         plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        help_path = os.path.join(plugin_root, "Assets", "help", "help_settings.html")
+        help_path = _i18n_help_path(os.path.join(plugin_root, "Assets", "help", "help_settings.html"))
         if os.path.isfile(help_path):
             webbrowser.open("file:///" + help_path.replace(os.sep, "/"))
         else:
@@ -1450,7 +1468,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _on_restore_defaults(self):
         reply = QtWidgets.QMessageBox.question(
-            self, "恢复默认", "确定要恢复所有设置到默认值吗？（config.json 将被重置）",
+            self, t("common.restore_default"), t("msg.restore_default_text"),
             QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No)
         if reply == QtWidgets.QMessageBox.StandardButton.Yes:
             self._font_slider.setValue(13)
@@ -1634,11 +1652,8 @@ class SettingsDialog(QtWidgets.QDialog):
         # 解锁状态下应用时弹出确认警告
         if hasattr(self, '_unlock_cb') and self._unlock_cb.isChecked():
             reply = QtWidgets.QMessageBox.critical(
-                self, "⚠ 配置变更确认",
-                "当前为解锁状态，非通用配置可能已被修改！\n\n"
-                "错误的配置可能导致资产库导入导出功能异常。\n"
-                "请确认你清楚每一项配置的含义。\n\n"
-                "是否仍要应用当前设置？",
+                self, t("msg.apply_confirm_title"),
+                t("msg.apply_confirm_text"),
                 QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
                 QtWidgets.QMessageBox.StandardButton.No,
             )
@@ -1655,6 +1670,7 @@ class SettingsDialog(QtWidgets.QDialog):
             "font_size": self._font_slider.value(),
             "default_view": "icon" if self._view_icon.isChecked() else "list",
             "default_thumb_size": self._thumb_slider.value(),
+            "language": self._lang_combo.currentData(),
         }
         if hasattr(self, '_lib_data') and self._lib_data:
             settings["library_paths"] = list(self._lib_data)
@@ -1665,7 +1681,7 @@ class SettingsDialog(QtWidgets.QDialog):
         """子库列表右键菜单"""
         menu = QtWidgets.QMenu(self)
 
-        add_action = menu.addAction("添加子库")
+        add_action = menu.addAction(t("ctx_menu.add_sub_lib"))
         add_action.triggered.connect(self._on_add_sub_lib)
 
         row = -1
@@ -1676,7 +1692,7 @@ class SettingsDialog(QtWidgets.QDialog):
             key = list(self._subs_data.keys())[row]
             CORE_LIBS = {"materials", "models", "lights", "textures", "scenes", "hdr", "ani"}
             if key not in CORE_LIBS:
-                delete_action = menu.addAction("删除子库")
+                delete_action = menu.addAction(t("ctx_menu.delete_sub_lib"))
                 delete_action.triggered.connect(lambda: self._on_delete_sub_lib(key))
 
         menu.exec_(self._sub_lib_list.mapToGlobal(pos))
@@ -1703,11 +1719,13 @@ class SettingsDialog(QtWidgets.QDialog):
         CORE_LIBS = {"materials", "models", "lights", "textures", "scenes", "hdr", "ani"}
         if key in CORE_LIBS:
             QtWidgets.QMessageBox.warning(
-                self, "无法删除", "核心子库（材质、模型、灯光、贴图、场景、HDR、动态）不可删除"
+                self, t("msg.cannot_delete"),
+                t("msg.core_lib_locked")
             )
             return
         reply = QtWidgets.QMessageBox.question(
-            self, "确认删除", f"确定要删除子库「{self._subs_data[key].get('display', key)}」吗？"
+            self, t("msg.confirm_delete"),
+            t("msg.confirm_delete_text", name=self._subs_data[key].get('display', key))
         )
         if reply == QtWidgets.QMessageBox.Yes:
             del self._subs_data[key]

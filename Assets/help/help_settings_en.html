@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — User Guide</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+  display: flex; justify-content: center;
+}
+.wrapper { display: flex; max-width: 1080px; width: 100%; }
+.sidebar {
+  width: 220px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #f5f5f5; padding: 24px 16px; flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+.sidebar h3 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; }
+.sidebar a:hover { background: #e0e0e0; color: #000; text-decoration: none; }
+.sidebar a.sub { padding-left: 20px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 800px; min-width: 0; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 20px 0 8px; }
+p, li { margin: 6px 0; }
+ol, ul { margin: 8px 0 8px 24px; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; }
+td { background: #fff; font-size: 13px; }
+img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #ddd; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h3>Contents</h3>
+  <a href="#general">General</a>
+  <a href="#general-display" class="sub">Display Settings</a>
+  <a href="#general-library" class="sub">Library Management</a>
+  <a href="#general-conflict" class="sub">Name Conflicts</a>
+  <a href="#export-defaults">Export Defaults</a>
+  <a href="#context-menu">Context Menu</a>
+  <a href="#double-click">Double-Click Command</a>
+  <a href="#formats">Supported Formats</a>
+  <a href="#texture-suffixes">Texture Suffixes</a>
+  <a href="#tags">Common Tags</a>
+  <a href="#subs">Sub-libraries &amp; Categories</a>
+  <a href="#subs-add" class="sub">Adding a Sub-library</a>
+  <a href="#subs-delete" class="sub">Deleting a Sub-library</a>
+  <a href="#subs-sync" class="sub">Syncing Categories</a>
+  <a href="#subs-edit" class="sub">Editing Categories</a>
+  <a href="#advanced">Advanced Configuration</a>
+</nav>
+
+<div class="content">
+
+<h1>Settings — Interface Guide</h1>
+
+<h2 id="general">General</h2>
+
+<h3 id="general-display">Display Settings</h3>
+
+<table>
+<tr><th>Setting</th><th>Description</th></tr>
+<tr><td><b>Font Size</b></td><td>Adjusts the size of all text in the interface (10–24px); drag the slider for a live preview</td></tr>
+<tr><td><b>Default View</b></td><td>Icon grid or list view, the default display mode for asset browsing</td></tr>
+<tr><td><b>Thumbnail Size</b></td><td>The size of thumbnails in the asset grid (100–1024px)</td></tr>
+</table>
+
+<h3 id="general-library">Library Management</h3>
+
+<p>Manage the locations and names of multiple asset libraries. Supports add, delete, and set-as-default operations.</p>
+
+<ol>
+<li><b>+ Add Library</b> — choose an asset library folder on disk and enter a display name</li>
+<li><b>- Delete Selected</b> — removes it from the list (does not delete on-disk files). At least one library must remain</li>
+<li><b>☆ Set as Default</b> — the library marked <code>[Default]</code> is loaded automatically when the plugin starts</li>
+</ol>
+
+<div class="note">
+<b>Tip:</b> The core directory structure (<code>materials/</code>, <code>models/</code>, etc.) is created automatically in a newly created empty folder the first time you switch to that library.
+</div>
+
+<h3 id="general-conflict">Name Conflict Handling</h3>
+
+<p>The strategy used when an exported asset has the same name as an existing asset:</p>
+
+<table>
+<tr><th>Strategy</th><th>Description</th></tr>
+<tr><td><b>Ask Every Time</b></td><td>Shows a dialog; you can choose to append an LOD / create a new version / rename</td></tr>
+<tr><td><b>Auto Rename</b></td><td>Automatically appends <code>_001</code>, <code>_002</code>…</td></tr>
+<tr><td><b>Manual Input</b></td><td>Shows an input box for you to enter a new name</td></tr>
+</table>
+
+<h2 id="export-defaults">Export Defaults</h2>
+
+<p>Set the default checked state of export formats separately by asset type (material/model/light/texture/scene/HDR/dynamic).</p>
+
+<table>
+<tr><th>Group</th><th>Included Formats</th></tr>
+<tr><td><b>Material Formats</b></td><td>Material nodes (.zmetal), merged materials, material mapping (.mcm)</td></tr>
+<tr><td><b>Geometry Formats</b></td><td>Maya ASCII (.ma), Maya Binary (.mb), FBX (.fbx), OBJ (.obj), USD (.usd)</td></tr>
+<tr><td><b>Cache &amp; Proxy</b></td><td>Alembic (.abc), Arnold (.ass), V-Ray (.vrscene), Redshift (.rs), V-Ray proxy (.vrmesh)</td></tr>
+</table>
+
+<div class="note">
+<b>Effect:</b> When the export dialog is first opened, the default value of each format checkbox is read from these presets based on the current asset type. For example, model-type assets default to FBX checked, and material-type assets leave geometry unchecked by default.
+</div>
+
+<h2 id="context-menu">Context Menu</h2>
+
+<p>Set which items appear in the context menu separately by sub-library type (material/model/light/texture/scene/HDR/dynamic). Uncheck an item to hide it from the menu.</p>
+
+<table>
+<tr><th>Menu Item</th><th>Description</th><th>Applicable Sub-libraries</th></tr>
+<tr><td><b>Import</b></td><td>Import asset files into the Maya scene</td><td>All</td></tr>
+<tr><td><b>Import Geometry</b></td><td>Import variant geometry (LOD/multiple versions); shown only for .zasset with variant data</td><td>All (conditional)</td></tr>
+<tr><td><b>Favorites</b></td><td>Add to or remove from favorites</td><td>All</td></tr>
+<tr><td><b>Select All</b></td><td>Select all assets in the current view</td><td>All</td></tr>
+<tr><td><b>Copy</b></td><td>Copy the asset information to the clipboard</td><td>All</td></tr>
+<tr><td><b>Open Folder</b></td><td>Open the asset's directory in the file manager</td><td>All</td></tr>
+<tr><td><b>Move To</b></td><td>Move the asset to another category</td><td>All</td></tr>
+<tr><td><b>Copy To</b></td><td>Copy the asset to another category</td><td>All</td></tr>
+<tr><td><b>Edit</b></td><td>Open the asset editing dialog</td><td>All</td></tr>
+<tr><td><b>Create Asset</b></td><td>Create a new export asset package from the current asset (list view)</td><td>All</td></tr>
+<tr><td><b>Update Thumbnail</b></td><td>Re-capture, import a thumbnail, or generate one via Maya playblast / render (playblast and render support choosing a current frame or an image sequence)</td><td>All</td></tr>
+<tr><td><b>Update Asset</b></td><td>Re-read the asset data</td><td>All</td></tr>
+<tr><td><b>Delete</b></td><td>Delete the selected asset</td><td>All</td></tr>
+<tr><td><b>Preview Nodes</b></td><td>Preview material nodes or MA file contents</td><td>All</td></tr>
+<tr><td><b>AI Analyze Thumbnail</b></td><td>Use AI to analyze the thumbnail and generate tags</td><td>All</td></tr>
+<tr><td><b>Apply Material to Selected Objects</b></td><td>Apply a material to the objects selected in Maya</td><td>Materials, Textures</td></tr>
+<tr><td><b>Create Material</b></td><td>Create a material node for a specified renderer based on a texture</td><td>Textures</td></tr>
+<tr><td><b>Import Texture</b></td><td>Import texture files from a texture asset into Maya</td><td>Textures</td></tr>
+<tr><td><b>Assign Texture to Material</b></td><td>Assign a texture to the material node selected in Maya</td><td>Textures</td></tr>
+<tr><td><b>Apply Light Parameters</b></td><td>Apply light parameters to the light(s) selected in Maya</td><td>Lights</td></tr>
+<tr><td><b>Create Dome Light</b></td><td>Create a dome light based on the HDR asset</td><td>HDR</td></tr>
+<tr><td><b>Assign Texture to Dome Light</b></td><td>Assign the HDR texture to the selected dome light</td><td>HDR</td></tr>
+</table>
+
+<div class="note">
+<b>Default behavior:</b> Each sub-library only checks the context menu items it actually has by default; unrelated items are off by default. You can freely adjust on top of this — only checked items are shown in the context menu.
+</div>
+
+<h2 id="double-click">Double-Click Command</h2>
+
+<p>Set which command is executed when double-clicking a thumbnail separately by sub-library type (single selection), mainly for fast import and asset creation. This feature is located below the "Context Menu" tab and shares the left-side sub-library type list with the context menu. After selecting a command that has a secondary menu, a "Sub-option" dropdown appears below for choosing the specific action.</p>
+
+<table>
+<tr><th>Command</th><th>Description</th><th>Sub-option</th><th>Applicable Sub-libraries</th></tr>
+<tr><td><b>No Operation</b></td><td>Double-click does nothing (default)</td><td>—</td><td>All</td></tr>
+<tr><td><b>Import</b></td><td>Import asset files into the Maya scene</td><td>ma / mb / fbx / obj / usd / abc / ass / vrscene / rs / vrmesh</td><td>All</td></tr>
+<tr><td><b>Import Geometry</b></td><td>Import variant geometry (defaults to the highest detail and the newest version)</td><td>—</td><td>All</td></tr>
+<tr><td><b>Import Texture</b></td><td>Import texture files from a texture asset into Maya</td><td>All (import all textures)</td><td>Textures</td></tr>
+<tr><td><b>Create Material</b></td><td>Create a material node based on a texture</td><td>aiStandardSurface / VRayMtl / RedshiftMaterial / standardSurface / lambert</td><td>Textures</td></tr>
+<tr><td><b>Create Dome Light</b></td><td>Create a dome light based on the HDR asset</td><td>Scans .ma files dynamically from the <code>HDR_ligt/</code> directory</td><td>HDR</td></tr>
+<tr><td><b>Apply Material to Selected Objects</b></td><td>Apply a material to the objects selected in Maya</td><td>—</td><td>Materials, Textures</td></tr>
+<tr><td><b>Assign Texture to Material</b></td><td>Assign a texture to the material node selected in Maya</td><td>—</td><td>Textures, HDR</td></tr>
+<tr><td><b>Apply Light Parameters</b></td><td>Apply light parameters to the light(s) selected in Maya</td><td>—</td><td>Lights</td></tr>
+</table>
+
+<div class="note">
+<b>Data storage:</b> The double-click command configuration is stored in a separate <code>double_click_preset.json</code> file and does not interfere with the context menu configuration.
+</div>
+
+<h2 id="formats">Supported Formats</h2>
+
+<p>Defines which file extensions are treated as importable asset files. One extension per line (without the dot).</p>
+
+<p>The data is stored in the <code>asset_file_extensions</code> field of <code>config.json</code>.</p>
+
+<div class="warn">
+<b>Note:</b> After modifying, click "Apply" for the changes to take effect. Incorrect configuration may cause asset import to malfunction.
+</div>
+
+<h2 id="texture-suffixes">Texture Suffixes</h2>
+
+<p>Configure the filename matching rules for PBR texture types.</p>
+
+<table>
+<tr><th>Configuration Item</th><th>Description</th></tr>
+<tr><td><b>Left Type List</b></td><td>PBR texture types (albedo / normal / roughness / metallic / ao, etc.)</td></tr>
+<tr><td><b>Right Alias List</b></td><td>The filename keywords corresponding to that type; the engine uses these keywords to identify the texture type</td></tr>
+</table>
+
+<p>For example: the aliases of the <code>normal</code> type include <code>_normal</code>, <code>_nrm</code>, <code>_n</code>, so a file named <code>crate_n.png</code> is recognized as a normal map.</p>
+
+<div class="note">
+<b>Tip:</b> Clicking "Restore Defaults" resets all aliases to factory settings. The data comes from <code>Assets/preset/pbr_mapping.json</code>.
+</div>
+
+<h2 id="tags">Common Tags</h2>
+
+<p>Manage the list of common tags separately by sub-library type (material/model/light/texture/scene/HDR).</p>
+
+<ul>
+<li>Select a sub-library type on the left → edit its tags on the right (one per line)</li>
+<li>Tags are presented as quick buttons in the export dialog; click to add</li>
+<li>The data is stored in the <code>common_tags</code> field of <code>config.json</code></li>
+</ul>
+
+<h2 id="subs">Sub-libraries &amp; Categories</h2>
+
+<p>Manage a sub-library's ID, display name, and default category list. Supports adding custom sub-libraries, deleting custom sub-libraries, and syncing categories from the actual folders.</p>
+
+<table>
+<tr><th>Field</th><th>Description</th></tr>
+<tr><td><b>Sub-library ID</b></td><td>The unique identifier of the sub-library (e.g. <code>materials</code>), which must not duplicate other sub-libraries</td></tr>
+<tr><td><b>Display Name</b></td><td>The name shown in the UI (e.g. "Materials")</td></tr>
+<tr><td><b>Default Category List</b></td><td>The category folders auto-generated the first time this sub-library is created, in the format <code>id name</code></td></tr>
+</table>
+
+<h3 id="subs-add">Adding a Sub-library</h3>
+
+<p>Right-click an empty area in the left sub-library list and choose "Add Sub-library". The new sub-library's ID format is <code>custom_N</code> and its display name is "Custom N".</p>
+
+<h3 id="subs-delete">Deleting a Sub-library</h3>
+
+<p>Right-click a custom sub-library and choose "Delete Sub-library". Core sub-libraries (materials, models, lights, textures, scenes, HDR, dynamic) cannot be deleted.</p>
+
+<h3 id="subs-sync">Syncing Categories</h3>
+
+<p>Click the "Read Current Category Folders" button above the right editing area to sync the actual folder structure of the current asset library to the settings. This overwrites the existing default category list configuration.</p>
+
+<h3 id="subs-edit">Editing Categories</h3>
+
+<p>In the category tree, right-click a category and choose "Edit" to modify its readable name and type. The type dropdown lists all sub-library types, ensuring the personalized context menu is recognized correctly.</p>
+
+<div class="warn">
+<b>Note:</b> The seven core sub-libraries (materials / models / lights / textures / scenes / hdr / ani) cannot be deleted; changing their IDs may make existing data unusable.
+</div>
+
+<h2 id="advanced">Advanced Configuration</h2>
+
+<p>Advanced users can customize file-extension recognition rules and material node types.</p>
+
+<table>
+<tr><th>Configuration Item</th><th>Description</th></tr>
+<tr><td><b>Geometry Extensions</b></td><td>The list of extensions recognized as geometry files on import (e.g. .ma .fbx .obj)</td></tr>
+<tr><td><b>Image/Texture Extensions</b></td><td>Extensions recognized as texture files on import (e.g. .png .exr .tga)</td></tr>
+<tr><td><b>Material Node Types</b></td><td>Which nodes in the scene are recognized as material nodes on export (e.g. standardSurface, VRayMtl)</td></tr>
+</table>
+
+<div class="warn">
+<b>⚠ Unlock for editing:</b> Advanced configuration is locked by default. It can only be modified after checking the "Unlock Editing" checkbox at the bottom. Incorrect configuration may cause asset library malfunctions, so be sure you understand the meaning of each item before changing it.
+</div>
+
+</div>
+</div>
+</body>
+</html>
