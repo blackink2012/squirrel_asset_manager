@@ -57,17 +57,23 @@ def supported_languages() -> tuple:
     return _SUPPORTED
 
 
-def t(key: str, **kwargs) -> str:
+def t(key: str, no_warn: bool = False, **kwargs) -> str:
     """按当前语言查表；找不到 key 回退到 fallback；再找不到返回 key 本身。
 
     支持 {name} 占位符：
         t("msg.selected_n", n=3) → "已选择 3 个" / "3 selected"
+
+    Args:
+        key: 翻译键。
+        no_warn: 为 True 时，缺失键不打印警告（用于选项等混合键场景）。
+        **kwargs: 占位符替换参数。
     """
     text = _lookup(_LANG, key)
     if text is None and _LANG != _FALLBACK:
         text = _lookup(_FALLBACK, key)
     if text is None:
-        print(f"[i18n] 缺失翻译键: {key}（lang={_LANG}）", file=sys.stderr)
+        if not no_warn:
+            print(f"[i18n] 缺失翻译键: {key}（lang={_LANG}）", file=sys.stderr)
         return key
     if kwargs:
         try:
