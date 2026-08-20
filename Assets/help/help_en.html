@@ -52,6 +52,7 @@ img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #dd
 <nav class="sidebar">
   <h2>Contents</h2>
   <a href="#overview">1. Plugin Overview</a>
+  <a href="#features" class="sub">1.1 Feature Overview</a>
   <a href="#export">2. Export Assets</a>
   <a href="#export-modes" class="sub">2.1 Three Export Modes</a>
   <a href="#export-thumb" class="sub">2.2 Three Thumbnail Sources</a>
@@ -75,7 +76,22 @@ img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #dd
 
 <h2 id="overview">1. Plugin Overview</h2>
 
-<p>MaterialManagementPro is a material and asset management plugin for Maya 2025. The plugin folder is named <code>squirrel_asset_manager</code>.</p>
+<p>MaterialManagementPro is a material and asset management plugin for <b>Maya 2022 – 2026</b> (plugin folder: <code>squirrel_asset_manager</code>). The interface supports Chinese/English switching and launches from the Maya toolbar / status-line button with one click.</p>
+
+<h3 id="features">Feature Overview</h3>
+<ul>
+<li><b>Unified .zasset format:</b> one folder packs metadata, thumbnail, material, lighting, geometry, textures, and associated files — one folder is one complete asset.</li>
+<li><b>Six sub-libraries:</b> Materials / Models / Textures / Lights / Scenes / HDR (plus custom sub-libraries), each with a customizable category hierarchy.</li>
+<li><b>Dual-library architecture:</b> a Category library for long-term accumulation and a Project library for per-project assets, fully isolated from each other.</li>
+<li><b>Multi-format export:</b> geometry ma / mb / fbx / obj / usd, cache abc, renderer proxies ass / rs / vrscene / vrmesh, plus native node formats zmetal / zlight / mcm.</li>
+<li><b>Three export modes:</b> single / fully automatic / semi-automatic; three thumbnail sources: screen capture / Maya playblast / render (timeline + render can composite MP4 animations).</li>
+<li><b>Collect associated files:</b> automatically copies caches (abc / vdb...), proxies (ass / vrmesh...) and Maya references into the asset, with full frame-sequence support.</li>
+<li><b>Full material rebuild:</b> .zmetal rebuilds the complete shading network in the scene; .zlight is a renderer-agnostic light preset (Arnold / V-Ray / Redshift / Maya native); .mcm matches objects by vertex/face/edge topology to auto-assign materials.</li>
+<li><b>Variants &amp; versions:</b> LOD precision, versions and variant materials; right-click "Update Asset" can add LOD / create a new version / fully replace.</li>
+<li><b>AI analysis:</b> an Ollama local vision model auto-detects asset type / name / category / tags and applies them in one click.</li>
+<li><b>Customization:</b> right-click menus, double-click commands, default export formats, common tags and categories can all be configured and persisted in the settings window.</li>
+<li><b>Version support:</b> compatible with <b>Maya 2022 / 2023 / 2024 / 2025 / 2026</b> (including localized Chinese Maya); core modules auto-select the matching build by Python ABI.</li>
+</ul>
 
 <h3>Dual Library Architecture</h3>
 <table>
@@ -253,7 +269,7 @@ img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #dd
 <p>Make sure the object is actually connected to cache/proxy nodes. V-Ray requires the corresponding VRayMesh/VRayScene nodes, Redshift requires RedshiftProxyMesh, and USD requires mayaUsdProxyShape.</p>
 
 <div class="footer">
-MaterialManagementPro v2.0 — Maya 2025 Material/Asset Management Plugin
+MaterialManagementPro v2.0 — Material/Asset Management Plugin for Maya 2022 – 2026
 </div>
 
 </div><!-- content -->
