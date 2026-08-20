@@ -14,6 +14,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # 预设目录：相对于脚本目录的 Assets/material_mapper_presets
 PRESET_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "Assets", "material_mapper_presets"))
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # 尝试导入 PySide6
 try:
     from PySide6 import QtWidgets, QtCore, QtGui
@@ -46,6 +48,22 @@ try:
     IN_MAYA = True
 except ImportError:
     IN_MAYA = False
+
+
+_T = None
+_help_path = lambda p: p
+try:
+    from utils.i18n import t as _T, help_path as _hpath
+    _help_path = _hpath
+except ImportError:
+    try:
+        from squirrel_asset_manager.utils.i18n import t as _T, help_path as _hpath
+        _help_path = _hpath
+    except ImportError:
+        _T = None
+
+def t(key, **kwargs):
+    return _T(key, **kwargs) if _T is not None else (key.format(**kwargs) if kwargs else key)
 
 
 def rgb_to_channel(rgb_color, channel='r'):
@@ -579,8 +597,8 @@ def precompute_remap_samples(transform_name, num_samples=32):
     samples = []
 
     for i in range(num_samples):
-        t = i / (num_samples - 1) if num_samples > 1 else 0.0
-        input_val = input_min + t * (input_max - input_min)
+        fraction = i / (num_samples - 1) if num_samples > 1 else 0.0
+        input_val = input_min + fraction * (input_max - input_min)
         try:
             output_val = float(func(input_val))
         except Exception:
@@ -617,7 +635,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
         super(MaterialConverter, self).__init__(parent)
 
-        self.setWindowTitle("材质转换工具 - Maya 2025")
+        self.setWindowTitle(t("qtool.matconv.window_title"))
         self.setMinimumSize(900, 600)
         self.resize(900, 650)
 
@@ -703,9 +721,9 @@ class MaterialConverter(QtWidgets.QDialog):
         toolbar_layout.setContentsMargins(5, 5, 5, 5)
         
         # 使用帮助按钮
-        help_btn = QtWidgets.QPushButton("❓ 使用帮助")
+        help_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.help"))
         help_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 8px 15px;")
-        help_btn.setStatusTip("打开完整的使用帮助文档")
+        help_btn.setStatusTip(t("qtool.matconv.status.open_help"))
         help_btn.clicked.connect(self.show_help)
         toolbar_layout.addWidget(help_btn)
         
@@ -714,21 +732,21 @@ class MaterialConverter(QtWidgets.QDialog):
         main_layout.addLayout(toolbar_layout)
 
         # 材质类型映射列表区域
-        mapping_type_group = QtWidgets.QGroupBox("材质类型映射配置")
-        mapping_type_group.setStatusTip("配置源材质类型到目标材质类型的映射关系，支持多行批量转换")
+        mapping_type_group = QtWidgets.QGroupBox(t("qtool.matconv.group.mapping_config"))
+        mapping_type_group.setStatusTip(t("qtool.matconv.status.mapping_config"))
         mapping_type_layout = QtWidgets.QVBoxLayout()
         mapping_type_group.setLayout(mapping_type_layout)
 
         # 说明标签
-        info_label = QtWidgets.QLabel("提示: 点击'加载源'从选择加载材质类型，点击'加载目标'设置目标类型，重复添加多行可实现批量转换")
+        info_label = QtWidgets.QLabel(t("qtool.matconv.label.mapping_config_hint"))
         info_label.setStyleSheet("color: #666; font-size: 14px; padding: 5px 0;")
         mapping_type_layout.addWidget(info_label)
 
         # 映射类型表格
         self.mapping_type_table = QtWidgets.QTableWidget()
-        self.mapping_type_table.setStatusTip("双击单元格编辑材质类型\n源为空时表示将所有材质转换为目标类型")
+        self.mapping_type_table.setStatusTip(t("qtool.matconv.status.mapping_table"))
         self.mapping_type_table.setColumnCount(4)
-        self.mapping_type_table.setHorizontalHeaderLabels(["", "源材质类型", "目标材质类型", ""])
+        self.mapping_type_table.setHorizontalHeaderLabels(["", t("qtool.matconv.header.source_type"), t("qtool.matconv.header.target_type"), ""])
         self.mapping_type_table.horizontalHeader().setStretchLastSection(False)
 
         header = self.mapping_type_table.horizontalHeader()
@@ -788,46 +806,46 @@ class MaterialConverter(QtWidgets.QDialog):
         # 按钮行
         btn_layout = QtWidgets.QHBoxLayout()
 
-        load_source_btn = QtWidgets.QPushButton("▶ 加载源")
+        load_source_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.load_source"))
         load_source_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 8px 15px;")
-        load_source_btn.setStatusTip("从Maya中选择的材质节点加载源材质类型到表格")
+        load_source_btn.setStatusTip(t("qtool.matconv.status.load_source"))
         load_source_btn.clicked.connect(self.load_source_type_from_selection)
         btn_layout.addWidget(load_source_btn)
 
-        load_target_btn = QtWidgets.QPushButton("◀ 加载目标")
+        load_target_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.load_target"))
         load_target_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 8px 15px;")
-        load_target_btn.setStatusTip("从Maya中选择的材质节点加载目标材质类型到表格")
+        load_target_btn.setStatusTip(t("qtool.matconv.status.load_target"))
         load_target_btn.clicked.connect(self.load_target_type_from_selection)
         btn_layout.addWidget(load_target_btn)
 
         btn_layout.addStretch()
 
-        add_row_btn = QtWidgets.QPushButton("+ 添加行")
-        add_row_btn.setStatusTip("添加一行空的材质类型映射")
+        add_row_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.add_row"))
+        add_row_btn.setStatusTip(t("qtool.matconv.status.add_row"))
         add_row_btn.clicked.connect(self.add_mapping_type_row)
         btn_layout.addWidget(add_row_btn)
 
-        delete_row_btn = QtWidgets.QPushButton("删除选中")
-        delete_row_btn.setStatusTip("删除表格中选中的行")
+        delete_row_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.delete_row"))
+        delete_row_btn.setStatusTip(t("qtool.matconv.status.delete_row"))
         delete_row_btn.clicked.connect(self.delete_mapping_type_row)
         btn_layout.addWidget(delete_row_btn)
 
-        clear_all_btn = QtWidgets.QPushButton("清空全部")
-        clear_all_btn.setStatusTip("清空表格中所有映射行")
+        clear_all_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.clear_all"))
+        clear_all_btn.setStatusTip(t("qtool.matconv.status.clear_all"))
         clear_all_btn.clicked.connect(self.clear_mapping_type_list)
         btn_layout.addWidget(clear_all_btn)
 
         btn_layout.addStretch()
 
-        save_config_btn = QtWidgets.QPushButton("💾 保存预设")
+        save_config_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.save_preset"))
         save_config_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold; padding: 8px 15px;")
-        save_config_btn.setStatusTip("将当前材质类型映射配置保存为.mlist预设文件")
+        save_config_btn.setStatusTip(t("qtool.matconv.status.save_preset"))
         save_config_btn.clicked.connect(self.save_mapping_type_preset)
         btn_layout.addWidget(save_config_btn)
 
-        load_config_btn = QtWidgets.QPushButton("📂 加载预设")
+        load_config_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.load_preset"))
         load_config_btn.setStyleSheet("background-color: #9C27B0; color: white; font-weight: bold; padding: 8px 15px;")
-        load_config_btn.setStatusTip("从.mlist预设文件加载材质类型映射配置")
+        load_config_btn.setStatusTip(t("qtool.matconv.status.load_preset"))
         load_config_btn.clicked.connect(self.load_mapping_type_preset)
         btn_layout.addWidget(load_config_btn)
 
@@ -842,18 +860,18 @@ class MaterialConverter(QtWidgets.QDialog):
         top_widget.setLayout(top_layout)
 
         # 材质信息显示区域
-        material_info_group = QtWidgets.QGroupBox("材质信息")
+        material_info_group = QtWidgets.QGroupBox(t("qtool.matconv.group.material_info"))
         material_info_layout = QtWidgets.QGridLayout()
         material_info_group.setLayout(material_info_layout)
 
-        material_info_layout.addWidget(QtWidgets.QLabel("源材质:"), 0, 0)
+        material_info_layout.addWidget(QtWidgets.QLabel(t("qtool.matconv.label.source_material")), 0, 0)
         self.source_name_label = QtWidgets.QLabel("(未选择)")
         self.source_name_label.setStyleSheet("color: #666; font-style: italic;")
         material_info_layout.addWidget(self.source_name_label, 0, 1)
         self.source_type_label = QtWidgets.QLabel("")
         material_info_layout.addWidget(self.source_type_label, 0, 2)
 
-        material_info_layout.addWidget(QtWidgets.QLabel("目标材质:"), 1, 0)
+        material_info_layout.addWidget(QtWidgets.QLabel(t("qtool.matconv.label.target_material")), 1, 0)
         self.target_name_label = QtWidgets.QLabel("(未选择)")
         self.target_name_label.setStyleSheet("color: #666; font-style: italic;")
         material_info_layout.addWidget(self.target_name_label, 1, 1)
@@ -871,17 +889,17 @@ class MaterialConverter(QtWidgets.QDialog):
         bottom_widget.setLayout(bottom_layout)
 
         # 映射文件区域
-        mapping_group = QtWidgets.QGroupBox("映射文件")
-        mapping_group.setStatusTip("选择包含属性映射.mmap文件的文件夹，工具会自动加载其中所有映射文件")
+        mapping_group = QtWidgets.QGroupBox(t("qtool.matconv.group.mapping_file"))
+        mapping_group.setStatusTip(t("qtool.matconv.status.mapping_file"))
         mapping_layout = QtWidgets.QHBoxLayout()
         mapping_group.setLayout(mapping_layout)
 
         self.mapping_file_edit = QtWidgets.QLineEdit()
         self.mapping_file_edit.setReadOnly(True)
-        self.mapping_file_edit.setPlaceholderText("选择映射关系文件...")
-        self.mapping_file_edit.setStatusTip("当前加载的映射文件所在文件夹路径")
-        browse_btn = QtWidgets.QPushButton("浏览...")
-        browse_btn.setStatusTip("浏览并选择包含映射.mmap文件的文件夹")
+        self.mapping_file_edit.setPlaceholderText(t("qtool.matconv.placeholder.mapping_file"))
+        self.mapping_file_edit.setStatusTip(t("qtool.matconv.status.mapping_file_path"))
+        browse_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.browse"))
+        browse_btn.setStatusTip(t("qtool.matconv.status.browse"))
         browse_btn.clicked.connect(self.browse_mapping_file)
         self.mapping_status_label = QtWidgets.QLabel("")
         self.mapping_status_label.setStyleSheet("color: #888;")
@@ -891,26 +909,26 @@ class MaterialConverter(QtWidgets.QDialog):
         mapping_layout.addWidget(self.mapping_status_label)
 
         # 映射文件夹说明
-        mapping_info_label = QtWidgets.QLabel(f"映射文件目录: {self.mapping_base_dir}")
+        mapping_info_label = QtWidgets.QLabel(f'{t("qtool.matconv.label.mapping_dir")}: {self.mapping_base_dir}')
         mapping_info_label.setStyleSheet("color: #888; font-size: 11px;")
         mapping_layout.addWidget(mapping_info_label)
 
-        open_folder_btn = QtWidgets.QPushButton("打开文件夹")
+        open_folder_btn = QtWidgets.QPushButton(t("common.open_folder"))
         open_folder_btn.setStyleSheet("font-size: 12px; padding: 3px 8px;")
-        open_folder_btn.setStatusTip("在资源管理器中打开映射文件所在文件夹")
+        open_folder_btn.setStatusTip(t("qtool.matconv.status.open_mapping_folder"))
         open_folder_btn.clicked.connect(self.open_mapping_folder)
         mapping_layout.addWidget(open_folder_btn)
 
         bottom_layout.addWidget(mapping_group)
 
         # 映射预览区域 - 使用选项卡显示多个映射文件（不优先缩放）
-        preview_group = QtWidgets.QGroupBox("属性映射预览")
-        preview_group.setStatusTip("预览已加载的属性映射关系，切换选项卡查看不同映射文件")
+        preview_group = QtWidgets.QGroupBox(t("qtool.matconv.group.preview"))
+        preview_group.setStatusTip(t("qtool.matconv.status.preview"))
         preview_layout = QtWidgets.QVBoxLayout()
         preview_group.setLayout(preview_layout)
 
         self.preview_tabs = QtWidgets.QTabWidget()
-        self.preview_tabs.setStatusTip("切换选项卡查看不同映射文件的属性映射详情")
+        self.preview_tabs.setStatusTip(t("qtool.matconv.status.preview_tabs"))
         self.preview_tabs.setStyleSheet("""
             QTabWidget::pane {
                 border: 1px solid #ccc;
@@ -937,23 +955,23 @@ class MaterialConverter(QtWidgets.QDialog):
         bottom_layout.addWidget(preview_group)
 
         # 选项区域
-        options_group = QtWidgets.QGroupBox("转换选项")
-        options_group.setStatusTip("设置材质转换时的附加选项")
+        options_group = QtWidgets.QGroupBox(t("qtool.matconv.group.options"))
+        options_group.setStatusTip(t("qtool.matconv.status.options"))
         options_layout = QtWidgets.QHBoxLayout()
         options_group.setLayout(options_layout)
 
-        self.copy_textures_check = QtWidgets.QCheckBox("复制纹理连接")
-        self.copy_textures_check.setStatusTip("转换时保留源材质的纹理贴图连接")
+        self.copy_textures_check = QtWidgets.QCheckBox(t("qtool.matconv.check.copy_textures"))
+        self.copy_textures_check.setStatusTip(t("qtool.matconv.status.copy_textures"))
         self.copy_textures_check.setChecked(True)
         options_layout.addWidget(self.copy_textures_check)
 
-        self.keep_original_check = QtWidgets.QCheckBox("保留原始材质")
-        self.keep_original_check.setStatusTip("转换后保留原始材质节点，不自动删除")
+        self.keep_original_check = QtWidgets.QCheckBox(t("qtool.matconv.check.keep_original"))
+        self.keep_original_check.setStatusTip(t("qtool.matconv.status.keep_original"))
         self.keep_original_check.setChecked(True)
         options_layout.addWidget(self.keep_original_check)
 
-        self.auto_assign_check = QtWidgets.QCheckBox("自动应用到选择对象")
-        self.auto_assign_check.setStatusTip("转换后自动将新材质应用到使用原材质的对象上")
+        self.auto_assign_check = QtWidgets.QCheckBox(t("qtool.matconv.check.auto_assign"))
+        self.auto_assign_check.setStatusTip(t("qtool.matconv.status.auto_assign"))
         self.auto_assign_check.setChecked(True)
         options_layout.addWidget(self.auto_assign_check)
 
@@ -962,8 +980,8 @@ class MaterialConverter(QtWidgets.QDialog):
         # 按钮区域
         button_layout = QtWidgets.QHBoxLayout()
 
-        self.convert_selection_btn = QtWidgets.QPushButton("▶ 转换选择")
-        self.convert_selection_btn.setStatusTip("仅转换Maya中当前选中的物体/材质")
+        self.convert_selection_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.convert_selection"))
+        self.convert_selection_btn.setStatusTip(t("qtool.matconv.status.convert_selection"))
         self.convert_selection_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
@@ -978,8 +996,8 @@ class MaterialConverter(QtWidgets.QDialog):
         self.convert_selection_btn.clicked.connect(self.convert_selection)
         button_layout.addWidget(self.convert_selection_btn)
 
-        self.convert_all_btn = QtWidgets.QPushButton("⚡ 转换全部")
-        self.convert_all_btn.setStatusTip("转换场景中所有符合映射配置的材质")
+        self.convert_all_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.convert_all"))
+        self.convert_all_btn.setStatusTip(t("qtool.matconv.status.convert_all"))
         self.convert_all_btn.setStyleSheet("""
             QPushButton {
                 background-color: #FF9800;
@@ -998,8 +1016,8 @@ class MaterialConverter(QtWidgets.QDialog):
 
         button_layout.addStretch()
 
-        close_btn = QtWidgets.QPushButton("关闭")
-        close_btn.setStatusTip("关闭材质转换工具窗口")
+        close_btn = QtWidgets.QPushButton(t("common.close"))
+        close_btn.setStatusTip(t("qtool.matconv.status.close"))
         close_btn.clicked.connect(self.close)
         button_layout.addWidget(close_btn)
 
@@ -1007,7 +1025,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
         # 状态栏
         status_layout = QtWidgets.QHBoxLayout()
-        self.status_label = QtWidgets.QLabel("就绪 - 请选择源材质和目标材质，然后加载映射文件")
+        self.status_label = QtWidgets.QLabel(t("qtool.matconv.label.status_ready"))
         self.status_label.setStyleSheet("color: #666; padding: 5px;")
         status_layout.addWidget(self.status_label)
         bottom_layout.addLayout(status_layout)
@@ -1029,12 +1047,12 @@ class MaterialConverter(QtWidgets.QDialog):
         import os
         import webbrowser
         plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        help_path = os.path.join(plugin_root, "Assets", "help", "材质转换工具", "help.html")
+        help_path = _help_path(os.path.join(plugin_root, "Assets", "help", "材质转换工具", "help.html"))
         if os.path.isfile(help_path):
             webbrowser.open("file:///" + help_path.replace(os.sep, "/"))
         else:
-            QtWidgets.QMessageBox.information(self, "使用帮助",
-                "帮助文件未找到: " + help_path)
+            QtWidgets.QMessageBox.information(self, t("btn.help"),
+                t("qtool.matconv.msg.help_not_found", path=help_path))
 
     def _preview_table_resize_event(self, event):
         """预览表格resize事件，保持列比例：源属性2/3, 目标属性2/3, 默认值1/3, 说明1/3"""
@@ -1115,7 +1133,7 @@ class MaterialConverter(QtWidgets.QDialog):
         """从选择加载源材质"""
         selected = cmds.ls(selection=True)
         if not selected:
-            QMessageBox.information(self, "提示", "请先在Maya中选择一个对象或材质节点")
+            QMessageBox.information(self, t("common.tip"), t("qtool.matconv.msg.select_object_in_maya"))
             return
 
         for obj in selected:
@@ -1133,13 +1151,13 @@ class MaterialConverter(QtWidgets.QDialog):
                     self.load_material_info(materials[0], True)
                     return
 
-        QMessageBox.information(self, "提示", "所选对象没有关联的材质，请选择其他对象")
+        QMessageBox.information(self, t("common.tip"), t("qtool.matconv.msg.no_associated_material"))
 
     def load_target_from_selection(self):
         """从选择加载目标材质"""
         selected = cmds.ls(selection=True)
         if not selected:
-            QMessageBox.information(self, "提示", "请先在Maya中选择一个对象或材质节点")
+            QMessageBox.information(self, t("common.tip"), t("qtool.matconv.msg.select_object_in_maya"))
             return
 
         for obj in selected:
@@ -1157,7 +1175,7 @@ class MaterialConverter(QtWidgets.QDialog):
                     self.load_material_info(materials[0], False)
                     return
 
-        QMessageBox.information(self, "提示", "所选对象没有关联的材质，请选择其他对象")
+        QMessageBox.information(self, t("common.tip"), t("qtool.matconv.msg.no_associated_material"))
 
     def clear_source(self):
         """清空源材质"""
@@ -1180,22 +1198,22 @@ class MaterialConverter(QtWidgets.QDialog):
         parts = []
 
         if self.source_material:
-            parts.append(f"源材质: {self.source_material}")
+            parts.append(t("qtool.matconv.status.source_material", name=self.source_material))
         else:
-            parts.append("源材质: 未选择")
+            parts.append(t("qtool.matconv.status.source_unselected"))
 
         if self.target_material_type:
-            parts.append(f"目标类型: {self.target_material_type}")
+            parts.append(t("qtool.matconv.status.target_type", type=self.target_material_type))
         elif self.target_name_label.text() != "(未选择)":
-            parts.append(f"目标材质: {self.target_name_label.text()}")
+            parts.append(t("qtool.matconv.status.target_material", name=self.target_name_label.text()))
         else:
-            parts.append("目标材质: 未选择")
+            parts.append(t("qtool.matconv.status.target_unselected"))
 
         if self.mapping_data:
             mapping_count = len(self.mapping_data.get('mappings', []))
-            parts.append(f"映射关系: {mapping_count} 条")
+            parts.append(t("qtool.matconv.status.mapping_count", count=mapping_count))
         else:
-            parts.append("映射关系: 未加载")
+            parts.append(t("qtool.matconv.status.mapping_unloaded"))
 
         self.status_label.setText(" | ".join(parts))
 
@@ -1206,7 +1224,7 @@ class MaterialConverter(QtWidgets.QDialog):
     def browse_mapping_file(self):
         """浏览并选择映射文件夹，加载该文件夹下所有映射文件"""
         folder = QFileDialog.getExistingDirectory(
-            self, "选择映射文件夹", self.mapping_base_dir,
+            self, t("qtool.matconv.dialog.select_mapping_folder"), self.mapping_base_dir,
             QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
         )
 
@@ -1220,7 +1238,7 @@ class MaterialConverter(QtWidgets.QDialog):
                 mmap_files.append(os.path.join(folder, file))
 
         if not mmap_files:
-            QMessageBox.information(self, "提示", f"选择的文件夹中没有找到映射文件(.mmap)")
+            QMessageBox.information(self, t("common.tip"), t("qtool.matconv.msg.no_mapping_files"))
             return
 
         # 清空现有选项卡
@@ -1251,20 +1269,19 @@ class MaterialConverter(QtWidgets.QDialog):
             if target_type:
                 self.target_material_type = target_type
                 self.target_type_label.setText(f"({target_type})")
-                self.target_name_label.setText(f"(将转换为 {target_type})")
+                self.target_name_label.setText(t("qtool.matconv.target_will_become", type=target_type))
 
             self.mapping_file_edit.setText(folder)
-            self.mapping_status_label.setText(f"已加载 {len(self.loaded_mappings)} 个映射文件")
+            self.mapping_status_label.setText(t("qtool.matconv.status.mappings_loaded", count=len(self.loaded_mappings)))
             self.update_status()
 
-            QMessageBox.information(self, "成功",
-                                  f"成功加载 {len(self.loaded_mappings)} 个映射文件！\n\n"
-                                  f"切换选项卡可查看不同映射预览。")
+            QMessageBox.information(self, t("msg.success"),
+                                  t("qtool.matconv.msg.mappings_loaded", count=len(self.loaded_mappings)))
 
         if failed_files:
             detail = "\n".join(f"  • {name}: {err}" for name, err in failed_files)
-            QMessageBox.warning(self, "部分加载失败",
-                               f"{len(failed_files)} 个文件加载失败:\n\n{detail}")
+            QMessageBox.warning(self, t("qtool.matconv.msg.partial_load_failed_title"),
+                               t("qtool.matconv.msg.partial_load_failed", count=len(failed_files), detail=detail))
 
     def open_mapping_folder(self):
         """打开映射文件夹"""
@@ -1275,13 +1292,18 @@ class MaterialConverter(QtWidgets.QDialog):
                 os.makedirs(folder_path)
             subprocess.Popen(['explorer', folder_path])
         except Exception as e:
-            QMessageBox.warning(self, "错误", f"无法打开文件夹:\n{str(e)}")
+            QMessageBox.warning(self, t("msg.error"), t("qtool.matconv.msg.open_folder_failed", e=str(e)))
 
     def _add_mapping_tab(self, name, data):
         """为映射数据添加一个选项卡"""
         table = QtWidgets.QTableWidget()
         table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["源属性", "目标属性", "转换函数", "默认值"])
+        table.setHorizontalHeaderLabels([
+            t("qtool.matconv.header.source_attr"),
+            t("qtool.matconv.header.target_attr"),
+            t("qtool.matconv.header.transform"),
+            t("qtool.matconv.header.default")
+        ])
         table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         table.setAlternatingRowColors(True)
         table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
@@ -1341,11 +1363,11 @@ class MaterialConverter(QtWidgets.QDialog):
 
             note = ""
             if not src_attr and dst_attr:
-                note = "新增属性"
+                note = t("qtool.matconv.note.new_attr")
             elif src_attr and not dst_attr:
-                note = "将被忽略"
+                note = t("qtool.matconv.note.ignored")
             elif default_value:
-                note = "使用默认值"
+                note = t("qtool.matconv.note.use_default")
 
             table.setItem(i, 0, QtWidgets.QTableWidgetItem(src_attr))
             table.setItem(i, 1, QtWidgets.QTableWidgetItem(dst_attr))
@@ -1375,25 +1397,25 @@ class MaterialConverter(QtWidgets.QDialog):
             if not self.target_material_type and target_type:
                 self.target_material_type = target_type
                 self.target_type_label.setText(f"({target_type})")
-                self.target_name_label.setText(f"(将转换为 {target_type})")
+                self.target_name_label.setText(t("qtool.matconv.target_will_become", type=target_type))
                 self.target_name_label.setStyleSheet("color: #666; font-style: italic;")
 
             # 更新映射预览
             self.update_mapping_preview()
 
             # 更新状态
-            self.mapping_status_label.setText(f"已加载 {len(data.get('mappings', []))} 条映射")
+            self.mapping_status_label.setText(t("qtool.matconv.status.mapping_entries", count=len(data.get('mappings', []))))
             self.update_status()
 
-            QMessageBox.information(self, "成功",
-                                  f"映射文件加载成功！\n\n"
-                                  f"源类型: {data.get('source_type', '未知')}\n"
-                                  f"目标类型: {target_type}\n"
-                                  f"映射数量: {len(data.get('mappings', []))}")
+            QMessageBox.information(self, t("msg.success"),
+                                  t("qtool.matconv.msg.mapping_loaded",
+                                    source_type=data.get('source_type', t("qtool.matconv.common.unknown")),
+                                    target_type=target_type,
+                                    count=len(data.get('mappings', []))))
 
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"加载映射文件失败:\n{str(e)}")
-            self.mapping_status_label.setText("加载失败")
+            QMessageBox.critical(self, t("msg.error"), t("qtool.matconv.msg.load_mapping_failed", e=str(e)))
+            self.mapping_status_label.setText(t("qtool.matconv.status.load_failed"))
 
     def update_mapping_preview(self):
         """更新映射预览表格"""
@@ -1404,14 +1426,14 @@ class MaterialConverter(QtWidgets.QDialog):
             return
 
         # 添加当前映射数据到选项卡
-        name = self.mapping_data.get('name', '当前映射')
+        name = self.mapping_data.get('name', t("qtool.matconv.common.current_mapping"))
         self._add_mapping_tab(name, self.mapping_data)
 
     def load_source_type_from_selection(self):
         """从选择加载源材质类型到列表"""
         selected = cmds.ls(selection=True)
         if not selected:
-            QMessageBox.warning(self, "警告", "请先在Maya中选择材质节点")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.select_material_node_in_maya"))
             return
 
         material = None
@@ -1424,7 +1446,7 @@ class MaterialConverter(QtWidgets.QDialog):
                 break
 
         if not material:
-            QMessageBox.warning(self, "警告", "选择中未找到有效的材质节点")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.no_valid_material_node"))
             return
 
         material_type = cmds.nodeType(material)
@@ -1475,7 +1497,7 @@ class MaterialConverter(QtWidgets.QDialog):
         """从选择加载目标材质类型到列表"""
         selected = cmds.ls(selection=True)
         if not selected:
-            QMessageBox.warning(self, "警告", "请先在Maya中选择材质节点")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.select_material_node_in_maya"))
             return
 
         material = None
@@ -1488,7 +1510,7 @@ class MaterialConverter(QtWidgets.QDialog):
                 break
 
         if not material:
-            QMessageBox.warning(self, "警告", "选择中未找到有效的材质节点")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.no_valid_material_node"))
             return
 
         material_type = cmds.nodeType(material)
@@ -1565,7 +1587,7 @@ class MaterialConverter(QtWidgets.QDialog):
                 })
 
         if not mappings:
-            QMessageBox.warning(self, "警告", "没有可保存的映射配置")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.no_mapping_config_to_save"))
             return
 
         from datetime import datetime
@@ -1581,7 +1603,7 @@ class MaterialConverter(QtWidgets.QDialog):
             os.makedirs(preset_dir)
 
         filepath, _ = QFileDialog.getSaveFileName(
-            self, "保存映射配置预设", preset_dir, "Mapping List Files (*.mlist)"
+            self, t("qtool.matconv.dialog.save_mapping_preset"), preset_dir, t("qtool.matconv.dialog.mlist_filter")
         )
 
         if filepath:
@@ -1590,9 +1612,9 @@ class MaterialConverter(QtWidgets.QDialog):
             try:
                 with open(filepath, 'w', encoding='utf-8') as f:
                     json.dump(preset_data, f, indent=4, ensure_ascii=False)
-                QMessageBox.information(self, "成功", f"映射配置已保存到:\n{filepath}")
+                QMessageBox.information(self, t("msg.success"), t("qtool.matconv.msg.mapping_config_saved", filepath=filepath))
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"保存失败:\n{str(e)}")
+                QMessageBox.critical(self, t("msg.error"), t("qtool.matconv.msg.save_mapping_config_failed", e=str(e)))
 
     def load_mapping_type_preset(self):
         """从.mlist预设加载材质类型映射配置"""
@@ -1601,7 +1623,7 @@ class MaterialConverter(QtWidgets.QDialog):
             os.makedirs(preset_dir)
 
         filepath, _ = QFileDialog.getOpenFileName(
-            self, "加载映射配置预设", preset_dir, "Mapping List Files (*.mlist)"
+            self, t("qtool.matconv.dialog.load_mapping_preset"), preset_dir, t("qtool.matconv.dialog.mlist_filter")
         )
 
         if not filepath:
@@ -1613,7 +1635,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
             mappings = preset_data.get("mappings", [])
             if not mappings:
-                QMessageBox.warning(self, "警告", "预设文件中没有映射数据")
+                QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.no_mapping_in_preset"))
                 return
 
             self.mapping_type_table.setRowCount(0)
@@ -1625,9 +1647,9 @@ class MaterialConverter(QtWidgets.QDialog):
                 self.mapping_type_table.setItem(row, 1, src_item)
                 self.mapping_type_table.setItem(row, 2, dst_item)
 
-            QMessageBox.information(self, "成功", f"已加载 {len(mappings)} 条映射配置")
+            QMessageBox.information(self, t("msg.success"), t("qtool.matconv.msg.mapping_config_loaded", count=len(mappings)))
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"加载失败:\n{str(e)}")
+            QMessageBox.critical(self, t("msg.error"), t("qtool.matconv.msg.load_mapping_config_failed", e=str(e)))
 
     def find_mapping_file(self, source_type, target_type):
         """根据源材质类型和目标材质类型查找映射文件
@@ -2182,7 +2204,7 @@ class MaterialConverter(QtWidgets.QDialog):
         # 获取配置的映射类型列表
         mappings = self.get_configured_mappings()
         if not mappings:
-            QMessageBox.warning(self, "警告", "请先配置材质类型映射列表")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.configure_mapping_first"))
             return
 
         # 检查是否是全局转换（源为空）
@@ -2219,7 +2241,7 @@ class MaterialConverter(QtWidgets.QDialog):
                             materials_to_process.append((mat, source_type, target_type))
 
         if not materials_to_process:
-            QMessageBox.information(self, "提示", "没有找到可转换的材质")
+            QMessageBox.information(self, t("common.tip"), t("qtool.matconv.msg.no_materials_to_convert"))
             return
 
         # 统计信息
@@ -2305,7 +2327,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
             self.mapping_data = old_mapping_data
 
-        self.status_label.setText("转换完成")
+        self.status_label.setText(t("qtool.matconv.status.conversion_done"))
         print(f"\n{'='*60}")
         print(f"批量转换完成！")
         print(f"转换材质数: {total_converted}")
@@ -2343,18 +2365,18 @@ class MaterialConverter(QtWidgets.QDialog):
         # 获取配置的映射类型列表
         mappings = self.get_configured_mappings()
         if not mappings:
-            QMessageBox.warning(self, "警告", "请先配置材质类型映射列表")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.configure_mapping_first"))
             return
 
         selection = cmds.ls(selection=True)
         if not selection:
-            QMessageBox.warning(self, "警告", "请先在Maya中选择物体或材质")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.select_object_or_material_in_maya"))
             return
 
         # 获取选择中的材质
         materials = self.get_materials_from_selection(selection)
         if not materials:
-            QMessageBox.warning(self, "警告", "选择中未找到可转换的材质")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.no_convertible_material_in_selection"))
             return
 
         # 检查是否是全局转换（源为空）
@@ -2389,9 +2411,9 @@ class MaterialConverter(QtWidgets.QDialog):
 
         if not materials_by_config:
             if is_global_conversion:
-                QMessageBox.information(self, "提示", "选择的材质已经是目标类型")
+                QMessageBox.information(self, t("common.tip"), t("qtool.matconv.msg.already_target_type"))
             else:
-                QMessageBox.warning(self, "警告", "选择的材质类型与配置的映射不匹配")
+                QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.mapping_mismatch"))
             return
 
         total_converted = 0
@@ -2470,7 +2492,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
                 self.mapping_data = old_mapping_data
 
-        self.status_label.setText("转换完成")
+        self.status_label.setText(t("qtool.matconv.status.conversion_done"))
         print(f"\n{'='*60}")
         print(f"选择转换完成！")
         print(f"转换材质数: {total_converted}")
@@ -2637,7 +2659,7 @@ class MaterialConverter(QtWidgets.QDialog):
     def batch_conversion(self):
         """批量转换材质"""
         if not self.mapping_data or not self.target_material_type:
-            QMessageBox.warning(self, "警告", "请先加载映射文件")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.load_mapping_first"))
             return
 
         source_type = self.mapping_data.get("source_type", "")
@@ -2647,13 +2669,12 @@ class MaterialConverter(QtWidgets.QDialog):
         filtered_materials = [m for m in materials if cmds.nodeType(m) == source_type]
 
         if not filtered_materials:
-            QMessageBox.warning(self, "警告", f"场景中没有 {source_type} 类型的材质")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matconv.msg.no_material_of_type", source_type=source_type))
             return
 
         # 确认批量转换
-        reply = QMessageBox.question(self, "确认批量转换",
-                                     f"将对 {len(filtered_materials)} 个 {source_type} 材质进行批量转换\n\n"
-                                     f"是否继续？",
+        reply = QMessageBox.question(self, t("qtool.matconv.msg.confirm_batch_title"),
+                                     t("qtool.matconv.msg.confirm_batch_text", count=len(filtered_materials), source_type=source_type),
                                      QMessageBox.Yes | QMessageBox.No)
 
         if reply != QMessageBox.Yes:
@@ -2675,11 +2696,11 @@ class MaterialConverter(QtWidgets.QDialog):
         except RuntimeError:
             keep_original = True  # 默认值
 
-        self.status_label.setText(f"正在批量转换 {len(filtered_materials)} 个材质...")
+        self.status_label.setText(t("qtool.matconv.status.batch_converting", count=len(filtered_materials)))
         self.repaint()
 
         for i, material in enumerate(filtered_materials):
-            self.status_label.setText(f"正在转换 ({i+1}/{len(filtered_materials)}): {material}...")
+            self.status_label.setText(t("qtool.matconv.status.converting", i=i + 1, total=len(filtered_materials), material=material))
             self.repaint()
 
             result = self.convert_material(material, self.target_material_type, copy_textures)
@@ -2719,18 +2740,16 @@ class MaterialConverter(QtWidgets.QDialog):
                 except:
                     pass
 
-        self.status_label.setText("批量转换完成")
+        self.status_label.setText(t("qtool.matconv.status.batch_conversion_done"))
 
-        result_text = f"""批量转换完成！
+        result_text = t("qtool.matconv.msg.batch_result",
+                        converted=len(converted_materials),
+                        success=total_success,
+                        default=total_default,
+                        texture=total_texture,
+                        failed=total_failed)
 
-转换统计:
-• 转换材质数: {len(converted_materials)}
-• 成功复制: {total_success} 个属性
-• 使用默认值: {total_default} 个属性
-• 复制纹理: {total_texture} 个连接
-• 失败: {total_failed} 个属性"""
-
-        QMessageBox.information(self, "成功", result_text)
+        QMessageBox.information(self, t("msg.success"), result_text)
 
 
 # 主启动函数
@@ -2763,7 +2782,7 @@ def show_material_converter():
         print(f"创建窗口时出错: {str(e)}")
         import traceback
         traceback.print_exc()
-        QMessageBox.critical(None, "错误", f"创建窗口时出错:\n{str(e)}")
+        QMessageBox.critical(None, t("msg.error"), t("qtool.matconv.msg.create_window_failed", e=str(e)))
         return None
 
 
@@ -2831,7 +2850,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"杩愯鑴氭湰鏃跺嚭閿? {e}")
         try:
-            error_msg = f"鑴氭湰杩愯澶辫触:\n{str(e)}"
-            QtWidgets.QMessageBox.critical(None, "閿欒", error_msg)
+            error_msg = t("qtool.matconv.msg.script_run_failed", e=str(e))
+            QtWidgets.QMessageBox.critical(None, t("msg.error"), error_msg)
         except Exception:
             print(error_msg)

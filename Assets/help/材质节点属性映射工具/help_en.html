@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Material Node Attribute Mapper - Help</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+}
+.wrapper { display: flex; max-width: 1100px; width: 100%; margin: 0 auto; }
+.sidebar {
+  width: 230px; height: 100vh; position: fixed; top: 0; left: 50%; transform: translateX(calc(-50% - 435px));
+  background: #f5f5f5; padding: 24px 14px; border-right: 1px solid #ddd;
+  overflow-y: auto;
+}
+.sidebar h2 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; border: none; padding: 0; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; text-decoration: none; }
+.sidebar a:hover { background: #e0e0e0; color: #000; }
+.sidebar a.sub { padding-left: 22px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 840px; margin-left: 230px; min-height: 100vh; overflow-y: auto; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 36px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 24px 0 8px; }
+h4 { font-size: 15px; color: #555; margin: 16px 0 6px; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0 8px 24px; }
+li { margin: 4px 0; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+pre { background: #f8f8f8; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 10px 0; border: 1px solid #e0e0e0; font-size: 13px; line-height: 1.6; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; vertical-align: top; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; font-weight: 600; }
+td { background: #fff; font-size: 13px; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; }
+.badge-red { background: #fdecea; color: #e74c3c; }
+.badge-orange { background: #fef5e7; color: #e67e22; }
+.badge-blue { background: #eaf2f8; color: #2980b9; }
+.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h2>Contents</h2>
+  <a href="#overview">1. Overview</a>
+  <a href="#workflow">2. Quick Start</a>
+  <a href="#buttons">3. Interface Buttons</a>
+  <a href="#context-menu">4. Context Menu</a>
+  <a href="#transform-func">5. Transform Functions</a>
+  <a href="#preset">6. Preset Management</a>
+  <a href="#examples">7. Common Mapping Examples</a>
+  <a href="#tips">8. Usage Tips</a>
+  <a href="#faq">9. FAQ</a>
+</nav>
+
+<div class="content">
+
+<h1>Material Node Attribute Mapper — Help</h1>
+
+<p>This tool is used to define attribute mapping relationships between Maya material nodes, with support for default values and transform functions. It is mainly used for converting attributes between material types of different renderers (e.g., <code>lambert</code> → <code>aiStandardSurface</code>).</p>
+
+<!-- ============================================================ -->
+<h2 id="overview">1. Overview</h2>
+
+<p>This tool can help you:</p>
+<ul>
+  <li><b>Automatically load node attributes</b> — after setting the source/target node types, the drop-down list is automatically populated with all readable and writable attributes of that type</li>
+  <li><b>Batch mapping</b> — configure multiple attribute mappings at once through the table</li>
+  <li><b>Value transforms</b> — supports simple transform functions (such as <code>1-x</code> to invert roughness)</li>
+  <li><b>Save/load presets</b> — mapping configurations can be saved as <code>.mmap</code> files for quick recovery next time</li>
+  <li><b>Reverse mapping</b> — one-click swap of source and target roles</li>
+  <li><b>Attribute browser</b> — a separate window to view all attributes and their current values of nodes in the scene</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="workflow">2. Quick Start</h2>
+
+<div class="step">
+<h3>Typical Workflow</h3>
+<ol>
+  <li><b>Set source node type</b>: select a source material node in Maya, then click the source "Browse" button; you can also type the node type directly into the text box (e.g., <code>lambert</code>)</li>
+  <li><b>Set target node type</b>: set the target type the same way (e.g., <code>aiStandardSurface</code>)</li>
+  <li><b>Add mapping rows</b>: click the "Add Row" button; each row's drop-down is automatically populated with the corresponding type's attributes</li>
+  <li><b>Configure the mapping</b>: select the source and target attributes in each row, filling in the transform function and default value as needed</li>
+  <li><b>Save the preset</b>: click "Save Preset" to store the mapping configuration as a <code>.mmap</code> file</li>
+</ol>
+</div>
+
+<div class="note">
+  <b>Tip:</b> The "Add Row" button also works when no node type is set, but the drop-down lists will be empty. You can manually enter attribute names later.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="buttons">3. Interface Buttons</h2>
+
+<table>
+<tr><th>Button</th><th>Function</th></tr>
+<tr><td><b>Add Row</b></td><td>Adds a new mapping row, automatically populating the attribute drop-down options based on the configured node types</td></tr>
+<tr><td><b>Remove Selected Rows</b></td><td>Deletes the currently selected rows or the rows whose checkboxes are checked (supports multiple selection)</td></tr>
+<tr><td><b>Attribute Browser</b></td><td>Opens the attribute browser window, allowing you to search and view all attributes and their current values of the selected node in the scene</td></tr>
+<tr><td><b>Help</b></td><td>Shows this help window (HTML version)</td></tr>
+<tr><td><b>Save Preset</b></td><td>Exports all current mapping configurations to a <code>.mmap</code> preset file</td></tr>
+<tr><td><b>Load Preset</b></td><td>Restores the mapping configuration from a <code>.mmap</code> preset file (includes node type information)</td></tr>
+<tr><td><b>Clear Source Attributes</b></td><td>Resets the source attribute column of all rows to "(None)"</td></tr>
+<tr><td><b>Clear Target Attributes</b></td><td>Resets the target attribute column of all rows to "(None)"</td></tr>
+<tr><td><b>Reverse Mapping</b></td><td>Swaps the source and target roles: node types are swapped and each row's source/target attributes are swapped</td></tr>
+<tr><td><b>Clear Table</b></td><td>Deletes all rows in the table</td></tr>
+<tr><td><b>Load Sample Data</b></td><td>Loads a set of common PBR material attribute mapping examples (baseColor→color, etc.)</td></tr>
+<tr><td><b>Open Folder</b></td><td>Opens the preset file storage directory in the file explorer</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="context-menu">4. Context Menu</h2>
+
+<p>The tool provides two right-click menus:</p>
+<ul>
+  <li><b>Table cell right-click</b>: right-click on the source or target attribute column to quickly "Clear Source Attributes" or "Clear Target Attributes"</li>
+  <li><b>Whole table right-click</b>: right-click on an empty area to perform "Reverse Mapping", "Clear Table", "Load Sample Data", "Load Preset", etc.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="transform-func">5. Transform Functions</h2>
+
+<p>The "Transform Function" column is used to perform simple mathematical transforms when passing attribute values, for example:</p>
+
+<table>
+<tr><th>Scenario</th><th>Transform Function</th><th>Description</th></tr>
+<tr><td>Invert roughness</td><td><code>1-x</code></td><td>Used when Maya's <code>roughness</code> follows a 1-roughness relationship</td></tr>
+<tr><td>Normalize</td><td><code>x/255</code></td><td>Maps from 0-255 to 0-1</td></tr>
+<tr><td>Denormalize</td><td><code>x*255</code></td><td>Maps from 0-1 to 0-255</td></tr>
+<tr><td>Gamma correction</td><td><code>x**2.2</code></td><td>Linear → sRGB conversion</td></tr>
+</table>
+
+<div class="warn">
+  <b>Note:</b> Transform functions use Python expression syntax; <code>x</code> represents the current attribute value. Only simple mathematical operations are supported; function calls or custom functions are not allowed.
+</div>
+
+<div class="note">
+  <b>Default value</b>: the default value used when the target attribute has no value. For example <code>0.5</code>, <code>(0,0,0)</code>, <code>""</code>, etc.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="preset">6. Preset Management</h2>
+
+<h3>Preset File Location</h3>
+<p>Preset files are stored in the tool's <code>preset/</code> directory with the <code>.mmap</code> extension. You can quickly locate them using the "Open Folder" button at the bottom of the interface.</p>
+
+<h3>Preset File Naming</h3>
+<p>It is recommended to use the <code>源类型_目标类型.mmap</code> naming format, for example:</p>
+<ul>
+  <li><code>lambert_aiStandardSurface.mmap</code></li>
+  <li><code>phong_redshiftStandardMaterial.mmap</code></li>
+  <li><code>standardSurface_arnold.mmap</code></li>
+</ul>
+
+<h3>Preset File Structure</h3>
+<p>The preset file is in JSON format and contains:</p>
+<pre>
+{
+  "source_type": "lambert",
+  "target_type": "aiStandardSurface",
+  "mappings": [
+    {"source": "color", "target": "baseColor", "transform": "", "default": ""},
+    {"source": "transparency", "target": "opacity", "transform": "", "default": "1.0"},
+    ...
+  ]
+}
+</pre>
+
+<!-- ============================================================ -->
+<h2 id="examples">7. Common Mapping Examples</h2>
+
+<h3>lambert → aiStandardSurface</h3>
+<table>
+<tr><th>Source Attribute</th><th>Target Attribute</th><th>Transform Function</th><th>Default Value</th></tr>
+<tr><td>color</td><td>baseColor</td><td></td><td></td></tr>
+<tr><td>transparency</td><td>opacity</td><td>1-x</td><td>1.0</td></tr>
+<tr><td>ambientColor</td><td>emission</td><td></td><td>(0,0,0)</td></tr>
+<tr><td>incandescence</td><td>emissionColor</td><td></td><td></td></tr>
+<tr><td>bumpMapping</td><td>normalCamera</td><td></td><td></td></tr>
+</table>
+
+<h3>phong → redshiftStandardMaterial</h3>
+<table>
+<tr><th>Source Attribute</th><th>Target Attribute</th><th>Transform Function</th><th>Default Value</th></tr>
+<tr><td>color</td><td>base_color</td><td></td><td></td></tr>
+<tr><td>transparency</td><td>opacity</td><td>1-x</td><td>1.0</td></tr>
+<tr><td>cosinePower</td><td>roughness</td><td>1 - x/100</td><td>0.5</td></tr>
+<tr><td>specularColor</td><td>reflectivity</td><td></td><td></td></tr>
+<tr><td>incandescence</td><td>emission_color</td><td></td><td></td></tr>
+</table>
+
+<div class="note">
+  <b>Tip:</b> Click the "Load Sample Data" button to quickly load the standard lambert → aiStandardSurface mapping.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="tips">8. Usage Tips</h2>
+
+<div class="step">
+<ol>
+  <li><b>Quickly populate attributes</b>: set the source/target node types first, then click "Add Row"; the drop-down automatically shows all attributes of that type</li>
+  <li><b>Batch multi-delete</b>: check the checkboxes in front of multiple rows, then click "Remove Selected Rows" to delete several rows at once</li>
+  <li><b>Reuse via reverse mapping</b>: after completing an <code>A → B</code> mapping, click "Reverse Mapping" to obtain the <code>B → A</code> configuration (note that transform functions need to be adjusted manually)</li>
+  <li><b>Complex value transforms</b>: for complex logic (conditionals, string processing, etc.), use Maya's built-in connection expressions or scripts</li>
+  <li><b>Preset version control</b>: preset files are plain JSON and can be version-controlled with Git/SVN</li>
+  <li><b>Team collaboration</b>: add the preset/ directory to a shared path so team members can use the same set of mappings</li>
+</ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="faq">9. FAQ</h2>
+
+<h3>Q: Why is the drop-down list empty?</h3>
+<p>A: You need to set the source/target node types first (click the "Browse" button or type manually). The node type determines the contents of the drop-down list.</p>
+
+<h3>Q: What is the attribute browser for?</h3>
+<p>A: It is used to quickly view all attributes and their current values of the selected node in the scene. You can refer to the actual values when writing in the "Transform Function" column. You can also drag attributes from the browser into the table.</p>
+
+<h3>Q: What syntax do transform functions support?</h3>
+<p>A: Python mathematical expressions are supported; <code>x</code> represents the current attribute value. For example <code>1-x</code>, <code>x*2</code>, <code>x**0.5</code>.</p>
+
+<h3>Q: Can preset files be used across tools?</h3>
+<p>A: <code>.mmap</code> presets are a tool-specific format and cannot be used directly by other tools. However, their JSON structure is simple and a script can be written to convert them.</p>
+
+<h3>Q: What happens to transform functions after reverse mapping?</h3>
+<p>A: Transform functions are kept unchanged and are not automatically inverted. If the original function was <code>1-x</code>, you may need to change it to <code>x</code> or an inverse function when reversing.</p>
+
+<div class="footer">
+  Material Node Attribute Mapper · Squirrel Asset Manager
+</div>
+
+</div>
+</div>
+
+</body>
+</html>

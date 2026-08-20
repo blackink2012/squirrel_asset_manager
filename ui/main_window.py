@@ -49,6 +49,20 @@ except ImportError:
     SettingsManager = None
 
 try:
+    from ..utils.i18n import t, set_language as _i18n_set_language
+    from ..utils.i18n import t as _t  # 别名，规避局部变量 t 遮蔽
+    from ..utils.i18n import help_path as _i18n_help_path
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+    def _i18n_set_language(lang):
+        pass
+    def _t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+    def _i18n_help_path(p):
+        return p
+
+try:
     from ..utils.error_handler import handle_errors
 except ImportError:
     def handle_errors(context="", show_dialog=True):
@@ -93,7 +107,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             parent = get_maya_window()
         super(MaterialLibraryWindow, self).__init__(parent)
 
-        self.setWindowTitle(f"Maya资产管理工具 版本 {self.VERSION}")
+        self.setWindowTitle(t("app.title", version=self.VERSION))
         self.setMinimumSize(1100, 650)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowFlags(
@@ -196,6 +210,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         defaults = {
             "font_size": 13, "thumb_size": 180,
             "default_view": "icon",
+            "language": "zh",
             "last_library_path": "", "last_export_path": "",
             "window_state": {"width": 1400, "height": 900},
             "active_category": "",
@@ -466,7 +481,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         self._panel_toggle_btn = QtWidgets.QPushButton("\u2261")
         self._panel_toggle_btn.setFixedSize(btn_height, btn_height)
-        self._panel_toggle_btn.setToolTip("显示/隐藏分类面板")
+        self._panel_toggle_btn.setToolTip(t("panel.toggle.tooltip"))
         self._panel_toggle_btn.setStyleSheet(
             f"QPushButton {{ background-color: transparent; color: #909090; border: none;"
             f"font-size: {font_size + 5}px; font-weight: bold; }}"
@@ -497,8 +512,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             QPushButton:checked {{ background-color: #5294e2; color: #ffffff; }}
         """
 
-        refresh_btn = QtWidgets.QPushButton("↻ 刷新")
-        refresh_btn.setToolTip("刷新材质库")
+        refresh_btn = QtWidgets.QPushButton(t("btn.refresh"))
+        refresh_btn.setToolTip(t("btn.refresh.tooltip"))
         refresh_btn.setStyleSheet(btn_style)
         qt_connect(refresh_btn.clicked, self._on_refresh)
         layout.addWidget(refresh_btn)
@@ -509,7 +524,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             QPushButton:hover {{ background-color: #3d4a6a; }}
             QPushButton:pressed {{ background-color: #1d2a4a; }}
         """
-        self._ai_tools_btn = QtWidgets.QPushButton("🤖 AI 工具")
+        self._ai_tools_btn = QtWidgets.QPushButton(t("btn.ai_tools"))
         self._ai_tools_btn.setStyleSheet(ai_btn_style)
         self._ai_tools_menu = QtWidgets.QMenu(self)
         self._ai_tools_menu.setStyleSheet(f"""
@@ -522,7 +537,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._refresh_ai_tools_menu()
         layout.addWidget(self._ai_tools_btn)
 
-        self._quick_tools_btn = QtWidgets.QPushButton("快捷工具")
+        self._quick_tools_btn = QtWidgets.QPushButton(t("btn.quick_tools"))
         self._quick_tools_btn.setStyleSheet(btn_style)
         self._quick_tools_menu = QtWidgets.QMenu(self)
         self._quick_tools_menu.setStyleSheet(f"""
@@ -535,7 +550,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._refresh_quick_tools_menu()
         layout.addWidget(self._quick_tools_btn)
 
-        settings_btn = QtWidgets.QPushButton("设置")
+        settings_btn = QtWidgets.QPushButton(t("btn.settings"))
         settings_btn.setStyleSheet(btn_style)
         qt_connect(settings_btn.clicked, self._on_settings)
         layout.addWidget(settings_btn)
@@ -543,7 +558,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         help_btn = QtWidgets.QPushButton("?")
         help_btn.setObjectName("help_btn")
         help_btn.setFixedSize(btn_height, btn_height)
-        help_btn.setToolTip("使用帮助")
+        help_btn.setToolTip(t("btn.help.tooltip"))
         help_btn.setStyleSheet(
             f"QPushButton {{ background-color: #3a3a3a; color: #ffa502; border: none;"
             f"font-size: {font_size + 5}px; font-weight: bold; border-radius: 4px; }}"
@@ -558,7 +573,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._ai_tools_menu.clear()
 
         if not hasattr(self, '_thumbnail_grid'):
-            no_action = self._ai_tools_menu.addAction("初始化中...")
+            no_action = self._ai_tools_menu.addAction(t("menu.ai.initializing"))
             no_action.setEnabled(False)
             return
 
@@ -567,16 +582,16 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         if selected_count > 0:
             action = self._ai_tools_menu.addAction(
-                f"🤖 AI 分析缩略图 ({selected_count} 个选中资产)")
+                t("menu.ai.analyze_count", count=selected_count))
         else:
             action = self._ai_tools_menu.addAction(
-                "🤖 AI 分析缩略图 (右键资产→AI 分析)")
+                t("menu.ai.analyze_hint"))
         qt_connect(action.triggered, self._on_ai_analysis_with_config)
 
         self._ai_tools_menu.addSeparator()
 
         no_action = self._ai_tools_menu.addAction(
-            "更多 AI 工具请添加到此菜单...")
+            t("menu.ai.more"))
         no_action.setEnabled(False)
 
     def _refresh_quick_tools_menu(self):
@@ -587,7 +602,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         
         if not os.path.exists(quicktools_dir):
             os.makedirs(quicktools_dir, exist_ok=True)
-            action = self._quick_tools_menu.addAction("暂无快捷工具")
+            action = self._quick_tools_menu.addAction(t("menu.quick.none"))
             action.setEnabled(False)
             return
         
@@ -597,7 +612,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 scripts.append(filename)
         
         if not scripts:
-            action = self._quick_tools_menu.addAction("暂无快捷工具")
+            action = self._quick_tools_menu.addAction(t("menu.quick.none"))
             action.setEnabled(False)
             return
         
@@ -692,7 +707,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         self._category_tree = CategoryTreeWidget()
         cat_layout.addWidget(self._category_tree)
-        self._left_panel_container.addTab(cat_widget, "分类")
+        self._left_panel_container.addTab(cat_widget, t("tab.left.category"))
 
         # Tab 1: 项目
         project_widget = QtWidgets.QWidget()
@@ -715,7 +730,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         proj_toolbar_layout = QtWidgets.QHBoxLayout(proj_toolbar)
         proj_toolbar_layout.setContentsMargins(8, 6, 8, 6)
 
-        create_proj_btn = QtWidgets.QPushButton("+ 创建")
+        create_proj_btn = QtWidgets.QPushButton(t("btn.project.create"))
         create_proj_btn.setStyleSheet(
             "QPushButton { background-color: #5294e2; color: #fff; border: none;"
             "padding: 4px 10px; font-size: 11px; border-radius: 3px; }"
@@ -724,7 +739,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         qt_connect(create_proj_btn.clicked, self._on_create_project_lib)
         proj_toolbar_layout.addWidget(create_proj_btn)
 
-        refresh_proj_btn = QtWidgets.QPushButton("↻ 刷新")
+        refresh_proj_btn = QtWidgets.QPushButton(t("btn.project.refresh"))
         refresh_proj_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #d0d0d0; border: none;"
             "padding: 4px 10px; font-size: 11px; border-radius: 3px; }"
@@ -752,11 +767,11 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             setattr(self, '_active_mgr', self._project_mgr), self._on_material_dropped_on_category(m, c, r))[-1])
         project_layout.addWidget(self._proj_category_tree, 1)
 
-        self._left_panel_container.addTab(project_widget, "项目")
+        self._left_panel_container.addTab(project_widget, t("tab.left.project"))
 
         # Tab 2: 收藏
         self._favorites_panel = FavoritesPanelWidget()
-        self._left_panel_container.addTab(self._favorites_panel, "收藏")
+        self._left_panel_container.addTab(self._favorites_panel, t("tab.left.favorites"))
 
         # 切换到"工程"选项卡时自动加载
         qt_connect(self._left_panel_container.currentChanged, self._on_left_tab_changed)
@@ -785,25 +800,25 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             QMenu::item {{ padding:6px 24px 6px 14px; font-size:{font_size}px; }}
             QMenu::item:selected {{ background-color:#2a3a5a; color:#5294e2; }}
         """)
-        qt_connect(import_menu.addAction("📄 从文件导入").triggered, self._on_import_files)
-        qt_connect(import_menu.addAction("📦 导入 .zasset 资产").triggered, self._on_import_zasset_folder)
+        qt_connect(import_menu.addAction(t("menu.import.file")).triggered, self._on_import_files)
+        qt_connect(import_menu.addAction(t("menu.import.zasset")).triggered, self._on_import_zasset_folder)
         import_menu.addSeparator()
-        qt_connect(import_menu.addAction("🖼️ 导入贴图").triggered, self._on_import_textures)
-        qt_connect(import_menu.addAction("☀️ 导入HDR").triggered, self._on_import_hdr)
+        qt_connect(import_menu.addAction(t("menu.import.texture")).triggered, self._on_import_textures)
+        qt_connect(import_menu.addAction(t("menu.import.hdr")).triggered, self._on_import_hdr)
 
-        import_btn = QtWidgets.QPushButton("📥 从外部导入")
+        import_btn = QtWidgets.QPushButton(t("btn.import"))
         import_btn.setStyleSheet(action_btn_style)
-        import_btn.setToolTip("导入外部资产（支持文件夹或单个文件）")
+        import_btn.setToolTip(t("btn.import.tooltip"))
         import_btn.setMenu(import_menu)
         layout.addWidget(import_btn)
 
-        create_asset_btn = QtWidgets.QPushButton("🎯 导出资产")
+        create_asset_btn = QtWidgets.QPushButton(t("btn.export"))
         create_asset_btn.setStyleSheet(
             "QPushButton { background-color: #2d6a4f; color: #ffffff; border: none; "
             "padding: 5px 12px; font-size: 12px; border-radius: 4px; font-weight: bold; }"
             "QPushButton:hover { background-color: #40916c; }"
         )
-        create_asset_btn.setToolTip("从 Maya 选中物体创建材质资产到当前分类")
+        create_asset_btn.setToolTip(t("btn.export.tooltip"))
         qt_connect(create_asset_btn.clicked, self._on_create_asset)
         layout.addWidget(create_asset_btn)
 
@@ -821,28 +836,29 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             QPushButton:checked { background-color: #5294e2; color: #ffffff; }
         """
 
-        self._tag_btn = QtWidgets.QPushButton("编辑标签")
+        self._tag_btn = QtWidgets.QPushButton(t("btn.tag"))
         self._tag_btn.setCheckable(True)
         self._tag_btn.setStyleSheet(view_btn_style)
-        self._tag_btn.setToolTip("选择标签筛选")
+        self._tag_btn.setToolTip(t("btn.tag.tooltip"))
         qt_connect(self._tag_btn.clicked, self._on_tag_popup)
         layout.addWidget(self._tag_btn)
 
-        self._icon_view_btn = QtWidgets.QPushButton("图标")
+        self._icon_view_btn = QtWidgets.QPushButton(t("view.icon"))
         self._icon_view_btn.setCheckable(True)
         self._icon_view_btn.setChecked(True)
         self._icon_view_btn.setStyleSheet(view_btn_style)
         self._icon_view_btn.clicked.connect(lambda: self._switch_view(self.VIEW_ICON))
         layout.addWidget(self._icon_view_btn)
 
-        self._list_view_btn = QtWidgets.QPushButton("列表")
+        self._list_view_btn = QtWidgets.QPushButton(t("view.list"))
         self._list_view_btn.setCheckable(True)
         self._list_view_btn.setStyleSheet(view_btn_style)
         self._list_view_btn.clicked.connect(lambda: self._switch_view(self.VIEW_LIST))
         layout.addWidget(self._list_view_btn)
 
         self._sort_combo = QtWidgets.QComboBox()
-        self._sort_combo.addItems(["名称↑", "名称↓", "类型", "分类", "时间↑", "时间↓"])
+        self._sort_combo.addItems([t("sort.name_asc"), t("sort.name_desc"), t("sort.type"),
+                                   t("sort.category"), t("sort.time_asc"), t("sort.time_desc")])
         self._sort_combo.setStyleSheet("""
             QComboBox { background-color: #3a3a3a; border: 1px solid #4a4a4a; border-radius: 3px;
                 padding: 2px 6px; color: #909090; font-size: 11px; min-width: 80px; }
@@ -853,7 +869,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         """)
         layout.addWidget(self._sort_combo)
 
-        thumb_label = QtWidgets.QLabel("缩略图:")
+        thumb_label = QtWidgets.QLabel(t("label.thumb_size"))
         thumb_label.setStyleSheet("color: #909090; font-size: 12px;")
         layout.addWidget(thumb_label)
 
@@ -1138,14 +1154,14 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         tag_type = self._current_tag_type()
         dlg = QtWidgets.QDialog(self)
         self._tag_dialog = dlg
-        dlg.setWindowTitle("编辑标签")
+        dlg.setWindowTitle(t("dialog.tag_editor.title"))
         dlg.setFixedSize(win_w, win_h)
         dlg.setWindowFlags(dlg.windowFlags() | QtCore.Qt.WindowType.WindowStaysOnTopHint)
         dlg.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose)
         dlg.setStyleSheet("background-color: #2a2a2a;")
         lyt = QtWidgets.QVBoxLayout(dlg); lyt.setSpacing(int(8 * scale))
 
-        hint = QtWidgets.QLabel("选中标签即可筛选  |  右键标签可删除")
+        hint = QtWidgets.QLabel(t("dialog.tag_editor.hint"))
         hint.setStyleSheet(f"color: #808080; font-size: {fs}px;")
         lyt.addWidget(hint)
 
@@ -1205,7 +1221,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                         self._tag_btn.setChecked(bool(active_tags))
                     return h
                 b.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.ActionsContextMenu)
-                del_action = _QAction("删除", b)
+                del_action = _QAction(_t("common.delete"), b)
                 del_action.triggered.connect(make_del(t))
                 b.addAction(del_action)
                 tag_flow.addWidget(b)
@@ -1216,10 +1232,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         add_row = QtWidgets.QHBoxLayout()
         add_input = QtWidgets.QLineEdit()
-        add_input.setPlaceholderText("新标签名称...")
+        add_input.setPlaceholderText(t("ph.new_tag_name"))
         add_input.setStyleSheet(f"background: #333; border: 1px solid #4a4a4a; border-radius: {int(3 * scale)}px; padding: {btn_pad}px {int(8 * scale)}px; color: #e0e0e0; font-size: {fs}px;")
         add_row.addWidget(add_input, 1)
-        add_btn = QtWidgets.QPushButton("添加")
+        add_btn = QtWidgets.QPushButton(t("common.add"))
         add_btn.setStyleSheet(f"QPushButton {{ background: #5294e2; color: #fff; border: none; border-radius: {int(3 * scale)}px; padding: {btn_pad}px {int(12 * scale)}px; font-size: {fs}px; }} QPushButton:hover {{ background: #6ab0ff; }}")
         def add_tag():
             t = add_input.text().strip()
@@ -1234,11 +1250,11 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.addStretch()
-        clear_btn = QtWidgets.QPushButton("清除筛选")
+        clear_btn = QtWidgets.QPushButton(t("dialog.tag_editor.clear_filter"))
         clear_btn.setStyleSheet(f"QPushButton {{ background: #3a3a3a; color: #a0a0a0; border: none; border-radius: {int(3 * scale)}px; padding: {btn_pad}px {int(12 * scale)}px; font-size: {fs}px; }} QPushButton:hover {{ color: #e0e0e0; }}")
         clear_btn.clicked.connect(lambda: (active_tags.clear(), self._thumbnail_grid.filter_by_tags([]), self._tag_btn.setChecked(False), dlg.close()))
         btn_row.addWidget(clear_btn)
-        ok_btn = QtWidgets.QPushButton("关闭")
+        ok_btn = QtWidgets.QPushButton(t("common.close"))
         ok_btn.setStyleSheet(f"QPushButton {{ background: #5294e2; color: #fff; border: none; border-radius: {int(3 * scale)}px; padding: {btn_pad}px {int(16 * scale)}px; font-size: {fs}px; }} QPushButton:hover {{ background: #6ab0ff; }}")
         ok_btn.clicked.connect(dlg.close)
         btn_row.addWidget(ok_btn)
@@ -1846,7 +1862,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         # 确保项目库已加载
         lib_path = self._get_project_library_path()
         if not os.path.isdir(lib_path):
-            QtWidgets.QMessageBox.information(self, "提示", "请先在项目选项卡中点击「创建」按钮初始化项目库")
+            QtWidgets.QMessageBox.information(self, t("msg.notice"), t("msg.project_init_hint"))
             return
         self._project_mgr.load_library(lib_path)
 
@@ -1861,11 +1877,11 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                     collect(n.get("children", []))
         collect(tree)
         if not cats:
-            QtWidgets.QMessageBox.information(self, "提示", "项目库中还没有分类，请先在项目标签中创建分类")
+            QtWidgets.QMessageBox.information(self, t("msg.notice"), t("msg.project_no_category"))
             return
 
         name, ok = QtWidgets.QInputDialog.getItem(
-            self, "复制到项目库", f"选择目标分类 ({len(material_ids)} 个材质):", cats, 0, False)
+            self, t("dialog.copy_to_project.title"), t("dialog.copy_to_project.select", n=len(material_ids)), cats, 0, False)
         if not ok:
             return
         target = cat_ids[cats.index(name)]
@@ -1880,9 +1896,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 imported += 1
         if imported:
             self._on_refresh_project()
-            QtWidgets.QMessageBox.information(self, "完成", f"已复制 {imported} 个材质到项目库")
+            QtWidgets.QMessageBox.information(self, t("msg.done"), t("msg.copy_done", n=imported))
         else:
-            QtWidgets.QMessageBox.warning(self, "失败", "未能复制材质")
+            QtWidgets.QMessageBox.warning(self, t("msg.failed"), t("msg.copy_failed"))
 
     def _on_paste(self):
         """粘贴剪贴板中的材质到当前分类"""
@@ -2005,7 +2021,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 self._cached_ui_data = {}
             self._cached_ui_data[cache_key] = common_tags
         self._right_panel.set_common_tags(common_tags)
-        self._status_info.setText(f"已选择: {material.get('name_cn', '')}")
+        self._status_info.setText(t("status.selected_name", name=material.get('name_cn', '')))
         # 同步收藏状态
         mid = material.get("id", "")
         if mid:
@@ -2327,18 +2343,18 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         btn_pad = int(6 * scale)
 
         dlg = QtWidgets.QDialog(self)
-        dlg.setWindowTitle(f"\u7f16\u8f91 {mat_dict.get('name_cn', '')}")
+        dlg.setWindowTitle(_t("dialog.edit_asset.title", name=mat_dict.get('name_cn', '')))
         dlg.setFixedSize(win_w, win_h)
         dlg.setStyleSheet("background-color: #2a2a2a;")
         lyt = QtWidgets.QVBoxLayout(dlg); lyt.setSpacing(int(10 * scale))
 
         label_font = f"font-size: {fs}px; color: #e0e0e0;"
-        lyt.addWidget(QtWidgets.QLabel(f'<span style="{label_font}">\u4e2d\u6587\u540d</span>'))
+        lyt.addWidget(QtWidgets.QLabel(f'<span style="{label_font}">{_t("label.chinese_name")}</span>'))
         cn = QtWidgets.QLineEdit(mat_dict.get("name_cn", ""))
         cn.setStyleSheet(f"background-color: #333; border: 1px solid #4a4a4a; border-radius: {int(3 * scale)}px; padding: {btn_pad}px {int(8 * scale)}px; color: #e0e0e0; font-size: {fs}px;")
         lyt.addWidget(cn)
 
-        lyt.addWidget(QtWidgets.QLabel(f'<span style="{label_font}">\u5206\u7c7b</span>'))
+        lyt.addWidget(QtWidgets.QLabel(f'<span style="{label_font}">{_t("label.category")}</span>'))
         cat_combo = QtWidgets.QComboBox()
         cat_combo.setStyleSheet(f"QComboBox {{ background-color: #333; border: 1px solid #4a4a4a; border-radius: {int(3 * scale)}px; padding: {int(5 * scale)}px {int(8 * scale)}px; color: #e0e0e0; font-size: {fs}px; }} QComboBox::drop-down {{ border: none; }}")
         tree = self._active_mgr.get_category_tree()
@@ -2352,7 +2368,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         if idx >= 0: cat_combo.setCurrentIndex(idx)
         lyt.addWidget(cat_combo)
 
-        lyt.addWidget(QtWidgets.QLabel(f'<span style="{label_font}">\u6807\u7b7e</span>'))
+        lyt.addWidget(QtWidgets.QLabel(f'<span style="{label_font}">{_t("label.tag")}</span>'))
         tags_w = QtWidgets.QWidget()
         tags_w.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
         tags_l = FlowLayout(tags_w, margin=0, spacing=int(3 * scale))
@@ -2382,7 +2398,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         add_btn.setFixedSize(int(22 * scale), int(22 * scale))
         add_btn.setStyleSheet(f"QPushButton {{ background-color: #3a3a3a; color: #5294e2; border: 1px solid #4a4a4a; border-radius: {int(11 * scale)}px; font-size: {fs}px; }} QPushButton:hover {{ background-color: #4a4a4a; }}")
         def add_tag():
-            t, ok = QtWidgets.QInputDialog.getText(dlg, "添加标签", "新标签:")
+            t, ok = QtWidgets.QInputDialog.getText(dlg, _t("dialog.add_tag.title"), _t("dialog.add_tag.prompt"))
             if ok and t.strip() and t.strip() not in tags_data:
                 tags_data.append(t.strip()); rebuild()
         add_btn.clicked.connect(add_tag)
@@ -2390,7 +2406,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         common_tags = self._material_manager.get_common_tags(self._current_tag_type()) if not self._use_mock else [
             "金属", "pbr", "布料", "玻璃", "木材"]
-        lyt.addWidget(QtWidgets.QLabel(f'<span style="{label_font}">\u5e38\u7528\u6807\u7b7e</span>'))
+        lyt.addWidget(QtWidgets.QLabel(f'<span style="{label_font}">{_t("label.common_tags")}</span>'))
         common_w = QtWidgets.QWidget()
         common_l = FlowLayout(common_w, margin=0, spacing=int(3 * scale))
         for ct in common_tags:
@@ -2408,9 +2424,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         lyt.addWidget(common_w)
 
         # ── 注释 ──
-        lyt.addWidget(QtWidgets.QLabel(f'<span style="{label_font}">\u6ce8\u91ca</span>'))
+        lyt.addWidget(QtWidgets.QLabel(f'<span style="{label_font}">{_t("label.notes")}</span>'))
         notes_edit = QtWidgets.QPlainTextEdit()
-        notes_edit.setPlaceholderText("\u5907\u6ce8\u4fe1\u606f\uff0c\u652f\u6301\u591a\u884c\u6587\u672c...")
+        notes_edit.setPlaceholderText(_t("ph.notes_placeholder"))
         notes_edit.setPlainText(mat_dict.get("notes", ""))
         notes_edit.setStyleSheet(
             f"QPlainTextEdit {{ background-color: #333; border: 1px solid #4a4a4a; "
@@ -2422,10 +2438,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         lyt.addStretch()
         br = QtWidgets.QHBoxLayout(); br.addStretch()
-        c = QtWidgets.QPushButton("\u53d6\u6d88")
+        c = QtWidgets.QPushButton(_t("common.cancel"))
         c.setStyleSheet(f"QPushButton {{ background-color: #3a3a3a; color: #a0a0a0; border: none; padding: {btn_pad}px {int(16 * scale)}px; border-radius: {int(3 * scale)}px; font-size: {fs}px; }} QPushButton:hover {{ color: #e0e0e0; }}")
         c.clicked.connect(dlg.reject); br.addWidget(c)
-        ok = QtWidgets.QPushButton("\u4fdd\u5b58")
+        ok = QtWidgets.QPushButton(_t("common.save"))
         ok.setStyleSheet(f"QPushButton {{ background-color: #5294e2; color: #fff; border: none; padding: {btn_pad}px {int(16 * scale)}px; border-radius: {int(3 * scale)}px; font-size: {fs}px; }}")
         ok.clicked.connect(dlg.accept); br.addWidget(ok)
         lyt.addLayout(br)
@@ -2594,7 +2610,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         lib = self._libraries[index]
         path = lib["path"]
         if not os.path.isdir(path):
-            QtWidgets.QMessageBox.warning(self, "路径无效", f"资产库路径不存在: {path}")
+            QtWidgets.QMessageBox.warning(self, t("msg.invalid_path"), t("msg.library_path_missing", path=path))
             return
         self._material_manager.load_library(path)
         self._active_mgr = self._material_manager
@@ -2735,9 +2751,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             total = self._material_manager.get_material_count()
         visible = self._thumbnail_grid.get_visible_count()
         sel_count = self._thumbnail_grid.get_selection_count()
-        msg = f"材料: {visible}/{total}"
+        msg = t("status.material_count", visible=visible, total=total)
         if sel_count > 0:
-            msg += f"  |  已选: {sel_count}"
+            msg += t("status.selected", count=sel_count)
         self._status_count.setText(msg)
 
     def _update_batch_action_bar(self):
@@ -2774,10 +2790,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                         print(f"[BatchRename] 失败: {mid} → {e}")
             mgr.reload()
             self._refresh_keep_current()
-            msg = f"批量重命名完成：成功 {success} 个"
+            msg = t("msg.batch_rename_done", success=success)
             if failed:
-                msg += f"，失败 {failed} 个"
-            QtWidgets.QMessageBox.information(self, "批量重命名", msg)
+                msg += t("msg.batch_rename_failed", failed=failed)
+            QtWidgets.QMessageBox.information(self, t("msg.batch_rename_title"), msg)
 
     def _on_batch_tag(self, materials):
         """批量标签管理"""
@@ -2832,10 +2848,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                     print(f"[BatchTag] 失败: {mid} → {e}")
             mgr.reload()
             self._refresh_keep_current()
-            msg = f"批量标签操作完成：成功 {success} 个"
+            msg = _t("msg.batch_tag_done", success=success)
             if failed:
-                msg += f"，失败 {failed} 个"
-            QtWidgets.QMessageBox.information(self, "批量标签", msg)
+                msg += _t("msg.batch_tag_failed", failed=failed)
+            QtWidgets.QMessageBox.information(self, _t("msg.batch_tag_title"), msg)
 
     def _on_batch_move(self, materials):
         """批量移动分类 — 复用已有的移动逻辑"""
@@ -3184,14 +3200,14 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             self._on_refresh()
             print(f"[VariantDelete] 已删除版本: {version_id} from {zasset_path}")
         else:
-            QtWidgets.QMessageBox.warning(self, "删除失败", f"无法删除版本「{version_id}」")
+            QtWidgets.QMessageBox.warning(self, t("msg.delete_failed"), t("msg.delete_version_failed", version_id=version_id))
 
     def _on_variant_lod_delete(self, zasset_path, version_id, lod_id):
         """右键 → 删除 LOD"""
         reply = QtWidgets.QMessageBox.question(
-            self, "删除 LOD",
-            f"确定要删除版本「{version_id}」的「{lod_id}」吗？\n\n"
-            f"此操作仅删除该 LOD 精度，版本和其他 LOD 不受影响。",
+            self, t("msg.delete_lod"),
+            t("msg.delete_lod_confirm", version_id=version_id, lod_id=lod_id) + "\n\n" +
+            t("msg.delete_lod_hint"),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
             QtWidgets.QMessageBox.No)
         if reply != QtWidgets.QMessageBox.Yes:
@@ -3202,7 +3218,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             self._on_refresh()
             print(f"[LodDelete] 已删除 LOD: {version_id}/{lod_id} from {zasset_path}")
         else:
-            QtWidgets.QMessageBox.warning(self, "删除失败", f"无法删除「{version_id}/{lod_id}」")
+            QtWidgets.QMessageBox.warning(self, t("msg.delete_failed"), t("msg.delete_lod_failed", path=f"{version_id}/{lod_id}"))
 
     def _on_import_single_texture(self, zasset_path, texture_name):
         """右键 → 导入贴图 → 导入单个贴图文件到 Maya"""
@@ -3895,7 +3911,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         """选择文件夹，扫描所有 .zasset 子文件夹 → 复制到当前分类 + 新UUID + 自动去重"""
         if self._use_mock:
             QtWidgets.QMessageBox.information(
-                self, "提示", "当前为 Mock 模式。\n请在设置中配置材质库路径后再导入。")
+                self, t("msg.notice"), t("msg.mock_mode"))
             return
 
         src_dir = QtWidgets.QFileDialog.getExistingDirectory(
@@ -3990,20 +4006,20 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             tree._active_category = cat_path
             desc_ids = tree.get_descendant_ids(cat_path, sub_lib)
             self._on_category_selected(cat_path, desc_ids, sub_lib)
-            msg = f"成功导入 {imported} 个 .zasset 资产。"
+            msg = t("msg.import_zasset_done", n=imported)
             if skipped:
-                msg += f"\n跳过 {skipped} 个（复制失败）。"
-            QtWidgets.QMessageBox.information(self, "导入完成", msg)
+                msg += t("msg.import_zasset_skipped", n=skipped)
+            QtWidgets.QMessageBox.information(self, t("msg.import_done"), msg)
         else:
             QtWidgets.QMessageBox.information(
-                self, "提示", "在选定文件夹中未找到 .zasset 资产。")
+                self, t("msg.notice"), t("msg.no_zasset_found"))
 
     @handle_errors(context="导入贴图", show_dialog=True)
     def _on_import_textures(self):
         """选择多张贴图 → 作为一个PBR贴图资产导入 .zasset + textures/ + pbr_mapping 适配缩略图"""
         if self._use_mock:
             QtWidgets.QMessageBox.information(
-                self, "提示", "当前为 Mock 模式。\n请在设置中配置材质库路径后再导入。")
+                self, t("msg.notice"), t("msg.mock_mode"))
             return
 
         exts = " ".join(f"*{e}" for e in ['.png', '.jpg', '.jpeg', '.tga', '.tif', '.tiff', '.bmp', '.exr'])
@@ -4175,16 +4191,16 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             tree._active_category = cat_path
             desc_ids = tree.get_descendant_ids(cat_path, sub_lib)
             self._on_category_selected(cat_path, desc_ids, sub_lib)
-            QtWidgets.QMessageBox.information(self, "导入完成", f"成功导入 {imported} 个贴图资产。")
+            QtWidgets.QMessageBox.information(self, t("msg.import_done"), t("msg.import_texture_done", n=imported))
         else:
-            QtWidgets.QMessageBox.information(self, "提示", "未能导入贴图。")
+            QtWidgets.QMessageBox.information(self, t("msg.notice"), t("msg.import_texture_failed"))
 
     @handle_errors(context="导入HDR", show_dialog=True)
     def _on_import_hdr(self):
         """选择 .hdr/.exr 文件 → 创建 .zasset + textures/ + 自动缩略图"""
         if self._use_mock:
             QtWidgets.QMessageBox.information(
-                self, "提示", "当前为 Mock 模式。\n请在设置中配置材质库路径后再导入。")
+                self, t("msg.notice"), t("msg.mock_mode"))
             return
 
         files, _ = QtWidgets.QFileDialog.getOpenFileNames(
@@ -4290,16 +4306,16 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             tree._active_category = cat_path
             desc_ids = tree.get_descendant_ids(cat_path, sub_lib)
             self._on_category_selected(cat_path, desc_ids, sub_lib)
-            QtWidgets.QMessageBox.information(self, "导入完成", f"成功导入 {imported} 个HDR资产。")
+            QtWidgets.QMessageBox.information(self, t("msg.import_done"), t("msg.import_hdr_done", n=imported))
         else:
-            QtWidgets.QMessageBox.information(self, "提示", "未能导入HDR资产。")
+            QtWidgets.QMessageBox.information(self, t("msg.notice"), t("msg.import_hdr_failed"))
 
     @handle_errors(context="导入文件", show_dialog=True)
     def _on_import_files(self):
         """从外部文件导入资产（每个选中文件独立生成 .zasset）"""
         if self._use_mock:
             QtWidgets.QMessageBox.information(
-                self, "提示", "当前为 Mock 模式。\n请在设置中配置材质库路径后再导入。")
+                self, t("msg.notice"), t("msg.mock_mode"))
             return
 
         # 支持的文件过滤器
@@ -4511,18 +4527,17 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         if reply != QtWidgets.QMessageBox.StandardButton.Yes:
             return
 
-        self._status_info.setText(f"正在修复 UUID...")
+        self._status_info.setText(t("status.fixing_uuid"))
 
         def _progress_cb(i, total):
-            self._status_info.setText(f"修复 UUID: {i}/{total}")
+            self._status_info.setText(t("status.fixing_uuid_progress", i=i, total=total))
             QtWidgets.QApplication.processEvents()
 
         fixed = mgr.fix_duplicate_uuids(progress_callback=_progress_cb)
 
         if fixed > 0:
-            QtWidgets.QMessageBox.information(self, "修复完成",
-                f"已为 {fixed} 个资产重新分配 UUID。\n\n"
-                f"正在刷新资产库以加载这些资产...")
+            QtWidgets.QMessageBox.information(self, t("msg.fix_done"),
+                t("msg.fix_done_body", n=fixed))
             if self._active_mgr is self._project_mgr:
                 self._on_refresh_project()
             else:
@@ -4938,20 +4953,16 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         """弹出配置对话框 → 批量分析"""
         selected = self._thumbnail_grid.get_selected_materials_list()
         if not selected:
-            QtWidgets.QMessageBox.information(self, "AI 分析",
-                "请先在网格中选中要分析的资产")
+            QtWidgets.QMessageBox.information(self, t("progress.ai.title"),
+                t("msg.ai_select_first"))
             return
 
         try:
             from ..core.ai_analyzer import AIAnalyzer
             analyzer = AIAnalyzer()
             if not analyzer.is_available():
-                QtWidgets.QMessageBox.warning(self, "AI 分析",
-                    "无法连接到 Ollama 服务。\n\n"
-                    "请确保 Ollama 已安装并启动：\n"
-                    "1. 下载安装: https://ollama.com\n"
-                    "2. 拉取模型: ollama pull qwen3-vl:8b\n"
-                    "3. 启动服务: ollama serve")
+                QtWidgets.QMessageBox.warning(self, t("progress.ai.title"),
+                    t("msg.ai_ollama_help"))
                 return
             models = analyzer.get_available_models()
         except Exception:
@@ -4975,8 +4986,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         selected = self._thumbnail_grid.get_selected_materials_list()
         if not selected:
-            QtWidgets.QMessageBox.information(self, "AI 分析",
-                "请先在网格中选中要分析的资产")
+            QtWidgets.QMessageBox.information(self, t("progress.ai.title"),
+                t("msg.ai_select_first"))
             return
 
         total = len(selected)
@@ -4987,21 +4998,21 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             if model:
                 analyzer.model = model
             if not analyzer.is_available():
-                QtWidgets.QMessageBox.warning(self, "AI 分析",
-                    "无法连接到 Ollama 服务，请确保 Ollama 已启动")
+                QtWidgets.QMessageBox.warning(self, t("progress.ai.title"),
+                    t("msg.ai_ollama_unavailable"))
                 return
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "AI 分析", f"初始化失败: {e}")
+            QtWidgets.QMessageBox.warning(self, t("progress.ai.title"), t("msg.ai_init_failed", error=e))
             return
 
         if review:
-            label_text = "正在分析 0/{0} ...".format(total)
+            label_text = t("progress.ai.analyzing", current=0, total=total)
         else:
-            label_text = "正在分析并应用 0/{0} ...".format(total)
+            label_text = t("progress.ai.applying", current=0, total=total)
 
         progress = QtWidgets.QProgressDialog(
-            label_text, "取消", 0, total, self)
-        progress.setWindowTitle("批量 AI 分析")
+            label_text, t("common.cancel"), 0, total, self)
+        progress.setWindowTitle(t("progress.ai.title"))
         progress.setModal(True)
         progress.setMinimumDuration(0)
         progress.show()
@@ -5013,7 +5024,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             if progress.wasCanceled():
                 break
 
-            progress.setLabelText(f"正在分析 {i + 1}/{total}: {mat.get('name', '')}")
+            progress.setLabelText(t("progress.ai.item", current=i + 1, total=total, name=mat.get('name', '')))
             progress.setValue(i)
             QtCore.QCoreApplication.processEvents()
 
@@ -5041,7 +5052,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         progress.close()
 
         if not collected:
-            QtWidgets.QMessageBox.warning(self, "批量 AI 分析", "没有资产分析成功")
+            QtWidgets.QMessageBox.warning(self, t("progress.ai.title"), t("msg.ai_no_success"))
             return
 
         if review:
@@ -5095,8 +5106,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 failed += 1
 
         self._refresh_material_grid()
-        QtWidgets.QMessageBox.information(self, "批量 AI 分析",
-            f"应用完成!\n成功: {success}  失败: {failed}")
+        QtWidgets.QMessageBox.information(self, t("progress.ai.title"),
+            t("msg.ai_applied", success=success, failed=failed))
 
     def _do_ai_analysis_for_material(self, material, show_dialog=True):
         mgr = self._active_mgr
@@ -5110,7 +5121,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._ensure_material_thumb(material)
         thumb_bytes = material.get('thumb_bytes', None)
         if not thumb_bytes:
-            QtWidgets.QMessageBox.warning(self, "AI 分析", "该资产没有缩略图可分析")
+            QtWidgets.QMessageBox.warning(self, t("progress.ai.title"), t("msg.ai_no_thumb"))
             return
 
         sub_library = material.get('sub_library', 'materials')
@@ -5120,12 +5131,12 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
             analyzer = AIAnalyzer()
             if not analyzer.is_available():
-                QtWidgets.QMessageBox.warning(self, "AI 分析",
-                    "无法连接到 Ollama 服务，请确保 Ollama 已启动")
+                QtWidgets.QMessageBox.warning(self, t("progress.ai.title"),
+                    t("msg.ai_ollama_unavailable"))
                 return
 
-            progress_dlg = QtWidgets.QProgressDialog("正在分析缩略图...", "取消", 0, 0, self)
-            progress_dlg.setWindowTitle("AI 分析")
+            progress_dlg = QtWidgets.QProgressDialog(t("progress.ai.analyzing_thumb"), t("common.cancel"), 0, 0, self)
+            progress_dlg.setWindowTitle(t("progress.ai.title"))
             progress_dlg.setModal(True)
             progress_dlg.show()
             QtCore.QCoreApplication.processEvents()
@@ -5135,7 +5146,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             progress_dlg.close()
 
             if not result:
-                QtWidgets.QMessageBox.warning(self, "AI 分析", "分析失败，请重试")
+                QtWidgets.QMessageBox.warning(self, t("progress.ai.title"), t("msg.ai_analyze_failed"))
                 return
 
             if show_dialog:
@@ -5155,7 +5166,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             print(f"[AI Analysis] Error: {e}")
             import traceback
             traceback.print_exc()
-            QtWidgets.QMessageBox.warning(self, "AI 分析", f"分析过程发生错误: {str(e)}")
+            QtWidgets.QMessageBox.warning(self, t("progress.ai.title"), t("msg.ai_error", error=str(e)))
 
     def _on_ai_analysis_applied(self, material_id, updates):
         """应用 AI 分析结果到元数据"""
@@ -5184,9 +5195,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         success = mgr.update_material(material_id, updates)
         if success:
             self._refresh_material_grid()
-            QtWidgets.QMessageBox.information(self, "AI 分析", "元数据已更新")
+            QtWidgets.QMessageBox.information(self, t("progress.ai.title"), t("msg.ai_meta_updated"))
         else:
-            QtWidgets.QMessageBox.warning(self, "AI 分析", "更新元数据失败")
+            QtWidgets.QMessageBox.warning(self, t("progress.ai.title"), t("msg.ai_meta_update_failed"))
 
     def _on_update_asset(self, mid):
         """右键→更新资产：弹出预填对话框，确认后替换原 .zasset"""
@@ -5451,7 +5462,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._export_dialog = dlg
 
         qt_connect(dlg.finished, self._on_export_dialog_closed)
-        dlg.setWindowTitle("更新资产")
+        dlg.setWindowTitle(t("dialog.update_asset.title"))
 
     def _on_create_asset(self):
         """资产导出流程 V3 — 每次点击重建对话框"""
@@ -5519,8 +5530,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         cat_id = cat_tree.get_active_category()
         root_lib = cat_tree.get_active_root_lib()
         if not cat_id or cat_id == "all":
-            QtWidgets.QMessageBox.warning(self, "导出资产",
-                "请先在左侧分类树中选择目标分类。")
+            QtWidgets.QMessageBox.warning(self, t("dialog.asset_create.title"),
+                t("msg.export_select_category"))
             return
 
         _RESOLVED_DIR = ""
@@ -5558,8 +5569,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         else:
             cat_dir = self._active_mgr.get_category_disk_path(cat_id, sub_lib_hint=root_lib)
         if not cat_dir:
-            QtWidgets.QMessageBox.warning(self, "导出资产",
-                f"分类文件夹不存在: {cat_id}")
+            QtWidgets.QMessageBox.warning(self, t("dialog.asset_create.title"),
+                t("msg.category_dir_missing", cat_id=cat_id))
             return
 
         # ── ③ 解析选中项：分离材质节点与 DAG 物体 ──
@@ -6243,22 +6254,22 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         failed_count = sum(1 for r in results if not r.success)
 
         if failed_count == 0:
-            QtWidgets.QMessageBox.information(self, "导出资产",
-                f"导出完成！\n\n✅ 全部成功: {total} 个资产")
+            QtWidgets.QMessageBox.information(self, t("dialog.asset_create.title"),
+                t("msg.export_all_success", n=total))
         else:
             failed_details = "\n".join(
-                f"• {r.asset_name}: {r.error[:80] or '未知错误'}"
+                f"• {r.asset_name}: {r.error[:80] or t('msg.unknown_error')}"
                 for r in results if not r.success
             )
             msg = (
-                f"导出完成！\n\n"
-                f"✅ 成功: {success_count} 个\n"
-                f"❌ 失败: {failed_count} 个\n\n"
-                f"── 失败详情 ──\n"
-                f"{failed_details}"
+                t("msg.export_done") + "\n\n"
+                + t("msg.export_success_count", n=success_count) + "\n"
+                + t("msg.export_failed_count", n=failed_count) + "\n\n"
+                + t("msg.export_failed_detail_title") + "\n"
+                + failed_details
             )
             reply = QtWidgets.QMessageBox.question(
-                self, "导出资产", msg,
+                self, t("dialog.asset_create.title"), msg,
                 QtWidgets.QMessageBox.StandardButton.Retry
                 | QtWidgets.QMessageBox.StandardButton.Close,
             )
@@ -6283,7 +6294,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 failed_configs.append(self._asset_configs[i])
 
         if not failed_configs:
-            QtWidgets.QMessageBox.information(self, "导出资产", "没有需要重试的项目。")
+            QtWidgets.QMessageBox.information(self, t("dialog.asset_create.title"), t("msg.no_retry_items"))
             return
 
         # 重新处理失败项
@@ -6321,7 +6332,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         import webbrowser
         import os
         plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        help_path = os.path.join(plugin_root, "Assets", "help", "help.html")
+        help_path = _i18n_help_path(os.path.join(plugin_root, "Assets", "help", "help.html"))
         if os.path.isfile(help_path):
             webbrowser.open("file:///" + help_path.replace(os.sep, "/"))
         else:
@@ -6518,6 +6529,15 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         # 按变更项增量更新
         font_changed = "font_size" in settings
         path_changed = False
+
+        # 语言变更 → 立即生效到 i18n，并提示重启
+        if "language" in settings:
+            _i18n_set_language(settings["language"])
+            QtWidgets.QMessageBox.information(
+                self,
+                "语言 / Language",
+                t("msg.language_restart"),
+            )
         config_changed = any(k in settings for k in (
             "default_thumb_size", "default_view", "texture_suffixes",
             "common_tags", "asset_file_extensions", "geometry_extensions",
@@ -6720,18 +6740,18 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             当 choice=="add_lod" 时 version_id 为目标版本；其余情况为 None
         """
         msg = QtWidgets.QMessageBox(self)
-        msg.setWindowTitle("更新资产")
-        msg.setText(f"资产「{asset_name}」已存在。\n\n请选择更新方式：")
+        msg.setWindowTitle(t("dialog.update_asset.title"))
+        msg.setText(t("dialog.update_asset.exists", name=asset_name))
         msg.setIcon(QtWidgets.QMessageBox.Question)
 
-        btn_add_lod = msg.addButton("追加为 LOD", QtWidgets.QMessageBox.ActionRole)
-        btn_new_ver = msg.addButton("创建新版本", QtWidgets.QMessageBox.ActionRole)
-        btn_replace = msg.addButton("替换资产", QtWidgets.QMessageBox.ActionRole)
-        btn_cancel = msg.addButton("取消", QtWidgets.QMessageBox.RejectRole)
+        btn_add_lod = msg.addButton(t("dialog.update_asset.add_lod"), QtWidgets.QMessageBox.ActionRole)
+        btn_new_ver = msg.addButton(t("dialog.update_asset.new_version"), QtWidgets.QMessageBox.ActionRole)
+        btn_replace = msg.addButton(t("dialog.update_asset.replace"), QtWidgets.QMessageBox.ActionRole)
+        btn_cancel = msg.addButton(t("common.cancel"), QtWidgets.QMessageBox.RejectRole)
 
         if not existing_versions:
             btn_add_lod.setEnabled(False)
-            btn_add_lod.setToolTip("当前无可用版本，请先创建新版本")
+            btn_add_lod.setToolTip(t("dialog.update_asset.no_version_tooltip"))
 
         msg.setDefaultButton(btn_add_lod)
         qt_exec(msg)
@@ -6771,6 +6791,15 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
     @classmethod
     def show_window(cls, library_path=None):
         import maya.cmds as cmds
+        # ↓ 必须在创建实例（触发 __init__ → _setup_ui）之前设置语言
+        try:
+            from ..utils.settings import SettingsManager as _SM
+            from ..utils.i18n import set_language as _set_lang
+            _sm = _SM()
+            _sm.load()
+            _set_lang(_sm.get("language", "zh"))
+        except Exception as e:
+            print(f"[i18n] show_window 设置语言失败: {e}")
         if cmds.window(cls.WINDOW_NAME, exists=True):
             cmds.deleteUI(cls.WINDOW_NAME)
         maya_window = get_maya_window()

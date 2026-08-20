@@ -4,6 +4,12 @@
 import os
 from ..utils.maya_utils import get_qt_modules
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 try:
     from PySide6 import QtMultimedia, QtMultimediaWidgets
@@ -203,30 +209,30 @@ class PreviewPanelWidget(QtWidgets.QWidget):
 
         # ── 标题行 ──
         hr = QtWidgets.QHBoxLayout(); hr.setSpacing(4)
-        lbl = QtWidgets.QLabel("属性")
+        lbl = QtWidgets.QLabel(t("preview_panel.attributes"))
         lbl.setStyleSheet("color: #e0e0e0; font-size: 13px; font-weight: bold;")
         hr.addWidget(lbl); hr.addStretch(1)
 
         self._fav_btn = QtWidgets.QPushButton("☆")
-        self._fav_btn.setFixedSize(22, 22); self._fav_btn.setToolTip("收藏")
+        self._fav_btn.setFixedSize(22, 22); self._fav_btn.setToolTip(t("common.favorite"))
         self._fav_btn.setStyleSheet("QPushButton { background:transparent; color:#606060; border:none; font-size:15px; } QPushButton:hover { color:#FFD700; }")
         self._fav_btn.clicked.connect(self._on_fav); self._fav_btn.setVisible(False)
         hr.addWidget(self._fav_btn)
 
         self._edit_btn = QtWidgets.QPushButton("✏")
-        self._edit_btn.setFixedSize(22, 22); self._edit_btn.setToolTip("编辑")
+        self._edit_btn.setFixedSize(22, 22); self._edit_btn.setToolTip(t("common.edit"))
         self._edit_btn.setStyleSheet("QPushButton { background:transparent; color:#808080; border:none; font-size:13px; } QPushButton:hover { color:#5294e2; }")
         self._edit_btn.clicked.connect(self._enter_edit)
         hr.addWidget(self._edit_btn)
 
         self._save_btn = QtWidgets.QPushButton("✔")
-        self._save_btn.setFixedSize(22, 22); self._save_btn.setToolTip("保存")
+        self._save_btn.setFixedSize(22, 22); self._save_btn.setToolTip(t("common.save"))
         self._save_btn.setStyleSheet("QPushButton { background:transparent; color:#5294e2; border:none; font-size:13px; } QPushButton:hover { color:#6ab0ff; }")
         self._save_btn.clicked.connect(self._save); self._save_btn.setVisible(False)
         hr.addWidget(self._save_btn)
 
         self._cancel_btn = QtWidgets.QPushButton("✖")
-        self._cancel_btn.setFixedSize(22, 22); self._cancel_btn.setToolTip("取消")
+        self._cancel_btn.setFixedSize(22, 22); self._cancel_btn.setToolTip(t("common.cancel"))
         self._cancel_btn.setStyleSheet("QPushButton { background:transparent; color:#808080; border:none; font-size:13px; } QPushButton:hover { color:#e06060; }")
         self._cancel_btn.clicked.connect(self._cancel); self._cancel_btn.setVisible(False)
         hr.addWidget(self._cancel_btn)
@@ -254,22 +260,22 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         self._d_asset_name.setVisible(False)
         l.addWidget(self._d_asset_name)
 
-        self._d_type = QtWidgets.QLabel("\u8282\u70b9\u7c7b\u578b: -")
+        self._d_type = QtWidgets.QLabel(t("preview_panel.node_type") + ": -")
         self._d_type.setStyleSheet("color:#909090; font-size:11px;")
         self._d_type.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         l.addWidget(self._d_type)
 
-        self._d_asset = QtWidgets.QLabel("\u8d44\u4ea7\u7c7b\u578b: -")
+        self._d_asset = QtWidgets.QLabel(t("preview_panel.asset_type") + ": -")
         self._d_asset.setStyleSheet("color:#909090; font-size:11px;")
         self._d_asset.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         l.addWidget(self._d_asset)
 
-        self._d_cat = QtWidgets.QLabel("\u5206\u7c7b: -")
+        self._d_cat = QtWidgets.QLabel(t("common.category") + ": -")
         self._d_cat.setStyleSheet("color:#909090; font-size:11px;")
         self._d_cat.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         l.addWidget(self._d_cat)
 
-        self._d_filetype = QtWidgets.QLabel("\u683c\u5f0f: -")
+        self._d_filetype = QtWidgets.QLabel(t("preview_panel.format") + ": -")
         self._d_filetype.setStyleSheet("color:#909090; font-size:11px;")
         self._d_filetype.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         l.addWidget(self._d_filetype)
@@ -280,7 +286,7 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         self._d_ani.setVisible(False)
         l.addWidget(self._d_ani)
 
-        self._d_filesize = QtWidgets.QLabel("大小: -")
+        self._d_filesize = QtWidgets.QLabel(t("preview_panel.size") + ": -")
         self._d_filesize.setStyleSheet("color:#909090; font-size:11px;")
         self._d_filesize.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         l.addWidget(self._d_filesize)
@@ -320,7 +326,7 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         sep.setStyleSheet("color:#3a3a3a; margin:2px 0;")
         l.addWidget(sep)
 
-        l.addWidget(QtWidgets.QLabel("标签")); l.itemAt(l.count()-1).widget().setStyleSheet("color:#808080; font-size:11px;")
+        l.addWidget(QtWidgets.QLabel(t("common.tag"))); l.itemAt(l.count()-1).widget().setStyleSheet("color:#808080; font-size:11px;")
 
         self._d_tags = FlowWidget()
         l.addWidget(self._d_tags)
@@ -341,22 +347,22 @@ class PreviewPanelWidget(QtWidgets.QWidget):
 
         s = "background:#333; border:1px solid #4a4a4a; border-radius:3px; padding:4px 6px; color:#e0e0e0; font-size:12px;"
         self._e_name = QtWidgets.QLineEdit(); self._e_name.setStyleSheet(s)
-        l.addWidget(QtWidgets.QLabel("名称")); l.addWidget(self._e_name)
+        l.addWidget(QtWidgets.QLabel(t("common.name"))); l.addWidget(self._e_name)
 
         self._e_cat = QtWidgets.QComboBox()
         self._e_cat.setStyleSheet("QComboBox { background:#333; border:1px solid #4a4a4a; border-radius:3px; padding:3px 5px; color:#e0e0e0; font-size:12px; } QComboBox::drop-down { border:none; } QComboBox QAbstractItemView { background:#333; color:#e0e0e0; font-size:12px; }")
-        l.addWidget(QtWidgets.QLabel("分类")); l.addWidget(self._e_cat)
+        l.addWidget(QtWidgets.QLabel(t("common.category"))); l.addWidget(self._e_cat)
 
-        l.addWidget(QtWidgets.QLabel("标签"))
+        l.addWidget(QtWidgets.QLabel(t("common.tag")))
         self._e_tags = FlowWidget()
         l.addWidget(self._e_tags)
 
-        add = QtWidgets.QPushButton("+ 添加标签")
+        add = QtWidgets.QPushButton(t("preview_panel.add_tag"))
         add.setStyleSheet("QPushButton { background:transparent; color:#5294e2; border:none; font-size:11px; } QPushButton:hover { color:#6ab0ff; }")
         add.clicked.connect(self._add_tag)
         l.addWidget(add)
 
-        l.addWidget(QtWidgets.QLabel("常用标签"))
+        l.addWidget(QtWidgets.QLabel(t("preview_panel.common_tags")))
         self._e_common = FlowWidget()
         l.addWidget(self._e_common)
         l.addStretch()
@@ -369,7 +375,7 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         l = QtWidgets.QVBoxLayout(w); l.setContentsMargins(10, 8, 10, 10); l.setSpacing(6)
 
         hr = QtWidgets.QHBoxLayout()
-        h = QtWidgets.QLabel("预览"); h.setStyleSheet("color:#e0e0e0; font-size:13px; font-weight:bold;")
+        h = QtWidgets.QLabel(t("preview_panel.preview")); h.setStyleSheet("color:#e0e0e0; font-size:13px; font-weight:bold;")
         hr.addWidget(h); hr.addStretch()
         l.addLayout(hr)
 
@@ -386,11 +392,11 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.setSpacing(6)
         btn_s = "QPushButton { background:#3a3a3a; color:#d0d0d0; border:none; padding:5px 12px; font-size:12px; border-radius:4px; } QPushButton:hover { background:#4a4a4a; }"
-        cap_btn = QtWidgets.QPushButton("截取")
+        cap_btn = QtWidgets.QPushButton(t("preview_panel.capture"))
         cap_btn.setStyleSheet(btn_s)
         cap_btn.clicked.connect(self._on_thumbnail_capture)
         btn_row.addWidget(cap_btn)
-        imp_btn = QtWidgets.QPushButton("导入")
+        imp_btn = QtWidgets.QPushButton(t("common.import"))
         imp_btn.setStyleSheet(btn_s)
         imp_btn.clicked.connect(self._on_thumbnail_import)
         btn_row.addWidget(imp_btn)
@@ -408,11 +414,11 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         if not material:
             self._material = None
             self._d_name.setText("-"); self._d_asset_name.setText("")
-            self._d_type.setText("\u6750\u8d28\u7c7b\u578b: -")
-            self._d_asset.setText("\u8d44\u4ea7\u7c7b\u578b: -")
-            self._d_cat.setText("\u5206\u7c7b: -")
-            self._d_filetype.setText("\u683c\u5f0f: -")
-            self._d_filesize.setText("\u5927\u5c0f: -")
+            self._d_type.setText(t("preview_panel.node_type") + ": -")
+            self._d_asset.setText(t("preview_panel.asset_type") + ": -")
+            self._d_cat.setText(t("common.category") + ": -")
+            self._d_filetype.setText(t("preview_panel.format") + ": -")
+            self._d_filesize.setText(t("preview_panel.size") + ": -")
             self._d_resolution.setText("")
             for lb in [self._d_software, self._d_renderer, self._d_colorspace, self._d_export]:
                 lb.setText("")
@@ -425,51 +431,51 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         self._d_name.setText(material.get("name_cn", "-"))
         asset_name = material.get("name", "")
         if asset_name:
-            self._d_asset_name.setText(f"\u8d44\u4ea7\u540d: {asset_name}")
+            self._d_asset_name.setText(t("preview_panel.asset_name_value", value=asset_name))
             self._d_asset_name.show()
         else:
             self._d_asset_name.hide()
-        self._d_type.setText(f"\u6750\u8d28\u7c7b\u578b: {material.get('node_type') or '-'}")
-        self._d_asset.setText(f"\u8d44\u4ea7\u7c7b\u578b: {material.get('_asset_type','-')}")
-        self._d_cat.setText(f"\u5206\u7c7b: {material.get('_category_display') or material.get('category','-')}")
+        self._d_type.setText(t("preview_panel.node_type_value", value=material.get('node_type') or '-'))
+        self._d_asset.setText(t("preview_panel.asset_type_value", value=material.get('_asset_type', '-')))
+        self._d_cat.setText(t("preview_panel.category_value", value=material.get('_category_display') or material.get('category', '-')))
 
         # 文件类型和大小
         self._set_file_info(material)
 
         res = self._get_texture_resolution(material)
         if res:
-            self._d_resolution.setText(f"分辨率: {res}")
+            self._d_resolution.setText(t("preview_panel.resolution_value", value=res))
             self._d_resolution.show()
         else:
             self._d_resolution.hide()
 
         sw = material.get('software')
         if sw:
-            self._d_software.setText(f"软件: {sw}")
+            self._d_software.setText(t("preview_panel.software_value", value=sw))
             self._d_software.show()
         else:
             self._d_software.hide()
         if material.get('renderer'):
-            self._d_renderer.setText(f"渲染器: {material.get('renderer')}")
+            self._d_renderer.setText(t("preview_panel.renderer_value", value=material.get('renderer')))
             self._d_renderer.show()
         else:
             self._d_renderer.hide()
         cs = material.get("color_space")
         if cs:
-            self._d_colorspace.setText(f"色彩空间: {cs}")
+            self._d_colorspace.setText(t("preview_panel.color_space_value", value=cs))
             self._d_colorspace.show()
         else:
             self._d_colorspace.hide()
         ed = material.get("create_date") or material.get("export_date", "")
         if ed:
-            self._d_export.setText(f"创建时间: {ed}")
+            self._d_export.setText(t("preview_panel.create_time_value", value=ed))
             self._d_export.show()
         else:
             self._d_export.hide()
         self._rebuild_display_tags(material.get("tags", []))
         notes = material.get("notes", "")
         if notes:
-            self._d_notes.setText(f"\u6ce8\u91ca: {notes}")
+            self._d_notes.setText(t("preview_panel.notes_value", value=notes))
             self._d_notes.setVisible(True)
         else:
             self._d_notes.setVisible(False)
@@ -511,15 +517,15 @@ class PreviewPanelWidget(QtWidgets.QWidget):
             display_formats = [f.upper() for f in exported
                                if f not in ("sicon", "aicon", "mcm")]
             if display_formats:
-                self._d_filetype.setText(f"\u683c\u5f0f: {', '.join(display_formats)}")
+                self._d_filetype.setText(t("preview_panel.format_value", value=', '.join(display_formats)))
             else:
                 # 无任何有效格式 → 未知
-                self._d_filetype.setText("\u683c\u5f0f: \u672a\u77e5")
+                self._d_filetype.setText(t("preview_panel.format_unknown"))
 
             # 动画格式（ani 字段）
             ani = material.get("ani", [])
             if ani:
-                self._d_ani.setText(f"\u52a8\u753b\u683c\u5f0f: {', '.join(ani)}")
+                self._d_ani.setText(t("preview_panel.animation_format_value", value=', '.join(ani)))
                 self._d_ani.show()
             else:
                 self._d_ani.hide()
@@ -527,13 +533,13 @@ class PreviewPanelWidget(QtWidgets.QWidget):
             node_path = material.get("node_json_path", "")
             if node_path and not node_path.endswith(".zasset"):
                 ext = os.path.splitext(node_path)[1].lstrip(".").upper()
-                self._d_filetype.setText(f"\u683c\u5f0f: {ext}")
+                self._d_filetype.setText(t("preview_panel.format_value", value=ext))
             elif json_path and not json_path.endswith(".zasset"):
                 ext = os.path.splitext(json_path)[1].lstrip(".").upper()
-                self._d_filetype.setText(f"\u683c\u5f0f: {ext}")
+                self._d_filetype.setText(t("preview_panel.format_value", value=ext))
             else:
                 # .zasset 但 meta.json 中无 formats 字段 → 未知
-                self._d_filetype.setText("\u683c\u5f0f: \u672a\u77e5")
+                self._d_filetype.setText(t("preview_panel.format_unknown"))
 
         # 文件大小（.zasset 优先，再回退 json_path）
         size = 0
@@ -554,9 +560,9 @@ class PreviewPanelWidget(QtWidgets.QWidget):
             if thumb and os.path.isfile(thumb):
                 size += os.path.getsize(thumb)
         if size > 0:
-            self._d_filesize.setText(f"\u5927\u5c0f: {self._fmt_size(size)}")
+            self._d_filesize.setText(t("preview_panel.size_value", value=self._fmt_size(size)))
         else:
-            self._d_filesize.setText("\u5927\u5c0f: -")
+            self._d_filesize.setText(t("preview_panel.size_dash"))
 
     @staticmethod
     def _fmt_size(size):
@@ -781,9 +787,9 @@ class PreviewPanelWidget(QtWidgets.QWidget):
                 self._e_common.flow.addWidget(b)
 
     def _add_tag(self):
-        t, ok = QtWidgets.QInputDialog.getText(self, "添加标签", "新标签:")
-        if ok and t.strip():
-            tag = t.strip()
+        t_input, ok = QtWidgets.QInputDialog.getText(self, t("preview_panel.add_tag"), t("preview_panel.new_tag") + ":")
+        if ok and t_input.strip():
+            tag = t_input.strip()
             if self._material:
                 self._material.setdefault("tags", [])
                 if tag not in self._material["tags"]:
@@ -818,7 +824,7 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         p = QtGui.QPixmap(size, size); p.fill(QtGui.QColor("#1a1a1a"))
         painter = QtGui.QPainter(p); painter.setPen(QtGui.QColor(255, 255, 255, 25))
         f = painter.font(); f.setPointSize(max(10, size // 13)); painter.setFont(f)
-        painter.drawText(p.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, "\u672a\u9009\u62e9\u6750\u8d28")
+        painter.drawText(p.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, t("preview_panel.no_material_selected"))
         painter.end(); self._preview_label.setPixmap(p)
         for b in getattr(self, '_thumb_btns', []):
             b.setEnabled(False)

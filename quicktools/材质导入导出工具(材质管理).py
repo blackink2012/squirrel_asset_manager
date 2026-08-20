@@ -2,8 +2,28 @@
 import maya.cmds as cmds
 import json
 import os
+import sys
 import uuid
 import traceback
+
+# ========== i18n 初始化 ==========
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+_T = None
+_help_path = lambda p: p
+try:
+    from utils.i18n import t as _T, help_path as _hpath
+    _help_path = _hpath
+except ImportError:
+    try:
+        from squirrel_asset_manager.utils.i18n import t as _T, help_path as _hpath
+        _help_path = _hpath
+    except ImportError:
+        _T = None
+
+def t(key, **kwargs):
+    return _T(key, **kwargs) if _T is not None else (key.format(**kwargs) if kwargs else key)
+
 
 # ========== 共享常量 ==========
 SKIP_ATTRS = {
@@ -524,7 +544,7 @@ def _find_shape_node(shape_path, user_ns=None, old_path_prefix=None, new_path_pr
             if len(ns_path_parts_clean) >= 2:
                 ns_transform_path = "|" + "|".join(ns_path_parts_clean[:-1])
                 possible_transforms = cmds.ls(ns_transform_path, long=True) or []
-                possible_transforms = [t for t in possible_transforms if cmds.nodeType(t) == "transform"]
+                possible_transforms = [pt_ for pt_ in possible_transforms if cmds.nodeType(pt_) == "transform"]
                 for pt in possible_transforms:
                     children = cmds.listRelatives(pt, children=True, fullPath=True, noIntermediate=True) or []
                     for child in children:
@@ -1507,7 +1527,7 @@ def _get_auto_export_params(target_dir=None, custom_name=None, export_all=False,
         if maya_file:
             target_dir = os.path.dirname(maya_file).replace('\\', '/')
         else:
-            result = cmds.fileDialog2(fileMode=2, caption="请选择导出目录")
+            result = cmds.fileDialog2(fileMode=2, caption=t("qtool.matexport.dlg.select_export_dir"))
             if result:
                 target_dir = result[0].replace('\\', '/')
             else:
@@ -1558,19 +1578,19 @@ def radar_export_materials(target_dir=None, custom_name=None, separate_files=Fal
     else:
         selection = cmds.ls(sl=True)
         if not selection:
-            cmds.warning("请先选择模型或材质！")
+            cmds.warning(t("qtool.matexport.msg.select_model_or_material"))
             return
 
         if selection_is_material:
             material_types = {'aiStandardSurface', 'standardSurface', 'lambert', 'blinn', 'phong', 'openPBRSurface', 'pxrSurface', 'aiHair', 'aiSkin', 'aiVolume'}
             materials = [item for item in selection if cmds.nodeType(item) in material_types]
             if not materials:
-                cmds.warning("所选对象不是有效的材质节点！")
+                cmds.warning(t("qtool.matexport.msg.need_valid_material"))
                 return
         else:
             materials = _get_materials_from_selection(selection)
             if not materials:
-                cmds.warning("所选对象没有关联的材质！")
+                cmds.warning(t("qtool.matexport.msg.no_material_associated"))
                 return
 
         selected_shapes = set(_get_all_shapes_with_material_from_selection(selection))
@@ -1777,7 +1797,7 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
                 new_node = cmds.shadingNode(ntype, asUtility=True, name=new_name)
             name_map[old_name] = new_node
         except Exception as e:
-            cmds.warning(f"创建节点失败 [{old_name}]: {e}")
+            cmds.warning(t("qtool.matexport.msg.node_create_failed", old_name=old_name, e=e))
             name_map[old_name] = None
             failed_nodes.append(old_name)
 
@@ -1895,7 +1915,7 @@ def radar_import_materials(file_paths=None, user_ns=None, user_prefix=None, user
             return False
 
         files = QFileDialog.getOpenFileNames(
-            None, '选择材质文件', '', 'Material Files (*.zmetal *.json *.mcm)'
+            None, t("qtool.matexport.dlg.select_material_files"), '', 'Material Files (*.zmetal *.json *.mcm)'
         )[0]
 
         if not files:
@@ -1949,7 +1969,7 @@ def radar_import_materials(file_paths=None, user_ns=None, user_prefix=None, user
                     success, name_map = _radar_import_single_file(filepath, user_prefix, user_suffix, copy_textures=copy_textures)
                 total_success += success
             else:
-                cmds.warning(f"文件不存在: {filepath}")
+                cmds.warning(t("qtool.matexport.msg.file_not_exist", filepath=filepath))
 
     if assign_objects and objects_files:
         all_failed_objects = []
@@ -2001,7 +2021,7 @@ def radar_import_materials(file_paths=None, user_ns=None, user_prefix=None, user
                             cmds.select(failed_transforms, replace=True)
                             print(f"[选择] 已选择 {len(failed_transforms)} 个指定失败的模型")
                 except Exception as e:
-                    cmds.warning(f"指定材质失败: {e}")
+                    cmds.warning(t("qtool.matexport.msg.assign_material_failed", e=e))
     elif assign_objects and not objects_files:
         print("[材质导入] 未找到 objects.json 文件，无法指定材质")
 
@@ -2026,7 +2046,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
     """MA+JSON版导出材质"""
     transforms = cmds.ls(selection=True, transforms=True)
     if not transforms:
-        cmds.warning("请先选择至少一个带有材质的模型！")
+        cmds.warning(t("qtool.matexport.msg.select_transform_with_material"))
         return False
 
     materials = set()
@@ -2044,7 +2064,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
     selected_shapes = list(set(selected_shapes))
 
     if not materials:
-        cmds.warning("所选模型没有关联的材质！")
+        cmds.warning(t("qtool.matexport.msg.selected_no_material"))
         return False
 
     materials = list(materials)
@@ -2119,7 +2139,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                         _replace_texture_paths_in_ma(ma_filepath, textures_dir, [mat])
                         print(f"[MA+JSON纹理打包] {mat} -> {textures_dir}")
                 except Exception as e:
-                    cmds.warning(f"导出 MA 失败 {mat}: {e}")
+                    cmds.warning(t("qtool.matexport.msg.ma_export_failed_mat", mat=mat, e=e))
 
             mat_json_path = os.path.join(mat_folder, f"{mat_name_clean}.mcm").replace("\\", "/")
             try:
@@ -2127,7 +2147,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                     json.dump({mat: result_data[mat]}, f, indent=4, ensure_ascii=False)
                 print(f"[MA+JSON导出] 成功: {mat} 映射 -> {os.path.basename(mat_json_path)}")
             except Exception as e:
-                cmds.warning(f"写入 JSON 失败: {e}")
+                cmds.warning(t("qtool.matexport.msg.json_write_failed", e=e))
 
             if export_metadata:
                 try:
@@ -2137,7 +2157,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                         json.dump(meta_data, f, indent=4, ensure_ascii=False)
                     print(f"[MA+JSON元数据导出] 成功: {mat} -> {os.path.basename(meta_filepath)}")
                 except Exception as e:
-                    cmds.warning(f"写入元数据 JSON 失败: {e}")
+                    cmds.warning(t("qtool.matexport.msg.meta_write_failed", e=e))
     else:
         result_data = {}
         face_assignments = _get_face_material_assignments(selected_shapes)
@@ -2169,7 +2189,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
             with open(json_filepath, 'w', encoding='utf-8') as f:
                 json.dump(result_data, f, indent=4, ensure_ascii=False)
         except Exception as e:
-            cmds.warning(f"写入材质文件失败: {e}")
+            cmds.warning(t("qtool.matexport.msg.material_file_write_failed", e=e))
             return False
 
         if export_metadata:
@@ -2180,7 +2200,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                     json.dump(meta_data, f, indent=4, ensure_ascii=False)
                 print(f"[MA+JSON元数据导出] 成功: {len(materials)} 个材质元数据 -> {os.path.basename(meta_filepath)}")
             except Exception as e:
-                cmds.warning(f"写入元数据 JSON 失败: {e}")
+                cmds.warning(t("qtool.matexport.msg.meta_write_failed", e=e))
 
         ma_filepath = json_filepath.rsplit('.', 1)[0] + '.ma'
 
@@ -2213,7 +2233,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
                     _replace_texture_paths_in_ma(ma_filepath, textures_dir, materials)
                     print(f"[MA+JSON纹理打包] {len(materials)} 个材质纹理 -> {textures_dir}")
             except Exception as e:
-                cmds.warning(f"导出 MA 失败: {e}")
+                cmds.warning(t("qtool.matexport.msg.ma_export_failed", e=e))
                 return False
 
     return True
@@ -2222,7 +2242,7 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
 def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=None, old_path_prefix=None, new_path_prefix=None, old_path_suffix=None, new_path_suffix=None, import_selection=False, fuzzy_match=False, copy_textures=False):
     """MA+JSON版导入材质"""
     if not os.path.exists(json_path):
-        cmds.warning(f"JSON 文件不存在: {json_path}")
+        cmds.warning(t("qtool.matexport.msg.json_not_exist", json_path=json_path))
         return False
 
     # 读取JSON文件
@@ -2230,7 +2250,7 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     except Exception as e:
-        cmds.warning(f"读取 JSON 失败: {e}")
+        cmds.warning(t("qtool.matexport.msg.json_read_failed", e=e))
         return False
 
     # 检查材质文件夹（与JSON文件同名）
@@ -2243,7 +2263,7 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
     if import_selection:
         selected_objects = set(cmds.ls(sl=True, long=True) or [])
         if not selected_objects:
-            cmds.warning("没有选择任何物体")
+            cmds.warning(t("qtool.matexport.msg.no_object_selected"))
             return False
 
     # 过滤需要导入的材质
@@ -2264,7 +2284,7 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
                     break
         
         if not materials_to_import:
-            cmds.warning("没有找到与选择物体相关的材质")
+            cmds.warning(t("qtool.matexport.msg.no_material_for_selection"))
             return False
         print(f"[MA+JSON导入] 找到 {len(materials_to_import)} 个与选择物体相关的材质")
     else:
@@ -2283,13 +2303,13 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
                 print(f"[MA+JSON导入] 警告: 找不到材质 {mat_name} 的 MA 文件")
         
         if not ma_files:
-            cmds.warning("没有找到任何材质的 MA 文件")
+            cmds.warning(t("qtool.matexport.msg.no_ma_found"))
             return False
     else:
         # 兼容旧格式：尝试查找与JSON同名的MA文件
         ma_path = json_path.rsplit('.', 1)[0] + '.ma'
         if not os.path.exists(ma_path):
-            cmds.warning(f"找不到配套的 MA 文件: {ma_path}")
+            cmds.warning(t("qtool.matexport.msg.ma_not_found", ma_path=ma_path))
             return False
         ma_files = [ma_path]
 
@@ -2326,7 +2346,7 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
             cmds.file(ma_file, i=True, type="mayaAscii", namespace=temp_ns_base, defaultNamespace=False)
             print(f"[MA+JSON导入] 成功导入: {os.path.basename(ma_file)}")
         except Exception as e:
-            cmds.warning(f"导入 MA 文件失败 {ma_file}: {e}")
+            cmds.warning(t("qtool.matexport.msg.ma_import_failed", ma_file=ma_file, e=e))
 
     _process_texture_paths_in_maya(json_path, copy_textures)
 
@@ -2557,8 +2577,10 @@ QAbstractItemView = QtWidgets.QAbstractItemView
 Qt = QtCore.Qt
 
 
-def _select_multiple_directories(parent, title='选择文件夹'):
+def _select_multiple_directories(parent, title=None):
     """弹出可多选文件夹的对话框，返回选中的文件夹路径列表"""
+    if title is None:
+        title = t("qtool.matexport.dlg.select_folders")
     dialog = QFileDialog(parent, title)
     dialog.setFileMode(QFileDialog.Directory)
     dialog.setOption(QFileDialog.DontUseNativeDialog, True)
@@ -2585,43 +2607,43 @@ class RadarTabWidget(QWidget):
         layout.setSpacing(8)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        title_label = QLabel("全频雷达版 - 完整材质网络导出/导入")
+        title_label = QLabel(t("qtool.matexport.radar_title"))
         title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         layout.addWidget(title_label)
 
-        help_btn = QPushButton("ℹ 使用帮助")
+        help_btn = QPushButton(t("qtool.matexport.btn_help"))
         help_btn.setFixedHeight(28)
         help_btn.clicked.connect(self.show_radar_help)
-        help_btn.setToolTip("点击查看详细使用帮助")
+        help_btn.setToolTip(t("qtool.matexport.help.tip"))
         layout.addWidget(help_btn)
 
-        info_label = QLabel(">> 选择场景中的模型或材质，导出完整材质网络；或导入.zmetal还原材质")
+        info_label = QLabel(t("qtool.matexport.radar_info"))
         layout.addWidget(info_label)
 
-        export_basic_group = QGroupBox("导出 - 基础设置")
+        export_basic_group = QGroupBox(t("qtool.matexport.group_export_basic"))
         export_basic_layout = QVBoxLayout()
         export_basic_layout.setSpacing(6)
 
         dir_layout = QHBoxLayout()
-        dir_label = QLabel('工作目录:')
+        dir_label = QLabel(t("qtool.matexport.label_work_dir"))
         dir_label.setFixedWidth(75)
         self.dir_input = QLineEdit()
-        self.dir_input.setToolTip("指定导出文件的保存位置")
-        browse_btn = QPushButton('浏览')
+        self.dir_input.setToolTip(t("qtool.matexport.work_dir.tip"))
+        browse_btn = QPushButton(t("qtool.matexport.btn_browse"))
         browse_btn.setFixedWidth(60)
         browse_btn.clicked.connect(self.browse_folder)
-        browse_btn.setToolTip("点击选择工作目录")
+        browse_btn.setToolTip(t("qtool.matexport.browse.tip"))
         dir_layout.addWidget(dir_label)
         dir_layout.addWidget(self.dir_input)
         dir_layout.addWidget(browse_btn)
         export_basic_layout.addLayout(dir_layout)
 
         name_layout = QHBoxLayout()
-        name_label = QLabel('文件名:')
+        name_label = QLabel(t("qtool.matexport.label_file_name"))
         name_label.setFixedWidth(75)
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText('留空使用默认命名')
-        self.name_input.setToolTip("导出的JSON文件名，留空使用默认命名（当前时间）")
+        self.name_input.setPlaceholderText(t("qtool.matexport.ph_file_name"))
+        self.name_input.setToolTip(t("qtool.matexport.file_name.tip"))
         name_layout.addWidget(name_label)
         name_layout.addWidget(self.name_input)
         export_basic_layout.addLayout(name_layout)
@@ -2629,60 +2651,60 @@ class RadarTabWidget(QWidget):
         export_basic_group.setLayout(export_basic_layout)
         layout.addWidget(export_basic_group)
 
-        export_options_group = QGroupBox("导出 - 选项")
+        export_options_group = QGroupBox(t("qtool.matexport.group_export_options"))
         export_options_layout = QVBoxLayout()
         export_options_layout.setSpacing(6)
 
         export_mode_layout = QHBoxLayout()
-        export_mode_label = QLabel('导出模式:')
+        export_mode_label = QLabel(t("qtool.matexport.label_export_mode"))
         export_mode_label.setFixedWidth(75)
-        self.export_selection_radio = QRadioButton('导出选择')
-        self.export_all_radio = QRadioButton('导出全部')
+        self.export_selection_radio = QRadioButton(t("qtool.matexport.export_selection"))
+        self.export_all_radio = QRadioButton(t("qtool.matexport.export_all"))
         self.export_selection_radio.setChecked(True)
-        self.export_selection_radio.setToolTip("只导出当前选择的模型或材质")
-        self.export_all_radio.setToolTip("导出场景中所有材质")
+        self.export_selection_radio.setToolTip(t("qtool.matexport.export_selection.tip"))
+        self.export_all_radio.setToolTip(t("qtool.matexport.export_all.tip"))
         export_mode_layout.addWidget(export_mode_label)
         export_mode_layout.addWidget(self.export_selection_radio)
         export_mode_layout.addWidget(self.export_all_radio)
         export_options_layout.addLayout(export_mode_layout)
 
-        self.selection_is_material_checkbox = QCheckBox('所选对象为材质节点（而非模型）')
-        self.selection_is_material_checkbox.setToolTip("如果当前选择的是材质节点而不是模型，请勾选此选项")
+        self.selection_is_material_checkbox = QCheckBox(t("qtool.matexport.selection_is_material"))
+        self.selection_is_material_checkbox.setToolTip(t("qtool.matexport.selection_is_material.tip"))
         export_options_layout.addWidget(self.selection_is_material_checkbox)
 
-        self.separate_checkbox = QCheckBox('每个材质导出为独立文件')
-        self.separate_checkbox.setToolTip("为每个材质生成单独的.zmetal文件")
+        self.separate_checkbox = QCheckBox(t("qtool.matexport.separate"))
+        self.separate_checkbox.setToolTip(t("qtool.matexport.separate.tip"))
         export_options_layout.addWidget(self.separate_checkbox)
 
-        self.export_objects_checkbox = QCheckBox('导出材质对应模型数据')
+        self.export_objects_checkbox = QCheckBox(t("qtool.matexport.export_objects"))
         self.export_objects_checkbox.setChecked(True)
-        self.export_objects_checkbox.setToolTip("生成额外的.mcm映射文件，记录材质与模型的对应关系")
+        self.export_objects_checkbox.setToolTip(t("qtool.matexport.export_objects.tip"))
         export_options_layout.addWidget(self.export_objects_checkbox)
 
-        self.export_metadata_checkbox = QCheckBox('导出元数据')
+        self.export_metadata_checkbox = QCheckBox(t("qtool.matexport.export_metadata"))
         self.export_metadata_checkbox.setChecked(True)
-        self.export_metadata_checkbox.setToolTip("生成独立的.ameta元数据文件，包含版本、渲染器、色彩空间、分类、标签等信息")
+        self.export_metadata_checkbox.setToolTip(t("qtool.matexport.export_metadata.tip"))
         export_options_layout.addWidget(self.export_metadata_checkbox)
 
-        self.create_folder_checkbox = QCheckBox('创建材质文件夹')
-        self.create_folder_checkbox.setToolTip("每个材质创建独立文件夹，包含材质.zmetal、元数据.ameta和textures子文件夹")
+        self.create_folder_checkbox = QCheckBox(t("qtool.matexport.create_folder"))
+        self.create_folder_checkbox.setToolTip(t("qtool.matexport.create_folder.tip"))
         export_options_layout.addWidget(self.create_folder_checkbox)
 
-        self.pack_textures_checkbox = QCheckBox('打包纹理')
-        self.pack_textures_checkbox.setToolTip("将材质连接的纹理拷贝到textures文件夹，并替换路径为相对路径")
+        self.pack_textures_checkbox = QCheckBox(t("qtool.matexport.pack_textures"))
+        self.pack_textures_checkbox.setToolTip(t("qtool.matexport.pack_textures.tip"))
         export_options_layout.addWidget(self.pack_textures_checkbox)
 
-        export_btn = QPushButton('执行导出')
+        export_btn = QPushButton(t("qtool.matexport.execute_export"))
         export_btn.setFixedHeight(32)
         export_btn.setStyleSheet('background-color: #669966; color: white; font-weight: bold;')
         export_btn.clicked.connect(self.do_export)
-        export_btn.setToolTip("开始执行材质导出")
+        export_btn.setToolTip(t("qtool.matexport.execute_export.tip"))
         export_options_layout.addWidget(export_btn)
 
         export_options_group.setLayout(export_options_layout)
         layout.addWidget(export_options_group)
 
-        self.export_metadata_header = QPushButton("导出 - 元数据设置 ►")
+        self.export_metadata_header = QPushButton(t("qtool.matexport.header_export_metadata") + " ►")
         self.export_metadata_header.setFlat(True)
         self.export_metadata_header.setStyleSheet("text-align: left; padding: 2px 5px; font-weight: bold;")
         self.export_metadata_header.setCheckable(True)
@@ -2696,12 +2718,12 @@ class RadarTabWidget(QWidget):
         export_metadata_content_layout.setContentsMargins(10, 0, 10, 5)
 
         color_space_layout = QHBoxLayout()
-        color_space_label = QLabel('色彩空间:')
+        color_space_label = QLabel(t("qtool.matexport.label_color_space"))
         color_space_label.setFixedWidth(75)
         detected_cs = _detect_color_space()
         self.color_space_input = QLineEdit(detected_cs)
         self.color_space_input.setPlaceholderText('ACEScg')
-        self.color_space_input.setToolTip("当前渲染器自动检测的色彩空间，可手动修改")
+        self.color_space_input.setToolTip(t("qtool.matexport.color_space.tip"))
         color_space_layout.addWidget(color_space_label)
         color_space_layout.addWidget(self.color_space_input)
         export_metadata_content_layout.addLayout(color_space_layout)
@@ -2710,8 +2732,8 @@ class RadarTabWidget(QWidget):
         category_label = QLabel('Category:')
         category_label.setFixedWidth(75)
         self.category_input = QLineEdit()
-        self.category_input.setPlaceholderText('材质分类，如: 金属/布料/皮肤')
-        self.category_input.setToolTip("材质的分类信息，用于材质库管理")
+        self.category_input.setPlaceholderText(t("qtool.matexport.ph_category"))
+        self.category_input.setToolTip(t("qtool.matexport.category.tip"))
         category_layout.addWidget(category_label)
         category_layout.addWidget(self.category_input)
         export_metadata_content_layout.addLayout(category_layout)
@@ -2720,18 +2742,18 @@ class RadarTabWidget(QWidget):
         tags_label = QLabel('Tags:')
         tags_label.setFixedWidth(75)
         self.tags_input = QLineEdit()
-        self.tags_input.setPlaceholderText('逗号分隔，如: metal,rough,pbr')
-        self.tags_input.setToolTip("材质的标签，多个标签用逗号分隔")
+        self.tags_input.setPlaceholderText(t("qtool.matexport.ph_tags"))
+        self.tags_input.setToolTip(t("qtool.matexport.tags.tip"))
         tags_layout.addWidget(tags_label)
         tags_layout.addWidget(self.tags_input)
         export_metadata_content_layout.addLayout(tags_layout)
 
         name_cn_layout = QHBoxLayout()
-        name_cn_label = QLabel('中文名:')
+        name_cn_label = QLabel(t("qtool.matexport.label_name_cn"))
         name_cn_label.setFixedWidth(75)
         self.name_cn_input = QLineEdit()
-        self.name_cn_input.setPlaceholderText('留空则使用英文原名')
-        self.name_cn_input.setToolTip("材质的中文名称，留空则使用英文名称")
+        self.name_cn_input.setPlaceholderText(t("qtool.matexport.ph_name_cn"))
+        self.name_cn_input.setToolTip(t("qtool.matexport.name_cn.tip"))
         name_cn_layout.addWidget(name_cn_label)
         name_cn_layout.addWidget(self.name_cn_input)
         export_metadata_content_layout.addLayout(name_cn_layout)
@@ -2745,7 +2767,7 @@ class RadarTabWidget(QWidget):
         separator.setStyleSheet("background-color: #CCCCCC;")
         layout.addWidget(separator)
 
-        self.import_basic_header = QPushButton("导入 - 基础设置 ►")
+        self.import_basic_header = QPushButton(t("qtool.matexport.header_import_basic") + " ►")
         self.import_basic_header.setFlat(True)
         self.import_basic_header.setStyleSheet("text-align: left; padding: 2px 5px; font-weight: bold;")
         self.import_basic_header.setCheckable(True)
@@ -2759,65 +2781,65 @@ class RadarTabWidget(QWidget):
         import_basic_content_layout.setContentsMargins(10, 0, 10, 5)
 
         ns_layout = QHBoxLayout()
-        ns_label = QLabel('命名空间:')
+        ns_label = QLabel(t("qtool.matexport.label_namespace"))
         ns_label.setFixedWidth(75)
         self.ns_input = QLineEdit()
-        self.ns_input.setPlaceholderText('引用模型时自带的前缀，如: ns1')
-        self.ns_input.setToolTip("引用模型时自带的前缀，用于匹配导出时的模型路径")
+        self.ns_input.setPlaceholderText(t("qtool.matexport.ph_namespace"))
+        self.ns_input.setToolTip(t("qtool.matexport.namespace.tip"))
         ns_layout.addWidget(ns_label)
         ns_layout.addWidget(self.ns_input)
         import_basic_content_layout.addLayout(ns_layout)
 
         prefix_suffix_layout = QHBoxLayout()
-        prefix_label = QLabel('材质前缀:')
+        prefix_label = QLabel(t("qtool.matexport.label_material_prefix"))
         prefix_label.setFixedWidth(75)
         self.prefix_input = QLineEdit()
-        self.prefix_input.setPlaceholderText('如: Imported_')
-        self.prefix_input.setToolTip("在导入的材质名称前添加前缀，避免命名冲突")
+        self.prefix_input.setPlaceholderText(t("qtool.matexport.ph_prefix"))
+        self.prefix_input.setToolTip(t("qtool.matexport.prefix.tip"))
         prefix_suffix_layout.addWidget(prefix_label)
         prefix_suffix_layout.addWidget(self.prefix_input)
 
-        suffix_label = QLabel('材质后缀:')
+        suffix_label = QLabel(t("qtool.matexport.label_material_suffix"))
         suffix_label.setFixedWidth(75)
         self.suffix_input = QLineEdit()
-        self.suffix_input.setPlaceholderText('如: _Import')
-        self.suffix_input.setToolTip("在导入的材质名称后添加后缀，避免命名冲突")
+        self.suffix_input.setPlaceholderText(t("qtool.matexport.ph_suffix"))
+        self.suffix_input.setToolTip(t("qtool.matexport.suffix.tip"))
         prefix_suffix_layout.addWidget(suffix_label)
         prefix_suffix_layout.addWidget(self.suffix_input)
         import_basic_content_layout.addLayout(prefix_suffix_layout)
 
         path_replace_layout = QHBoxLayout()
-        old_prefix_label = QLabel('原模型前缀:')
+        old_prefix_label = QLabel(t("qtool.matexport.label_old_prefix"))
         old_prefix_label.setFixedWidth(85)
         self.old_prefix_input = QLineEdit()
-        self.old_prefix_input.setPlaceholderText('导出时的模型前缀，如: OLD_')
-        self.old_prefix_input.setToolTip("导出时的模型路径前缀，用于路径替换")
+        self.old_prefix_input.setPlaceholderText(t("qtool.matexport.ph_old_prefix"))
+        self.old_prefix_input.setToolTip(t("qtool.matexport.old_prefix.tip"))
         path_replace_layout.addWidget(old_prefix_label)
         path_replace_layout.addWidget(self.old_prefix_input)
 
-        new_prefix_label = QLabel('新模型前缀:')
+        new_prefix_label = QLabel(t("qtool.matexport.label_new_prefix"))
         new_prefix_label.setFixedWidth(85)
         self.new_prefix_input = QLineEdit()
-        self.new_prefix_input.setPlaceholderText('替换为，如: NEW_')
-        self.new_prefix_input.setToolTip("导入到当前场景的模型路径前缀，用于路径替换")
+        self.new_prefix_input.setPlaceholderText(t("qtool.matexport.ph_new_prefix"))
+        self.new_prefix_input.setToolTip(t("qtool.matexport.new_prefix.tip"))
         path_replace_layout.addWidget(new_prefix_label)
         path_replace_layout.addWidget(self.new_prefix_input)
         import_basic_content_layout.addLayout(path_replace_layout)
 
         suffix_replace_layout = QHBoxLayout()
-        old_suffix_label = QLabel('原模型后缀:')
+        old_suffix_label = QLabel(t("qtool.matexport.label_old_suffix"))
         old_suffix_label.setFixedWidth(85)
         self.old_suffix_input = QLineEdit()
-        self.old_suffix_input.setPlaceholderText('导出时的模型后缀，如: _GEO')
-        self.old_suffix_input.setToolTip("导出时的模型路径后缀，用于路径替换")
+        self.old_suffix_input.setPlaceholderText(t("qtool.matexport.ph_old_suffix"))
+        self.old_suffix_input.setToolTip(t("qtool.matexport.old_suffix.tip"))
         suffix_replace_layout.addWidget(old_suffix_label)
         suffix_replace_layout.addWidget(self.old_suffix_input)
 
-        new_suffix_label = QLabel('新模型后缀:')
+        new_suffix_label = QLabel(t("qtool.matexport.label_new_suffix"))
         new_suffix_label.setFixedWidth(85)
         self.new_suffix_input = QLineEdit()
-        self.new_suffix_input.setPlaceholderText('替换为，如: _MESH')
-        self.new_suffix_input.setToolTip("导入到当前场景的模型路径后缀，用于路径替换")
+        self.new_suffix_input.setPlaceholderText(t("qtool.matexport.ph_new_suffix"))
+        self.new_suffix_input.setToolTip(t("qtool.matexport.new_suffix.tip"))
         suffix_replace_layout.addWidget(new_suffix_label)
         suffix_replace_layout.addWidget(self.new_suffix_input)
         import_basic_content_layout.addLayout(suffix_replace_layout)
@@ -2826,49 +2848,49 @@ class RadarTabWidget(QWidget):
         self.import_basic_content.setVisible(False)
         layout.addWidget(self.import_basic_content)
 
-        import_options_group = QGroupBox("导入 - 选项")
+        import_options_group = QGroupBox(t("qtool.matexport.group_import_options"))
         import_options_layout = QVBoxLayout()
         import_options_layout.setSpacing(6)
 
         import_mode_layout = QHBoxLayout()
-        import_mode_label = QLabel('导入模式:')
+        import_mode_label = QLabel(t("qtool.matexport.label_import_mode"))
         import_mode_label.setFixedWidth(75)
-        self.import_selection_radio = QRadioButton('导入选择')
-        self.import_all_radio = QRadioButton('导入全部')
+        self.import_selection_radio = QRadioButton(t("qtool.matexport.import_selection"))
+        self.import_all_radio = QRadioButton(t("qtool.matexport.import_all"))
         self.import_all_radio.setChecked(True)
-        self.import_selection_radio.setToolTip("只导入JSON文件中选中的材质")
-        self.import_all_radio.setToolTip("导入JSON文件中的所有材质")
+        self.import_selection_radio.setToolTip(t("qtool.matexport.import_selection.tip"))
+        self.import_all_radio.setToolTip(t("qtool.matexport.import_all.tip"))
         import_mode_layout.addWidget(import_mode_label)
         import_mode_layout.addWidget(self.import_selection_radio)
         import_mode_layout.addWidget(self.import_all_radio)
         import_options_layout.addLayout(import_mode_layout)
 
-        self.assign_objects_checkbox = QCheckBox('导入后指定材质给模型')
+        self.assign_objects_checkbox = QCheckBox(t("qtool.matexport.assign_objects"))
         self.assign_objects_checkbox.setChecked(True)
-        self.assign_objects_checkbox.setToolTip("自动将导入的材质指定给对应模型")
+        self.assign_objects_checkbox.setToolTip(t("qtool.matexport.assign_objects.tip"))
         import_options_layout.addWidget(self.assign_objects_checkbox)
 
-        self.fuzzy_match_checkbox = QCheckBox('模糊匹配模型名称')
-        self.fuzzy_match_checkbox.setToolTip("当精确匹配失败时，通过名称子串包含关系进行匹配\n例如：导出时模型为TEST_pSphere1_temp，导入时模型为pSphere1，勾选后可正确匹配")
+        self.fuzzy_match_checkbox = QCheckBox(t("qtool.matexport.fuzzy_match"))
+        self.fuzzy_match_checkbox.setToolTip(t("qtool.matexport.fuzzy_match.tip"))
         import_options_layout.addWidget(self.fuzzy_match_checkbox)
 
-        self.import_copy_textures_checkbox = QCheckBox('拷贝贴图到当前工程')
+        self.import_copy_textures_checkbox = QCheckBox(t("qtool.matexport.import_copy_textures"))
         self.import_copy_textures_checkbox.setChecked(True)
-        self.import_copy_textures_checkbox.setToolTip("将材质关联的纹理拷贝到当前Maya工程的sourceimages目录。不勾选则使用材质数据所在文件夹的相对路径")
+        self.import_copy_textures_checkbox.setToolTip(t("qtool.matexport.import_copy_textures.tip"))
         import_options_layout.addWidget(self.import_copy_textures_checkbox)
 
-        import_btn = QPushButton('执行导入')
+        import_btn = QPushButton(t("qtool.matexport.execute_import"))
         import_btn.setFixedHeight(32)
         import_btn.setStyleSheet('background-color: #6680AA; color: white; font-weight: bold;')
         import_btn.clicked.connect(self.do_import)
-        import_btn.setToolTip("开始执行材质导入")
+        import_btn.setToolTip(t("qtool.matexport.execute_import.tip"))
         import_options_layout.addWidget(import_btn)
 
-        folder_import_btn = QPushButton('从文件夹导入...')
+        folder_import_btn = QPushButton(t("qtool.matexport.import_from_folder"))
         folder_import_btn.setFixedHeight(28)
         folder_import_btn.setStyleSheet('background-color: #5a7a9a; color: white;')
         folder_import_btn.clicked.connect(self.do_import_from_folder)
-        folder_import_btn.setToolTip("选择文件夹，递归导入文件夹内所有材质.zmetal/.json文件")
+        folder_import_btn.setToolTip(t("qtool.matexport.import_from_folder.tip"))
         import_options_layout.addWidget(folder_import_btn)
 
         import_options_group.setLayout(import_options_layout)
@@ -2879,18 +2901,18 @@ class RadarTabWidget(QWidget):
     def _on_export_metadata_toggle(self):
         is_expanded = self.export_metadata_header.isChecked()
         self.export_metadata_content.setVisible(is_expanded)
-        self.export_metadata_header.setText("导出 - 元数据设置 ▼" if is_expanded else "导出 - 元数据设置 ►")
+        self.export_metadata_header.setText(t("qtool.matexport.header_export_metadata") + (" ▼" if is_expanded else " ►"))
 
     def _on_import_basic_toggle(self):
         is_expanded = self.import_basic_header.isChecked()
         self.import_basic_content.setVisible(is_expanded)
-        self.import_basic_header.setText("导入 - 基础设置 ▼" if is_expanded else "导入 - 基础设置 ►")
+        self.import_basic_header.setText(t("qtool.matexport.header_import_basic") + (" ▼" if is_expanded else " ►"))
 
     def show_radar_help(self):
         QDialog, QScrollArea = QtWidgets.QDialog, QtWidgets.QScrollArea
 
         help_window = QDialog(self)
-        help_window.setWindowTitle("全频雷达版使用帮助")
+        help_window.setWindowTitle(t("qtool.matexport.radar_help_title"))
         help_window.resize(600, 500)
 
         layout = QVBoxLayout(help_window)
@@ -2905,50 +2927,12 @@ class RadarTabWidget(QWidget):
         help_text.setTextFormat(Qt.RichText)
         # 使文本可选择
         help_text.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        help_text.setText(
-            "<b>全频雷达版 - 完整材质网络导出/导入</b><br><br>"
-            "本工具提供完整的材质参数导出和导入功能，支持选择模型或材质进行操作。<br><br>"
-            "<b>【导出功能】</b><br>"
-            "• 支持选择场景中的模型(transform)或材质节点进行导出<br>"
-            "• 导出内容包括：所有材质属性、连接信息、贴图节点等完整参数<br>"
-            "• 可选择每个材质导出为独立文件，或所有材质合并为一个文件<br>"
-            "• 勾选「导出材质对应模型数据」会生成额外的.mcm映射文件<br><br>"
-            "• <b>注意：材质数据保存为.zmetal格式</b>（实际为JSON格式，只是后缀不同）<br><br>"
-            "<b>【UI控件说明】</b><br>"
-            "<b>导出 - 基础设置</b><br>"
-            "• <b>工作目录</b>：指定导出文件的保存位置<br>"
-            "• <b>文件名</b>：导出的JSON文件名，留空使用默认命名（当前时间）<br><br>"
-            "<b>导出 - 选项</b><br>"
-            "• <b>导出模式</b>：「导出选择」只导出当前选中对象；「导出全部」导出场景中所有材质<br>"
-            "• <b>每个材质导出为独立文件</b>：是否为每个材质生成单独的.zmetal文件<br>"
-            "• <b>导出材质对应模型数据</b>：是否生成.mcm映射文件<br><br>"
-            "<b>导出 - 元数据设置</b><br>"
-            "• <b>色彩空间</b>：指定导出材质的色彩空间，默认值为ACEScg<br>"
-            "• <b>Category</b>：材质的分类信息，用于材质库管理，如：金属、布料、皮肤等<br>"
-            "• <b>Tags</b>：材质的标签，多个标签用逗号分隔，如：metal,rough,pbr<br><br>"
-            "<b>导入 - 基础设置</b><br>"
-            "• <b>命名空间</b>：引用模型时自带的前缀，如ns1，用于匹配导出时的模型路径<br>"
-            "• <b>材质前缀</b>：在导入的材质名称前添加前缀，避免命名冲突<br>"
-            "• <b>材质后缀</b>：在导入的材质名称后添加后缀，避免命名冲突<br>"
-            "• <b>原模型前缀</b>：导出时的模型路径前缀，用于路径替换<br>"
-            "• <b>新模型前缀</b>：导入到当前场景的模型路径前缀，用于路径替换<br>"
-            "• <b>原模型后缀</b>：导出时的模型路径后缀，用于路径替换<br>"
-            "• <b>新模型后缀</b>：导入到当前场景的模型路径后缀，用于路径替换<br><br>"
-            "<b>导入 - 选项</b><br>"
-            "• <b>导入模式</b>：「导入选择」只导入选中的材质；「导入全部」导入所有材质<br>"
-            "• <b>导入后指定材质给模型</b>：是否自动将材质指定给对应模型<br><br>"
-            "<b>【常见问题】</b><br>"
-            "• <b>导出时找不到材质？</b> 确保选择的对象是transform节点或材质节点<br>"
-            "• <b>导入后材质不显示？</b> 检查材质是否正确连接到shadingEngine<br>"
-            "• <b>指定材质失败？</b> 确保场景中存在模型物体，且路径与导出时一致<br>"
-            "• <b>后缀不起作用？</b> 后缀会自动加在原材质名后面（不包括下划线，需手动添加）<br>"
-            "• <b>实例物体材质丢失？</b> 工具已处理实例物体，但需确保选择的是顶层transform<br>"
-        )
+        help_text.setText(t("qtool.matexport.radar_help"))
 
         scroll_area.setWidget(help_text)
         layout.addWidget(scroll_area)
 
-        close_btn = QPushButton("关闭")
+        close_btn = QPushButton(t("common.close"))
         close_btn.clicked.connect(help_window.close)
         layout.addWidget(close_btn)
 
@@ -2956,7 +2940,7 @@ class RadarTabWidget(QWidget):
         help_window.show()
 
     def browse_folder(self):
-        path = QFileDialog.getExistingDirectory(self, '选择工作目录')
+        path = QFileDialog.getExistingDirectory(self, t("qtool.matexport.dlg.select_work_dir"))
         if path:
             self.dir_input.setText(path.replace('\\', '/'))
 
@@ -3006,7 +2990,7 @@ class RadarTabWidget(QWidget):
         copy_textures = self.import_copy_textures_checkbox.isChecked()
 
         files = QFileDialog.getOpenFileNames(
-            self, '选择材质文件', start_dir if start_dir else '', 'Material Files (*.zmetal *.json)'
+            self, t("qtool.matexport.dlg.select_material_files"), start_dir if start_dir else '', 'Material Files (*.zmetal *.json)'
         )[0]
 
         if files:
@@ -3027,14 +3011,14 @@ class RadarTabWidget(QWidget):
         fuzzy_match = self.fuzzy_match_checkbox.isChecked()
         copy_textures = self.import_copy_textures_checkbox.isChecked()
 
-        dirs = _select_multiple_directories(self, '选择材质文件夹（可按住Ctrl多选）')
+        dirs = _select_multiple_directories(self, t("qtool.matexport.dlg.select_material_folders"))
 
         if not dirs:
             return
 
         json_files = _collect_json_files_from_dirs(dirs)
         if not json_files:
-            cmds.warning("所选文件夹中没有找到材质文件！")
+            cmds.warning(t("qtool.matexport.msg.no_material_files_in_folder"))
             return
 
         print(f"[文件夹导入] 找到 {len(json_files)} 个材质文件")
@@ -3052,44 +3036,44 @@ class MATabWidget(QWidget):
         layout.setSpacing(8)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        title_label = QLabel("MA+JSON版 - 材质网络导出为MA文件")
+        title_label = QLabel(t("qtool.matexport.ma_title"))
         title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         layout.addWidget(title_label)
 
-        help_btn = QPushButton("ℹ 使用帮助")
+        help_btn = QPushButton(t("qtool.matexport.btn_help"))
         help_btn.setFixedHeight(28)
         help_btn.clicked.connect(self.show_ma_help)
-        help_btn.setToolTip("点击查看详细使用帮助")
+        help_btn.setToolTip(t("qtool.matexport.help.tip"))
         layout.addWidget(help_btn)
 
-        warning_label = QLabel(">> [重要] 请确保当前场景里已经有需要被赋值的模型！")
+        warning_label = QLabel(t("qtool.matexport.ma_warning"))
         warning_label.setStyleSheet("color: red; font-weight: bold;")
         layout.addWidget(warning_label)
 
-        export_basic_group = QGroupBox("导出 - 基础设置")
+        export_basic_group = QGroupBox(t("qtool.matexport.group_export_basic"))
         export_basic_layout = QVBoxLayout()
         export_basic_layout.setSpacing(6)
 
         dir_layout = QHBoxLayout()
-        dir_label = QLabel('工作目录:')
+        dir_label = QLabel(t("qtool.matexport.label_work_dir"))
         dir_label.setFixedWidth(75)
         self.dir_input = QLineEdit()
-        self.dir_input.setToolTip("指定导出文件的保存位置")
-        browse_btn = QPushButton('浏览')
+        self.dir_input.setToolTip(t("qtool.matexport.work_dir.tip"))
+        browse_btn = QPushButton(t("qtool.matexport.btn_browse"))
         browse_btn.setFixedWidth(60)
         browse_btn.clicked.connect(self.browse_folder)
-        browse_btn.setToolTip("点击选择工作目录")
+        browse_btn.setToolTip(t("qtool.matexport.browse.tip"))
         dir_layout.addWidget(dir_label)
         dir_layout.addWidget(self.dir_input)
         dir_layout.addWidget(browse_btn)
         export_basic_layout.addLayout(dir_layout)
 
         name_layout = QHBoxLayout()
-        name_label = QLabel('文件名:')
+        name_label = QLabel(t("qtool.matexport.label_file_name"))
         name_label.setFixedWidth(75)
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText('留空使用默认命名')
-        self.name_input.setToolTip("导出的MA和JSON文件名，留空使用默认命名（当前时间）")
+        self.name_input.setPlaceholderText(t("qtool.matexport.ph_file_name"))
+        self.name_input.setToolTip(t("qtool.matexport.ma_file_name.tip"))
         name_layout.addWidget(name_label)
         name_layout.addWidget(self.name_input)
         export_basic_layout.addLayout(name_layout)
@@ -3097,39 +3081,39 @@ class MATabWidget(QWidget):
         export_basic_group.setLayout(export_basic_layout)
         layout.addWidget(export_basic_group)
 
-        export_options_group = QGroupBox("导出 - 选项")
+        export_options_group = QGroupBox(t("qtool.matexport.group_export_options"))
         export_options_layout = QVBoxLayout()
         export_options_layout.setSpacing(6)
 
-        self.separate_checkbox = QCheckBox('每个材质导出为独立文件')
-        self.separate_checkbox.setToolTip("为每个材质生成单独的MA和JSON文件")
+        self.separate_checkbox = QCheckBox(t("qtool.matexport.separate"))
+        self.separate_checkbox.setToolTip(t("qtool.matexport.ma_separate.tip"))
         self.separate_checkbox.setChecked(True)
         export_options_layout.addWidget(self.separate_checkbox)
 
-        self.export_metadata_checkbox = QCheckBox('导出元数据')
+        self.export_metadata_checkbox = QCheckBox(t("qtool.matexport.export_metadata"))
         self.export_metadata_checkbox.setChecked(True)
-        self.export_metadata_checkbox.setToolTip("生成独立的.ameta元数据文件，包含版本、渲染器、色彩空间、分类、标签等信息")
+        self.export_metadata_checkbox.setToolTip(t("qtool.matexport.export_metadata.tip"))
         export_options_layout.addWidget(self.export_metadata_checkbox)
 
-        self.create_folder_checkbox = QCheckBox('创建材质文件夹')
-        self.create_folder_checkbox.setToolTip("每个材质创建独立文件夹，包含MA、JSON、元数据JSON和textures子文件夹")
+        self.create_folder_checkbox = QCheckBox(t("qtool.matexport.create_folder"))
+        self.create_folder_checkbox.setToolTip(t("qtool.matexport.ma_create_folder.tip"))
         export_options_layout.addWidget(self.create_folder_checkbox)
 
-        self.pack_textures_checkbox = QCheckBox('打包纹理')
-        self.pack_textures_checkbox.setToolTip("将材质连接的纹理拷贝到textures文件夹，并替换MA文件中的路径为相对路径")
+        self.pack_textures_checkbox = QCheckBox(t("qtool.matexport.pack_textures"))
+        self.pack_textures_checkbox.setToolTip(t("qtool.matexport.ma_pack_textures.tip"))
         export_options_layout.addWidget(self.pack_textures_checkbox)
 
-        export_btn = QPushButton("执行导出")
+        export_btn = QPushButton(t("qtool.matexport.execute_export"))
         export_btn.setFixedHeight(32)
         export_btn.setStyleSheet('background-color: #669966; color: white; font-weight: bold;')
         export_btn.clicked.connect(self.do_export)
-        export_btn.setToolTip("开始执行材质导出")
+        export_btn.setToolTip(t("qtool.matexport.execute_export.tip"))
         export_options_layout.addWidget(export_btn)
 
         export_options_group.setLayout(export_options_layout)
         layout.addWidget(export_options_group)
 
-        self.ma_export_metadata_header = QPushButton("导出 - 元数据设置 ►")
+        self.ma_export_metadata_header = QPushButton(t("qtool.matexport.header_export_metadata") + " ►")
         self.ma_export_metadata_header.setFlat(True)
         self.ma_export_metadata_header.setStyleSheet("text-align: left; padding: 2px 5px; font-weight: bold;")
         self.ma_export_metadata_header.setCheckable(True)
@@ -3143,12 +3127,12 @@ class MATabWidget(QWidget):
         ma_export_metadata_content_layout.setContentsMargins(10, 0, 10, 5)
 
         color_space_layout = QHBoxLayout()
-        color_space_label = QLabel('色彩空间:')
+        color_space_label = QLabel(t("qtool.matexport.label_color_space"))
         color_space_label.setFixedWidth(75)
         detected_cs = _detect_color_space()
         self.ma_color_space_input = QLineEdit(detected_cs)
         self.ma_color_space_input.setPlaceholderText('ACEScg')
-        self.ma_color_space_input.setToolTip("当前渲染器自动检测的色彩空间，可手动修改")
+        self.ma_color_space_input.setToolTip(t("qtool.matexport.color_space.tip"))
         color_space_layout.addWidget(color_space_label)
         color_space_layout.addWidget(self.ma_color_space_input)
         ma_export_metadata_content_layout.addLayout(color_space_layout)
@@ -3157,8 +3141,8 @@ class MATabWidget(QWidget):
         category_label = QLabel('Category:')
         category_label.setFixedWidth(75)
         self.category_input = QLineEdit()
-        self.category_input.setPlaceholderText('材质分类，如: 金属/布料/皮肤')
-        self.category_input.setToolTip("材质的分类信息，用于材质库管理")
+        self.category_input.setPlaceholderText(t("qtool.matexport.ph_category"))
+        self.category_input.setToolTip(t("qtool.matexport.category.tip"))
         category_layout.addWidget(category_label)
         category_layout.addWidget(self.category_input)
         ma_export_metadata_content_layout.addLayout(category_layout)
@@ -3167,18 +3151,18 @@ class MATabWidget(QWidget):
         tags_label = QLabel('Tags:')
         tags_label.setFixedWidth(75)
         self.tags_input = QLineEdit()
-        self.tags_input.setPlaceholderText('逗号分隔，如: metal,rough,pbr')
-        self.tags_input.setToolTip("材质的标签，多个标签用逗号分隔")
+        self.tags_input.setPlaceholderText(t("qtool.matexport.ph_tags"))
+        self.tags_input.setToolTip(t("qtool.matexport.tags.tip"))
         tags_layout.addWidget(tags_label)
         tags_layout.addWidget(self.tags_input)
         ma_export_metadata_content_layout.addLayout(tags_layout)
 
         name_cn_layout = QHBoxLayout()
-        name_cn_label = QLabel('中文名:')
+        name_cn_label = QLabel(t("qtool.matexport.label_name_cn"))
         name_cn_label.setFixedWidth(75)
         self.name_cn_input = QLineEdit()
-        self.name_cn_input.setPlaceholderText('留空则使用英文原名')
-        self.name_cn_input.setToolTip("材质的中文名称，留空则使用英文名称")
+        self.name_cn_input.setPlaceholderText(t("qtool.matexport.ph_name_cn"))
+        self.name_cn_input.setToolTip(t("qtool.matexport.name_cn.tip"))
         name_cn_layout.addWidget(name_cn_label)
         name_cn_layout.addWidget(self.name_cn_input)
         ma_export_metadata_content_layout.addLayout(name_cn_layout)
@@ -3187,7 +3171,7 @@ class MATabWidget(QWidget):
         self.ma_export_metadata_content.setVisible(False)
         layout.addWidget(self.ma_export_metadata_content)
 
-        self.ma_import_basic_header = QPushButton("导入 - 基础设置 ►")
+        self.ma_import_basic_header = QPushButton(t("qtool.matexport.header_import_basic") + " ►")
         self.ma_import_basic_header.setFlat(True)
         self.ma_import_basic_header.setStyleSheet("text-align: left; padding: 2px 5px; font-weight: bold;")
         self.ma_import_basic_header.setCheckable(True)
@@ -3201,65 +3185,65 @@ class MATabWidget(QWidget):
         ma_import_basic_content_layout.setContentsMargins(10, 0, 10, 5)
 
         ns_layout = QHBoxLayout()
-        ns_label = QLabel('命名空间:')
+        ns_label = QLabel(t("qtool.matexport.label_namespace"))
         ns_label.setFixedWidth(70)
         self.ns_edit = QLineEdit()
-        self.ns_edit.setPlaceholderText("引用模型时自带的前缀，如: ns1")
-        self.ns_edit.setToolTip("引用模型时自带的前缀，用于匹配导出时的模型路径")
+        self.ns_edit.setPlaceholderText(t("qtool.matexport.ph_namespace"))
+        self.ns_edit.setToolTip(t("qtool.matexport.namespace.tip"))
         ns_layout.addWidget(ns_label)
         ns_layout.addWidget(self.ns_edit, 1)
         ma_import_basic_content_layout.addLayout(ns_layout)
 
         prefix_suffix_layout = QHBoxLayout()
-        prefix_label = QLabel('材质前缀:')
+        prefix_label = QLabel(t("qtool.matexport.label_material_prefix"))
         prefix_label.setFixedWidth(70)
         self.prefix_edit = QLineEdit()
-        self.prefix_edit.setPlaceholderText("如: Imported_")
-        self.prefix_edit.setToolTip("在导入的材质名称前添加前缀，避免命名冲突")
+        self.prefix_edit.setPlaceholderText(t("qtool.matexport.ph_prefix"))
+        self.prefix_edit.setToolTip(t("qtool.matexport.prefix.tip"))
         prefix_suffix_layout.addWidget(prefix_label)
         prefix_suffix_layout.addWidget(self.prefix_edit, 1)
 
-        suffix_label = QLabel('材质后缀:')
+        suffix_label = QLabel(t("qtool.matexport.label_material_suffix"))
         suffix_label.setFixedWidth(70)
         self.suffix_edit = QLineEdit()
-        self.suffix_edit.setPlaceholderText("如: _Import")
-        self.suffix_edit.setToolTip("在导入的材质名称后添加后缀，避免命名冲突")
+        self.suffix_edit.setPlaceholderText(t("qtool.matexport.ph_suffix"))
+        self.suffix_edit.setToolTip(t("qtool.matexport.suffix.tip"))
         prefix_suffix_layout.addWidget(suffix_label)
         prefix_suffix_layout.addWidget(self.suffix_edit, 1)
         ma_import_basic_content_layout.addLayout(prefix_suffix_layout)
 
         path_replace_layout = QHBoxLayout()
-        old_prefix_label = QLabel('原模型前缀:')
+        old_prefix_label = QLabel(t("qtool.matexport.label_old_prefix"))
         old_prefix_label.setFixedWidth(80)
         self.old_prefix_edit = QLineEdit()
-        self.old_prefix_edit.setPlaceholderText("导出时的模型前缀，如: OLD_")
-        self.old_prefix_edit.setToolTip("导出时的模型路径前缀，用于路径替换")
+        self.old_prefix_edit.setPlaceholderText(t("qtool.matexport.ph_old_prefix"))
+        self.old_prefix_edit.setToolTip(t("qtool.matexport.old_prefix.tip"))
         path_replace_layout.addWidget(old_prefix_label)
         path_replace_layout.addWidget(self.old_prefix_edit, 1)
 
-        new_prefix_label = QLabel('新模型前缀:')
+        new_prefix_label = QLabel(t("qtool.matexport.label_new_prefix"))
         new_prefix_label.setFixedWidth(80)
         self.new_prefix_edit = QLineEdit()
-        self.new_prefix_edit.setPlaceholderText("替换为，如: NEW_")
-        self.new_prefix_edit.setToolTip("导入到当前场景的模型路径前缀，用于路径替换")
+        self.new_prefix_edit.setPlaceholderText(t("qtool.matexport.ph_new_prefix"))
+        self.new_prefix_edit.setToolTip(t("qtool.matexport.new_prefix.tip"))
         path_replace_layout.addWidget(new_prefix_label)
         path_replace_layout.addWidget(self.new_prefix_edit, 1)
         ma_import_basic_content_layout.addLayout(path_replace_layout)
 
         suffix_replace_layout = QHBoxLayout()
-        old_suffix_label = QLabel('原模型后缀:')
+        old_suffix_label = QLabel(t("qtool.matexport.label_old_suffix"))
         old_suffix_label.setFixedWidth(80)
         self.old_suffix_edit = QLineEdit()
-        self.old_suffix_edit.setPlaceholderText("导出时的模型后缀，如: _GEO")
-        self.old_suffix_edit.setToolTip("导出时的模型路径后缀，用于路径替换")
+        self.old_suffix_edit.setPlaceholderText(t("qtool.matexport.ph_old_suffix"))
+        self.old_suffix_edit.setToolTip(t("qtool.matexport.old_suffix.tip"))
         suffix_replace_layout.addWidget(old_suffix_label)
         suffix_replace_layout.addWidget(self.old_suffix_edit, 1)
 
-        new_suffix_label = QLabel('新模型后缀:')
+        new_suffix_label = QLabel(t("qtool.matexport.label_new_suffix"))
         new_suffix_label.setFixedWidth(80)
         self.new_suffix_edit = QLineEdit()
-        self.new_suffix_edit.setPlaceholderText("替换为，如: _MESH")
-        self.new_suffix_edit.setToolTip("导入到当前场景的模型路径后缀，用于路径替换")
+        self.new_suffix_edit.setPlaceholderText(t("qtool.matexport.ph_new_suffix"))
+        self.new_suffix_edit.setToolTip(t("qtool.matexport.new_suffix.tip"))
         suffix_replace_layout.addWidget(new_suffix_label)
         suffix_replace_layout.addWidget(self.new_suffix_edit, 1)
         ma_import_basic_content_layout.addLayout(suffix_replace_layout)
@@ -3268,44 +3252,44 @@ class MATabWidget(QWidget):
         self.ma_import_basic_content.setVisible(False)
         layout.addWidget(self.ma_import_basic_content)
 
-        import_options_group = QGroupBox("导入 - 选项")
+        import_options_group = QGroupBox(t("qtool.matexport.group_import_options"))
         import_options_layout = QVBoxLayout()
         import_options_layout.setSpacing(6)
 
         import_mode_layout = QHBoxLayout()
-        import_mode_label = QLabel('导入模式:')
+        import_mode_label = QLabel(t("qtool.matexport.label_import_mode"))
         import_mode_label.setFixedWidth(70)
-        self.import_selection_radio = QRadioButton('导入选择')
-        self.import_all_radio = QRadioButton('导入全部')
+        self.import_selection_radio = QRadioButton(t("qtool.matexport.import_selection"))
+        self.import_all_radio = QRadioButton(t("qtool.matexport.import_all"))
         self.import_all_radio.setChecked(True)
-        self.import_selection_radio.setToolTip("只导入JSON文件中选中的材质")
-        self.import_all_radio.setToolTip("导入JSON文件中的所有材质")
+        self.import_selection_radio.setToolTip(t("qtool.matexport.import_selection.tip"))
+        self.import_all_radio.setToolTip(t("qtool.matexport.import_all.tip"))
         import_mode_layout.addWidget(import_mode_label)
         import_mode_layout.addWidget(self.import_selection_radio)
         import_mode_layout.addWidget(self.import_all_radio)
         import_options_layout.addLayout(import_mode_layout)
 
-        self.fuzzy_match_checkbox = QCheckBox('模糊匹配模型名称')
-        self.fuzzy_match_checkbox.setToolTip("当精确匹配失败时，通过名称子串包含关系进行匹配\n例如：导出时模型为TEST_pSphere1_temp，导入时模型为pSphere1，勾选后可正确匹配")
+        self.fuzzy_match_checkbox = QCheckBox(t("qtool.matexport.fuzzy_match"))
+        self.fuzzy_match_checkbox.setToolTip(t("qtool.matexport.fuzzy_match.tip"))
         import_options_layout.addWidget(self.fuzzy_match_checkbox)
 
-        self.import_copy_textures_checkbox = QCheckBox('拷贝贴图到当前工程')
+        self.import_copy_textures_checkbox = QCheckBox(t("qtool.matexport.import_copy_textures"))
         self.import_copy_textures_checkbox.setChecked(True)
-        self.import_copy_textures_checkbox.setToolTip("将材质关联的纹理拷贝到当前Maya工程的sourceimages目录。不勾选则使用材质数据所在文件夹的相对路径")
+        self.import_copy_textures_checkbox.setToolTip(t("qtool.matexport.import_copy_textures.tip"))
         import_options_layout.addWidget(self.import_copy_textures_checkbox)
 
-        import_btn = QPushButton("执行导入")
+        import_btn = QPushButton(t("qtool.matexport.execute_import"))
         import_btn.setFixedHeight(32)
         import_btn.setStyleSheet('background-color: #6680AA; color: white; font-weight: bold;')
         import_btn.clicked.connect(self.do_import)
-        import_btn.setToolTip("开始执行材质导入")
+        import_btn.setToolTip(t("qtool.matexport.execute_import.tip"))
         import_options_layout.addWidget(import_btn)
 
-        folder_import_btn = QPushButton('从文件夹导入...')
+        folder_import_btn = QPushButton(t("qtool.matexport.import_from_folder"))
         folder_import_btn.setFixedHeight(28)
         folder_import_btn.setStyleSheet('background-color: #5a7a9a; color: white;')
         folder_import_btn.clicked.connect(self.do_ma_import_from_folder)
-        folder_import_btn.setToolTip("选择文件夹，递归导入文件夹内所有材质MA+JSON文件")
+        folder_import_btn.setToolTip(t("qtool.matexport.ma_import_from_folder.tip"))
         import_options_layout.addWidget(folder_import_btn)
 
         import_options_group.setLayout(import_options_layout)
@@ -3314,7 +3298,7 @@ class MATabWidget(QWidget):
         layout.addStretch()
 
     def browse_folder(self):
-        path = QFileDialog.getExistingDirectory(self, '选择工作目录')
+        path = QFileDialog.getExistingDirectory(self, t("qtool.matexport.dlg.select_work_dir"))
         if path:
             self.dir_input.setText(path.replace('\\', '/'))
 
@@ -3357,7 +3341,7 @@ class MATabWidget(QWidget):
         start_dir = self.dir_input.text().strip()
 
         file, _ = QFileDialog.getOpenFileName(
-            self, '选择材质文件', start_dir if start_dir else '', 'Material Files (*.zmetal *.json)'
+            self, t("qtool.matexport.dlg.select_material_files"), start_dir if start_dir else '', 'Material Files (*.zmetal *.json)'
         )
 
         if file:
@@ -3375,14 +3359,14 @@ class MATabWidget(QWidget):
         fuzzy_match = self.fuzzy_match_checkbox.isChecked()
         copy_textures = self.import_copy_textures_checkbox.isChecked()
 
-        dirs = _select_multiple_directories(self, '选择材质文件夹（可按住Ctrl多选）')
+        dirs = _select_multiple_directories(self, t("qtool.matexport.dlg.select_material_folders"))
 
         if not dirs:
             return
 
         json_files = _collect_json_files_from_dirs(dirs)
         if not json_files:
-            cmds.warning("所选文件夹中没有找到材质JSON文件！")
+            cmds.warning(t("qtool.matexport.msg.no_material_json_in_folder"))
             return
 
         print(f"[文件夹导入] 找到 {len(json_files)} 个材质MA+JSON文件")
@@ -3393,18 +3377,18 @@ class MATabWidget(QWidget):
     def _on_ma_export_metadata_toggle(self):
         is_expanded = self.ma_export_metadata_header.isChecked()
         self.ma_export_metadata_content.setVisible(is_expanded)
-        self.ma_export_metadata_header.setText("导出 - 元数据设置 ▼" if is_expanded else "导出 - 元数据设置 ►")
+        self.ma_export_metadata_header.setText(t("qtool.matexport.header_export_metadata") + (" ▼" if is_expanded else " ►"))
 
     def _on_ma_import_basic_toggle(self):
         is_expanded = self.ma_import_basic_header.isChecked()
         self.ma_import_basic_content.setVisible(is_expanded)
-        self.ma_import_basic_header.setText("导入 - 基础设置 ▼" if is_expanded else "导入 - 基础设置 ►")
+        self.ma_import_basic_header.setText(t("qtool.matexport.header_import_basic") + (" ▼" if is_expanded else " ►"))
 
     def show_ma_help(self):
         QDialog, QScrollArea = QtWidgets.QDialog, QtWidgets.QScrollArea
 
         help_window = QDialog(self)
-        help_window.setWindowTitle("MA+JSON版使用帮助")
+        help_window.setWindowTitle(t("qtool.matexport.ma_help_title"))
         help_window.resize(600, 500)
 
         layout = QVBoxLayout(help_window)
@@ -3419,48 +3403,12 @@ class MATabWidget(QWidget):
         help_text.setTextFormat(Qt.RichText)
         # 使文本可选择
         help_text.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        help_text.setText(
-            "<b>MA+JSON版 - 材质网络导出为MA文件</b><br><br>"
-            "本工具将材质网络导出为MA文件格式，适合引用到其他场景，保留完整的材质连接关系。<br><br>"
-            "<b>【导出功能】</b><br>"
-            "• 选择带有材质的模型(transform)节点进行导出<br>"
-            "• 导出为两个文件：.ma材质文件和.json映射文件<br>"
-            "• MA文件只包含材质节点，不包含模型数据<br>"
-            "• JSON文件记录材质与模型的对应关系<br>"
-            "• 可选择每个材质导出为独立文件，或所有材质合并为一个文件<br><br>"
-            "<b>【UI控件说明】</b><br>"
-            "<b>导出 - 基础设置</b><br>"
-            "• <b>工作目录</b>：指定导出文件的保存位置<br>"
-            "• <b>文件名</b>：导出的MA和JSON文件名，留空使用默认命名（当前时间）<br><br>"
-            "<b>导出 - 选项</b><br>"
-            "• <b>每个材质导出为独立文件</b>：是否为每个材质生成单独的MA和JSON文件<br><br>"
-            "<b>导入 - 基础设置</b><br>"
-            "• <b>命名空间</b>：引用模型时自带的前缀，如ns1，用于匹配导出时的模型路径<br>"
-            "• <b>材质前缀</b>：在导入的材质名称前添加前缀，避免命名冲突<br>"
-            "• <b>材质后缀</b>：在导入的材质名称后添加后缀，避免命名冲突<br>"
-            "• <b>原模型前缀</b>：导出时的模型路径前缀，用于路径替换<br>"
-            "• <b>新模型前缀</b>：导入到当前场景的模型路径前缀，用于路径替换<br>"
-            "• <b>原模型后缀</b>：导出时的模型路径后缀，用于路径替换<br>"
-            "• <b>新模型后缀</b>：导入到当前场景的模型路径后缀，用于路径替换<br><br>"
-            "<b>导入 - 选项</b><br>"
-            "• <b>导入模式</b>：「导入选择」只导入选中的材质；「导入全部」导入所有材质<br>"
-            "• <b>执行导入</b>：点击后弹出文件选择窗口，选择JSON文件进行导入<br><br>"
-            "<b>【模型匹配策略】</b><br>"
-            "1. 优先使用完整长路径匹配<br>"
-            "2. 如果填写了命名空间，使用命名空间+短名称匹配<br>"
-            "3. 如果都没填，使用纯短名称匹配（可能匹配到错误的物体）<br><br>"
-            "<b>【常见问题】</b><br>"
-            "• <b>找不到配套MA文件？</b> 确保JSON和MA文件在同一目录下<br>"
-            "• <b>模型匹配失败？</b> 检查命名空间是否正确，确保模型路径一致<br>"
-            "• <b>材质指定到错误物体？</b> 可能是短名称重复导致，尝试填写命名空间<br>"
-            "• <b>后缀不起作用？</b> 后缀会自动加在原材质名后面（不包括下划线，需手动添加）<br>"
-            "• <b>导入后材质不显示？</b> 检查是否正确创建了 shadingEngine 并指定了模型<br>"
-        )
+        help_text.setText(t("qtool.matexport.ma_help"))
 
         scroll_area.setWidget(help_text)
         layout.addWidget(scroll_area)
 
-        close_btn = QPushButton("关闭")
+        close_btn = QPushButton(t("common.close"))
         close_btn.clicked.connect(help_window.close)
         layout.addWidget(close_btn)
 
@@ -3474,7 +3422,7 @@ class MaterialTransferTool(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName(self.WINDOW_OBJECT_NAME)
-        self.setWindowTitle('材质导入导出工具')
+        self.setWindowTitle(t("qtool.matexport.window_title"))
         self.resize(400, 600)
 
         self._is_closed = False
@@ -3502,10 +3450,10 @@ class MaterialTransferTool(QMainWindow):
         self.tabs = QTabWidget()
 
         self.radar_tab = RadarTabWidget()
-        self.tabs.addTab(self.radar_tab, "全频雷达版")
+        self.tabs.addTab(self.radar_tab, t("qtool.matexport.tab_radar"))
 
         self.ma_tab = MATabWidget()
-        self.tabs.addTab(self.ma_tab, "MA+JSON版")
+        self.tabs.addTab(self.ma_tab, t("qtool.matexport.tab_ma"))
 
         main_layout.addWidget(self.tabs)
 

@@ -1,5 +1,11 @@
 from ..utils.maya_utils import get_qt_modules, qt_exec
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
@@ -39,14 +45,14 @@ class FavoritesPanelWidget(QtWidgets.QWidget):
 
         header_row = QtWidgets.QHBoxLayout()
         header_row.setContentsMargins(14, 12, 8, 8)
-        header = QtWidgets.QLabel("\u2605 \u6536\u85cf\u5939")
+        header = QtWidgets.QLabel(t("favorites_panel.favorites_title"))
         header.setStyleSheet("color: #e0e0e0; font-size: 14px; font-weight: bold;")
         header_row.addWidget(header)
         header_row.addStretch()
 
         add_coll_btn = QtWidgets.QPushButton("+")
         add_coll_btn.setFixedSize(22, 22)
-        add_coll_btn.setToolTip("\u65b0\u5efa\u6536\u85cf\u5939")
+        add_coll_btn.setToolTip(t("favorites_panel.new_collection"))
         add_coll_btn.setStyleSheet(
             "QPushButton { background-color: #333333; color: #5294e2; border: none; "
             "border-radius: 3px; font-size: 14px; font-weight: bold; }"
@@ -183,27 +189,27 @@ class FavoritesPanelWidget(QtWidgets.QWidget):
         item = self._collection_list.itemAt(pos)
         if item is None:
             menu = QtWidgets.QMenu(self)
-            menu.addAction("+ \u65b0\u5efa\u6536\u85cf\u5939").triggered.connect(self._on_add_collection)
+            menu.addAction(t("favorites_panel.new_collection_menu")).triggered.connect(self._on_add_collection)
             qt_exec(menu, self._collection_list.viewport().mapToGlobal(pos))
             return
 
         coll_id = item.data(QtCore.Qt.ItemDataRole.UserRole)
         menu = QtWidgets.QMenu(self)
-        menu.addAction("+ \u65b0\u5efa\u6536\u85cf\u5939").triggered.connect(self._on_add_collection)
+        menu.addAction(t("favorites_panel.new_collection_menu")).triggered.connect(self._on_add_collection)
         menu.addSeparator()
-        menu.addAction("\u6e05\u7a7a\u6536\u85cf\u5939 \u2605").triggered.connect(
+        menu.addAction(t("favorites_panel.clear_collection")).triggered.connect(
             lambda: self._on_clear_collection(coll_id))
 
         if coll_id != "default":
             menu.addSeparator()
-            menu.addAction("\u91cd\u547d\u540d").triggered.connect(lambda: self._on_rename_collection(coll_id))
-            menu.addAction("\u5220\u9664\u6536\u85cf\u5939").triggered.connect(lambda: self._on_delete_collection(coll_id))
+            menu.addAction(t("favorites_panel.rename")).triggered.connect(lambda: self._on_rename_collection(coll_id))
+            menu.addAction(t("favorites_panel.delete_collection")).triggered.connect(lambda: self._on_delete_collection(coll_id))
 
         qt_exec(menu, self._collection_list.viewport().mapToGlobal(pos))
 
     def _on_add_collection(self):
         name, ok = QtWidgets.QInputDialog.getText(
-            self, "\u65b0\u5efa\u6536\u85cf\u5939", "\u8bf7\u8f93\u5165\u6536\u85cf\u5939\u540d\u79f0:",
+            self, t("favorites_panel.new_collection"), t("favorites_panel.enter_collection_name"),
             QtWidgets.QLineEdit.EchoMode.Normal
         )
         if ok and name.strip():
@@ -220,7 +226,7 @@ class FavoritesPanelWidget(QtWidgets.QWidget):
         for coll in self._collections:
             if coll["id"] == coll_id:
                 new_name, ok = QtWidgets.QInputDialog.getText(
-                    self, "\u91cd\u547d\u540d\u6536\u85cf\u5939", "\u65b0\u540d\u79f0:",
+                    self, t("favorites_panel.rename_collection"), t("favorites_panel.new_name"),
                     QtWidgets.QLineEdit.EchoMode.Normal, coll["name"]
                 )
                 if ok and new_name.strip():
@@ -235,8 +241,8 @@ class FavoritesPanelWidget(QtWidgets.QWidget):
         for coll in self._collections:
             if coll["id"] == coll_id:
                 reply = QtWidgets.QMessageBox.question(
-                    self, "\u786e\u8ba4\u5220\u9664",
-                    f"\u786e\u5b9a\u8981\u5220\u9664\u6536\u85cf\u5939 \"{coll['name']}\" \u5417\uff1f",
+                    self, t("favorites_panel.confirm_delete"),
+                    t("favorites_panel.confirm_delete_msg", name=coll['name']),
                     QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
                 )
                 if reply == QtWidgets.QMessageBox.StandardButton.Yes:
@@ -253,8 +259,8 @@ class FavoritesPanelWidget(QtWidgets.QWidget):
                 if not coll.get("materials"):
                     return
                 reply = QtWidgets.QMessageBox.question(
-                    self, "\u786e\u8ba4\u6e05\u7a7a",
-                    f"\u786e\u5b9a\u8981\u6e05\u7a7a\u6536\u85cf\u5939 \"{coll['name']}\" \u4e2d\u7684\u6240\u6709\u8d44\u4ea7\u5417\uff1f",
+                    self, t("favorites_panel.confirm_clear"),
+                    t("favorites_panel.confirm_clear_msg", name=coll['name']),
                     QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
                 )
                 if reply == QtWidgets.QMessageBox.StandardButton.Yes:

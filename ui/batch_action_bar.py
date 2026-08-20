@@ -6,6 +6,12 @@
 
 from ..utils.maya_utils import get_qt_modules
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
@@ -46,7 +52,7 @@ class BatchActionBar(QtWidgets.QFrame):
         layout.setSpacing(4)
 
         # 选中数量提示
-        self._count_label = QtWidgets.QLabel("已选中 N 个资产")
+        self._count_label = QtWidgets.QLabel(t("batch_action_bar.selected_count", n=0))
         self._count_label.setStyleSheet(f"color: #5294e2; font-size: {fs}px; font-weight: bold;")
         layout.addWidget(self._count_label)
 
@@ -68,31 +74,31 @@ class BatchActionBar(QtWidgets.QFrame):
         """
 
         # 批量重命名按钮
-        self._rename_btn = QtWidgets.QPushButton("批量重命名")
+        self._rename_btn = QtWidgets.QPushButton(t("batch_action_bar.batch_rename"))
         self._rename_btn.setStyleSheet(btn_style)
         self._rename_btn.clicked.connect(self._on_rename)
         layout.addWidget(self._rename_btn)
 
         # 批量标签按钮
-        self._tag_btn = QtWidgets.QPushButton("批量标签")
+        self._tag_btn = QtWidgets.QPushButton(t("batch_action_bar.batch_tag"))
         self._tag_btn.setStyleSheet(btn_style)
         self._tag_btn.clicked.connect(self._on_tag)
         layout.addWidget(self._tag_btn)
 
         # 批量移动按钮
-        self._move_btn = QtWidgets.QPushButton("批量移动")
+        self._move_btn = QtWidgets.QPushButton(t("batch_action_bar.batch_move"))
         self._move_btn.setStyleSheet(btn_style)
         self._move_btn.clicked.connect(self._on_move)
         layout.addWidget(self._move_btn)
 
         # 批量复制按钮
-        self._copy_btn = QtWidgets.QPushButton("批量复制")
+        self._copy_btn = QtWidgets.QPushButton(t("batch_action_bar.batch_copy"))
         self._copy_btn.setStyleSheet(btn_style)
         self._copy_btn.clicked.connect(self._on_copy)
         layout.addWidget(self._copy_btn)
 
         # 批量删除按钮
-        self._delete_btn = QtWidgets.QPushButton("批量删除")
+        self._delete_btn = QtWidgets.QPushButton(t("batch_action_bar.batch_delete"))
         self._delete_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: #5a2a2a; color: #f0a0a0;
@@ -109,7 +115,7 @@ class BatchActionBar(QtWidgets.QFrame):
         layout.addStretch(1)
 
         # 清除选中按钮
-        clear_btn = QtWidgets.QPushButton("✕ 取消选中")
+        clear_btn = QtWidgets.QPushButton("✕ " + t("batch_action_bar.clear_selection"))
         clear_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: transparent; color: #909090;
@@ -131,7 +137,7 @@ class BatchActionBar(QtWidgets.QFrame):
         """显示操作栏并设置选中数量"""
         self._material_count = count
         self._selected_materials = materials
-        self._count_label.setText(f"已选中 {count} 个资产")
+        self._count_label.setText(t("batch_action_bar.selected_count", n=count))
 
         # 根据选中数量启用/禁用按钮
         has_selection = count > 0

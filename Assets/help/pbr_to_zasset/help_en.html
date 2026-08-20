@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PBR Textures to Asset Tool - Help</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+}
+.wrapper { display: flex; max-width: 1100px; width: 100%; margin: 0 auto; }
+.sidebar {
+  width: 230px; height: 100vh; position: fixed; top: 0; left: 50%; transform: translateX(calc(-50% - 435px));
+  background: #f5f5f5; padding: 24px 14px; border-right: 1px solid #ddd;
+  overflow-y: auto;
+}
+.sidebar h2 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; border: none; padding: 0; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; text-decoration: none; }
+.sidebar a:hover { background: #e0e0e0; color: #000; }
+.sidebar a.sub { padding-left: 22px; font-size: 12px; }
+.content { flex: 1; padding: 24px 40px; max-width: 840px; margin-left: 230px; min-height: 100vh; overflow-y: auto; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 36px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 24px 0 8px; }
+h4 { font-size: 15px; color: #555; margin: 16px 0 6px; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0 8px 24px; }
+li { margin: 4px 0; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+pre { background: #f8f8f8; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 10px 0; border: 1px solid #e0e0e0; font-size: 13px; line-height: 1.6; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; vertical-align: top; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; font-weight: 600; }
+td { background: #fff; font-size: 13px; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; }
+.badge-red { background: #fdecea; color: #e74c3c; }
+.badge-orange { background: #fef5e7; color: #e67e22; }
+.badge-blue { background: #eaf2f8; color: #2980b9; }
+.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<nav class="sidebar">
+  <h2>Contents</h2>
+  <a href="#overview">1. Tool Overview</a>
+  <a href="#naming">2. Texture Naming Rules</a>
+  <a href="#workflow">3. Basic Workflow</a>
+  <a href="#batch" class="sub">3.1 Batch Mode</a>
+  <a href="#recursive" class="sub">3.2 Recursive Subfolder Scan</a>
+  <a href="#ui-options">4. UI Options Explained</a>
+  <a href="#config">5. Configuration Details</a>
+  <a href="#config-placeholder" class="sub">5.1 Variable Placeholders</a>
+  <a href="#config-routing" class="sub">5.2 File Routing</a>
+  <a href="#config-thumb" class="sub">5.3 Thumbnail Search</a>
+  <a href="#config-meta" class="sub">5.4 Metadata Sources</a>
+  <a href="#config-processor" class="sub">5.5 Field Processors</a>
+  <a href="#config-regex" class="sub">5.6 Regex Matching Internals</a>
+  <a href="#examples">6. Full Configuration Examples</a>
+  <a href="#example-megascans" class="sub">6.1 Megascans Assets</a>
+  <a href="#example-zootools" class="sub">6.2 Zoo Tools Assets</a>
+  <a href="#example-custom" class="sub">6.3 Custom Assets</a>
+  <a href="#faq">7. FAQ</a>
+</nav>
+
+<div class="content">
+
+<h1>PBR Textures to Asset Tool — Help</h1>
+
+<p>This tool automatically converts a set of PBR textures into the <code>.zasset</code> asset format. It supports automatic texture-type recognition, reading external metadata (tags, description, etc.), and searching for existing thumbnails.</p>
+
+<!-- ============================================================ -->
+<h2 id="overview">1. Tool Overview</h2>
+
+<p>Here is what the tool can do for you:</p>
+<ul>
+  <li><b>Auto-detect texture type</b> — recognize BaseColor, Normal, Roughness and other PBR channels from the file name suffix</li>
+  <li><b>Multi-resolution support</b> — recognize 2K/4K/8K resolution markers and separate resolutions when packing</li>
+  <li><b>Read external metadata</b> — extract tags, description, author and more from JSON/TXT files and write them into the asset</li>
+  <li><b>Search existing thumbnails</b> — automatically match Megascans' <code>*_Preview.png</code> or Zoo Tools' <code>*/thumbnail.png</code></li>
+  <li><b>Batch conversion</b> — choose a parent folder so each subfolder becomes a separate .zasset</li>
+  <li><b>Direct library import</b> — auto-copy into the current asset library category after conversion</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="naming">2. Texture Naming Rules</h2>
+
+<p>The tool identifies which PBR channel a texture belongs to by the <b>underscore suffix at the end or middle of the file name</b>.</p>
+
+<p><b>Basic format:</b><code>AnyName_channelAlias.extension</code></p>
+
+<table>
+<tr><th>PBR Channel</th><th>Available Aliases (case-insensitive)</th><th>Valid Examples</th><th>Invalid Examples</th></tr>
+<tr>
+  <td><b>BaseColor</b></td>
+  <td>baseColor, base_color, albedo, diffuse, diff, col, color, base</td>
+  <td><code>wood_albedo.png</code><br><code>brickwall_BaseColor.jpg</code><br><code>floor_4K_diff.tga</code></td>
+  <td><code>woodcolor.png</code> ❌ missing underscore<br><code>baseColor.png</code> ❌ no material name</td>
+</tr>
+<tr>
+  <td><b>Normal</b></td>
+  <td>normal, norm, nor, nrm, normalmap</td>
+  <td><code>stone_normal.jpg</code><br><code>rock_nor_dx.png</code></td>
+  <td><code>stone_N.jpg</code> ❌ too short to match</td>
+</tr>
+<tr>
+  <td><b>Roughness</b></td>
+  <td>roughness, rough, rgh</td>
+  <td><code>metal_roughness.png</code></td>
+  <td><code>metal_rough.png</code> ❌ "rough" is not an alias</td>
+</tr>
+<tr>
+  <td><b>Metallic</b></td>
+  <td>metallic, metal, mtl</td>
+  <td><code>steel_metallic.jpg</code></td>
+  <td></td>
+</tr>
+<tr>
+  <td><b>AO</b></td>
+  <td>ao, ambientOcclusion</td>
+  <td><code>brick_ao.png</code></td>
+  <td></td>
+</tr>
+<tr>
+  <td><b>Height</b></td>
+  <td>height, bump, displacement, displace, disp</td>
+  <td><code>rock_displacement.exr</code><br><code>rock_displacement.jpg</code></td>
+  <td></td>
+</tr>
+<tr>
+  <td><b>Emissive</b></td>
+  <td>emissive, emiss, emit</td>
+  <td><code>lava_emissive.png</code></td>
+  <td></td>
+</tr>
+</table>
+
+<div class="note">
+  <b>Key points:</b>
+  <ul>
+    <li>The channel alias must be separated from the preceding name with an underscore <code>_</code></li>
+    <li>Resolution markers like <code>_2K_</code> / <code>_4K_</code> are recognized and stripped correctly (see the regex section below)</li>
+    <li>Multiple files of the same type are allowed (e.g. <code>_Displacement.exr</code> + <code>_Displacement.jpg</code>) and are all collected</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="workflow">3. Basic Workflow</h2>
+
+<div class="step">
+<h3>Single-folder Conversion (most common)</h3>
+<ol>
+  <li>Click "Browse" and choose the folder containing the PBR textures</li>
+  <li>Set the output folder (by default the same as the input folder)</li>
+  <li>Click "<b>Scan Textures</b>" — the tool auto-analyzes the file structure and shows recognition results on the right</li>
+  <li>Check the tree list on the right: confirm material count, texture types, and resolutions are correct</li>
+  <li>Click "<b>Convert</b>" — generates the .zasset file</li>
+</ol>
+</div>
+
+<h3 id="batch">3.1 Batch Mode</h3>
+<div class="step">
+<p>Batch mode is for the case where a parent folder contains multiple subfolders, and each subfolder is an independent asset. For example, the structure after downloading from Megascans:</p>
+<pre>
+surface/                          ← select this parent folder
+├── bark_other_wknjchbs/          ← subfolder 1 → generated as bark_other_wknjchbs.zasset
+│   ├── wknjchbs_2K_Albedo.jpg
+│   ├── wknjchbs_2K_Normal.jpg
+│   ├── wknjchbs.json
+│   └── wknjchbs_Preview.png
+├── metal_sheet_xhtnbhlg/         ← subfolder 2 → generated as metal_sheet_xhtnbhlg.zasset
+│   └── ...
+└── wood_veneer_vlsjeec/          ← subfolder 3
+    └── ...
+</pre>
+<ol>
+  <li>Check the "<b>Batch Mode</b>" checkbox</li>
+  <li>Select the <b>parent folder</b> (a directory containing multiple subfolders)</li>
+  <li>Click "Scan Textures" — every subfolder is scanned one by one</li>
+  <li>Click "Convert" — each subfolder generates an independent .zasset</li>
+</ol>
+</div>
+
+<h3 id="recursive">3.2 Recursively Scanning Textures in Subfolders</h3>
+<div class="step">
+<p>By default, the tool only scans texture files in the selected folder's <b>root directory</b>. If textures are placed in subfolders (e.g. a <code>tex/</code> directory), you need to enable recursive scanning.</p>
+
+<p><b>When do you need it?</b></p>
+<ul>
+  <li>Texture files live under a <code>tex/</code> or <code>textures/</code> subfolder</li>
+  <li>Textures are organized into per-resolution folders (<code>tex/2K/</code>, <code>tex/4K/</code>)</li>
+  <li>The asset has a multi-level subfolder structure</li>
+</ul>
+
+<h4>Three Modes</h4>
+
+<table>
+<tr><th>Mode</th><th>Behavior</th><th>Best For</th></tr>
+<tr>
+  <td><b>Off (default)</b></td>
+  <td>Only scans files in the root folder</td>
+  <td>Textures sit directly in the folder root (e.g. raw Megascans layout)</td>
+</tr>
+<tr>
+  <td><b>Auto-recurse all</b></td>
+  <td>Recurses into all subfolders (unlimited depth), skipping folders in the exclude list</td>
+  <td>You don't know subfolder names, or there is deep nesting</td>
+</tr>
+<tr>
+  <td><b>Manual specify</b></td>
+  <td>Only recurses into subfolders with the given names (e.g. <code>tex</code>), then recurses all their subfolders automatically</td>
+  <td>You know where the textures are and want to avoid scanning unrelated folders</td>
+</tr>
+</table>
+
+<h4>Excluded Directories</h4>
+<p>In the "Exclude" input box, enter folder names to skip (comma-separated), for example:</p>
+<pre>Thumbs, previews, .mayaSwatches</pre>
+<p>During recursion these folders are automatically skipped, so images in thumbnail or cache directories are not mistaken for textures.</p>
+
+<h4>Practical Examples</h4>
+<p><b>Example 1: Textures under tex/ (flat)</b></p>
+<pre>
+my_asset/
+├── preview.jpg
+├── info.json
+└── tex/
+    ├── brick_2K_Albedo.jpg
+    ├── brick_2K_Normal.jpg
+    ├── brick_4K_Albedo.jpg
+    └── ...
+</pre>
+<p>Setup: enable recursive → Manual → enter <code>tex</code> as the folder</p>
+
+<p><b>Example 2: Textures grouped by resolution</b></p>
+<pre>
+my_asset/
+├── Preview.png
+├── data.json
+└── tex/
+    ├── 2K/
+    │   ├── wknjchbs_2K_Albedo.jpg
+    │   └── ...
+    ├── 4K/
+    │   └── ...
+    └── 8K/
+        └── ...
+</pre>
+<p>Setup: enable recursive → Manual → enter <code>tex</code> (after entering tex, 2K/4K/8K recurse automatically)</p>
+
+<p><b>Example 3: Auto-recurse excluding unrelated folders</b></p>
+<pre>
+my_asset/
+├── Thumbs/          ← excluded
+├── previews/        ← excluded
+├── textures/
+│   ├── metal_albedo.png
+│   └── ...
+└── mesh/
+    └── model.fbx
+</pre>
+<p>Setup: enable recursive → Auto-recurse all → enter <code>Thumbs, previews</code> in Exclude</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="ui-options">4. UI Options Explained</h2>
+
+<table>
+<tr><th>Option</th><th>Effect</th><th>Default</th></tr>
+<tr><td><b>Texture Folder</b></td><td>The folder containing the PBR textures to convert</td><td>Required</td></tr>
+<tr><td><b>Output Location</b></td><td>Directory where the .zasset files are written</td><td>Auto-synced to the input folder</td></tr>
+<tr><td><b>Export .zasset</b></td><td>Whether to generate .zasset files</td><td>Checked</td></tr>
+<tr><td><b>Batch Mode</b></td><td>Select a parent folder; each subfolder becomes an independent asset</td><td>Unchecked</td></tr>
+<tr><td><b>Import After Conversion</b></td><td>Copy the .zasset into the current asset library category<br><small>Note: only the .zasset file itself is copied, not the source folder structure</small></td><td>Unchecked</td></tr>
+<tr><td><b>Pack All Resolutions</b></td><td>Pack textures of all resolutions (2K/4K/8K) into the .zasset<br><small>If unchecked, only the default (highest) resolution is packed</small></td><td>Unchecked</td></tr>
+<tr><td><b>Recursive Scan</b></td><td>Scan texture files in subfolders (e.g. a tex/ directory)<br><small>Off by default — root folder only</small></td><td>Unchecked</td></tr>
+<tr><td><b>Recursive Mode</b></td><td>Auto-recurse all / manually specify folder names<br><small>In manual mode it only enters subfolders with the given names</small></td><td>Auto</td></tr>
+<tr><td><b>Exclude Directories</b></td><td>Folder names skipped during recursion, comma-separated<br><small>e.g. Thumbs, previews</small></td><td>Empty</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="config">5. Configuration Details</h2>
+
+<p>The tool uses the <code>pbr_mapping.json</code> config file to define "how to find thumbnails", "how to find metadata files", and "which fields in the metadata map where". You can edit it in the "Settings" tab at the top-right of the tool.</p>
+
+<h3 id="config-placeholder">5.1 Variable Placeholders <code>{folderName}</code> and <code>{materialName}</code></h3>
+
+<p>These are the two most important variables in the config. They are <b>automatically replaced with real names</b>:</p>
+
+<table>
+<tr><th>Placeholder</th><th>What it is replaced with</th><th>Example (folder <code>metal_sheet_xhtnbhlg</code>, material name <code>xhtnbhlg</code> extracted from the textures)</th></tr>
+<tr>
+  <td><code>{folderName}</code></td>
+  <td>The name of the folder</td>
+  <td><code>{folderName}.json</code> → <code>metal_sheet_xhtnbhlg.json</code></td>
+</tr>
+<tr>
+  <td><code>{materialName}</code></td>
+  <td>The material name extracted from the texture file names<br><small>e.g. <code>xhtnbhlg_2K_Albedo.jpg</code> strips the resolution and channel to get <code>xhtnbhlg</code></small></td>
+  <td><code>{materialName}_Preview.png</code> → <code>xhtnbhlg_Preview.png</code></td>
+</tr>
+</table>
+
+<div class="note">
+  <b>Search rules (important):</b> the tool <b>first tries to match with <code>{materialName}</code>, and if no file is found it automatically falls back to <code>{folderName}</code></b>. So you don't need to worry about which one to use — either placeholder works, the tool tries both.<br><br>
+  <b>Recommendation:</b> use <code>{materialName}</code> in path templates, because if a file named after the material is found (e.g. Megascans' <code>xhtnbhlg.json</code>), the folder name no longer needs to be tried.
+</div>
+
+<h3 id="config-routing">5.2 File Routing Configuration</h3>
+
+<p>File routing controls "which file extensions from the source folder" are packed into "which location inside the .zasset".</p>
+
+<table>
+<tr><th>Field</th><th>Meaning</th><th>Example</th></tr>
+<tr>
+  <td><b>Folder</b></td>
+  <td>The target directory name inside the .zasset<br><code>root</code> means the root directory</td>
+  <td><code>textures</code></td>
+</tr>
+<tr>
+  <td><b>Extensions</b></td>
+  <td>File extensions to route (space-separated)</td>
+  <td><code>.png .jpg .exr .hdr</code></td>
+</tr>
+</table>
+
+<div class="note">
+  <b>How it works:</b> when scanning a folder, all files matching the extensions are found. PBR textures (that matched a channel alias) go through the <b>dedicated texture packing flow</b> (grouped by resolution); the remaining files that match the extensions but are not PBR channels (e.g. <code>.ma</code> <code>.mb</code> model files) are placed into the corresponding subdirectory according to the routing rules.<br><br>
+  For example with routing config <code>root → .ma .mb</code>, Maya files are placed in the .zasset root directory.
+</div>
+
+<h3 id="config-thumb">5.3 Thumbnail Search Paths</h3>
+
+<p>Defines <b>where to look for existing thumbnails</b>. The tool tries each path template in turn, replacing <code>{materialName}</code> and <code>{folderName}</code>, and uses the first file it finds.</p>
+
+<table>
+<tr><th>Scenario</th><th>Recommended Config</th><th>Matched File Path</th></tr>
+<tr>
+  <td>Megascans assets</td>
+  <td><code>{materialName}_Preview.png</code></td>
+  <td><code>xhtnbhlg_Preview.png</code></td>
+</tr>
+<tr>
+  <td>Zoo Tools assets</td>
+  <td><code>{folderName}_ma_fileDependencies/thumbnail.png</code></td>
+  <td><code>myMat_ma_fileDependencies/thumbnail.png</code></td>
+</tr>
+</table>
+
+<div class="warn">
+  <b>If no path finds a thumbnail,</b> the tool falls back to auto-generating a thumbnail from the BaseColor/Diffuse texture. If you don't need thumbnails you can leave this empty.
+</div>
+
+<h3 id="config-meta">5.4 Metadata Source Configuration</h3>
+
+<p>This is one of the tool's <b>most powerful features</b>: it reads fields from an external JSON or TXT file and automatically writes them into the .zasset metadata.</p>
+
+<p><b>When do you need it?</b></p>
+<ul>
+  <li>Megascans has a <code>*.json</code> file in every asset directory, containing tags, name, and more</li>
+  <li>Assets exported from Zoo Tools have a <code>.zooInfo</code> JSON file</li>
+  <li>You wrote a description file for your own asset (e.g. <code>info.json</code> or <code>readme.txt</code>)</li>
+</ul>
+
+<p><b>Each metadata source requires three parts:</b></p>
+
+<table>
+<tr><th>Config Item</th><th>Description</th><th>Example Value</th></tr>
+<tr>
+  <td><b>File Path Template</b></td>
+  <td>The location of the metadata file within the asset folder, using <code>{materialName}</code> or <code>{folderName}</code> placeholders</td>
+  <td><code>{materialName}.json</code></td>
+</tr>
+<tr>
+  <td><b>File Format</b></td>
+  <td><code>json</code> or <code>txt</code></td>
+  <td><code>json</code></td>
+</tr>
+<tr>
+  <td><b>Field Mapping</b></td>
+  <td>Maps the field names from the source file to the target fields of the .zasset, with an optional processor to transform the format</td>
+  <td>See details below</td>
+</tr>
+</table>
+
+<p><b>Field mappings are defined one by one; each consists of:</b></p>
+<ul>
+  <li><b>Source field</b> — a key name in the JSON file (e.g. <code>"tags"</code>, <code>"name"</code>, <code>"description"</code>)</li>
+  <li><b>Target field</b> — the field name written to the .zasset (usually the same as the source field)</li>
+  <li><b>Processor</b> — optional, transforms the read value (see 5.5)</li>
+</ul>
+
+<h4>Which target fields are available?</h4>
+<table>
+<tr><th>Target Field Name</th><th>Meaning</th><th>Value Format</th></tr>
+<tr><td><code>tags</code></td><td>Asset tag list</td><td>Array of strings, e.g. <code>["metal", "rust", "old"]</code></td></tr>
+<tr><td><code>description</code></td><td>Asset description text</td><td>Plain text string</td></tr>
+<tr><td><code>author</code></td><td>Author name</td><td>Plain text string</td></tr>
+<tr><td><code>source_url</code></td><td>Source URL</td><td>Plain text string</td></tr>
+</table>
+
+<h3 id="config-processor">5.5 Field Processors — Data Format Conversion</h3>
+
+<p>The purpose of a processor is <b>to transform the value read from the source file into the format the .zasset needs</b>.</p>
+
+<table>
+<tr><th>Processor</th><th>What it does</th><th>When to use</th></tr>
+<tr>
+  <td><code>none</code></td>
+  <td><b>Does nothing</b>, keeps the value as-is</td>
+  <td><b>Most common.</b> The source data format is already correct (e.g. Megascans tags are already an array and ready to use)</td>
+</tr>
+<tr>
+  <td><code>split_comma</code></td>
+  <td>Splits a <b>comma-separated string</b> into an array</td>
+  <td><b>Only</b> when the source tags are stored as a string like <code>"metal, wood, glass"</code></td>
+</tr>
+<tr>
+  <td><code>first_line</code></td>
+  <td>Takes only the <b>first line</b></td>
+  <td>The source is multi-line text (e.g. a txt file) and only the first line is needed as a description</td>
+</tr>
+</table>
+
+<div class="warn">
+  <b>⚠ Most common mistake:</b> the source tags are already <code>["a","b","c"]</code> (a JSON array), but you select <code>split_comma</code>.<br>
+  This crashes the program (a list cannot call .split(',')), and metadata reading fails returning an empty result.<br><br>
+  <b>Simple way to tell:</b> open the JSON file and look — if tags are bracketed <code>["...","..."]</code>, use <code>none</code>; if they are a quoted string <code>"a, b, c"</code>, use <code>split_comma</code>.
+</div>
+
+<h3 id="config-regex">5.6 How It Works Internally — Texture File Name Regex Matching</h3>
+
+<p>This section explains how the tool recognizes textures internally — you <b>don't need to write regex by hand</b>, but understanding it helps troubleshoot naming mismatches.</p>
+
+<p><b>Texture type detection (identify_texture_type)</b> matching priority:</p>
+
+<pre>
+Priority=1 (highest): file name ends with _alias
+  e.g. wood_albedo.jpg  → "_albedo" matches baseColor alias ✓
+
+Priority+5: file name contains _resolution_alias pattern
+  e.g. floor_2K_diff.png → after stripping "_2K", floor_diff matches diff alias ✓
+
+Priority+10: file name contains _alias_ in the middle
+  e.g. rock_diff_2K.jpg → matches diff alias ✓
+</pre>
+
+<p><b>Resolution stripping (detect_resolution_from_name):</b></p>
+<pre>
+Input: xhtnbhlg_2K_Albedo
+       ↓ detects the "_2K_" middle pattern
+       ↓ removes only the "2K" text itself (keeps the surrounding _)
+Output: xhtnbhlg_Albedo  +  resolution="2K"
+</pre>
+
+<p><b>Material name extraction (extract_material_name):</b></p>
+<pre>
+Input: xhtnbhlg_Albedo  +  channel alias "albedo"
+       ↓ removes the trailing _albedo
+Output: xhtnbhlg
+</pre>
+
+<p>So the full flow from <code>xhtnbhlg_2K_Displacement.exr</code> to the final data:</p>
+
+<pre>
+xhtnbhlg_2K_Displacement.exr
+  → resolution stripped → xhtnbhlg_Displacement (res=2K)
+    → channel detection → "displacement" matches height alias
+      → material name extraction → xhtnbhlg
+        → stored: resolution_map["xhtnbhlg"]["variants"]["2K"]["height"]
+</pre>
+
+<div class="note">
+  <b>File names are case-insensitive:</b> <code>Albedo</code>, <code>ALBEDO</code>, and <code>albedo</code> all match.<br>
+  <b>Resolution case is preserved:</b> <code>2K</code> stays <code>2K</code> (not lowercased to <code>2k</code>).
+</div>
+
+<!-- ============================================================ -->
+<h2 id="examples">6. Full Configuration Examples</h2>
+
+<h3 id="example-megascans">6.1 Megascans Assets</h3>
+
+<p><b>Folder structure:</b></p>
+<pre>
+surface/metal_sheet_xhtnbhlg/
+├── xhtnbhlg.json              ← metadata file (contains tags array + name field)
+├── xhtnbhlg_Preview.png       ← thumbnail
+├── xhtnbhlg_2K_Albedo.jpg
+├── xhtnbhlg_2K_AO.jpg
+├── xhtnbhlg_2K_Displacement.exr
+├── xhtnbhlg_2K_Displacement.jpg
+├── xhtnbhlg_2K_Normal.jpg
+├── xhtnbhlg_2K_Roughness.jpg
+├── xhtnbhlg_4K_Albedo.jpg
+├── ... (4K other channels)
+├── xhtnbhlg_8K_Albedo.jpg
+└── ... (8K other channels)
+</pre>
+
+<p><b>xhtnbhlg.json contents (excerpt):</b></p>
+<pre>
+{
+  "name": "Rusty Painted Metal Sheet",
+  "tags": ["green", "orange", "industrial", "metal", "rust", ...],
+  "categories": ["surface", "metal", "sheet"]
+}
+</pre>
+
+<p><b>Configuration steps:</b></p>
+
+<h4>Step 1: Thumbnail search path</h4>
+<p>Add one path:</p>
+<pre>
+{materialName}_Preview.png
+</pre>
+<p>Matched: <code>metal_sheet_xhtnbhlg/xhtnbhlg_Preview.png</code> ✓</p>
+
+<h4>Step 2: Add a metadata source</h4>
+<table>
+<tr><th>Config Item</th><th>Value</th></tr>
+<tr><td>File Path Template</td><td><code>{materialName}.json</code></td></tr>
+<tr><td>File Format</td><td><code>json</code></td></tr>
+</table>
+
+<p>Then click "+ Add Field Mapping" and add two rows:</p>
+
+<table>
+<tr><th>Source Field</th><th>→</th><th>Target Field</th><th>Processor</th><th>Reason</th></tr>
+<tr><td><code>tags</code></td><td>→</td><td><code>tags</code></td><td><code>none</code></td><td>The tags in the JSON are already an array <code>["green","orange",...]</code>, no processing needed</td></tr>
+<tr><td><code>name</code></td><td>→</td><td><code>description</code></td><td><code>none</code></td><td>The source field is called "name", but we want to write it into the .zasset description field</td></tr>
+</table>
+
+<h4>Step 3: Using it</h4>
+<ol>
+  <li>In the tool, select the parent folder <code>.../surface/</code></li>
+  <li>Check "Batch Mode"</li>
+  <li>Click "Scan Textures" → you see 3 materials</li>
+  <li>Click "Convert" → generates 3 .zasset files, each with tags and description</li>
+</ol>
+
+<div class="note">
+  <b>Effect on the meta.json inside the .zasset after conversion:</b>
+  <pre>
+"tags": ["green", "orange", "industrial", "metal", "rust", ...],
+"description": "Rusty Painted Metal Sheet",
+"resolutions": ["8K", "4K", "2K"],
+"default_resolution": "8K"</pre>
+</div>
+
+<!-- ------ -->
+
+<h3 id="example-zootools">6.2 Zoo Tools Assets</h3>
+
+<p><b>Folder structure:</b></p>
+<pre>
+myMetalMaterial/
+├── myMetalMaterial_ma_fileDependencies/
+│   ├── thumbnail.png           ← thumbnail
+│   └── myMetalMaterial.zooInfo ← metadata file
+├── myMetalMaterial_baseColor.png
+├── myMetalMaterial_metallic.png
+├── myMetalMaterial_normal.png
+└── myMetalMaterial_roughness.png
+</pre>
+
+<p><b>myMetalMaterial.zooInfo contents (excerpt):</b></p>
+<pre>
+{
+  "tags": "metal, shiny, industrial"
+}
+</pre>
+
+<div class="warn">
+  <b>Note:</b> here the tags value is a <b>string</b> <code>"metal, shiny, industrial"</code>, not an array! Use <code>split_comma</code> to convert it.
+</div>
+
+<p><b>Configuration:</b></p>
+
+<h4>Thumbnail search path</h4>
+<pre>
+{folderName}_ma_fileDependencies/thumbnail.png
+</pre>
+
+<h4>Metadata source</h4>
+<table>
+<tr><th>Config Item</th><th>Value</th></tr>
+<tr><td>File Path Template</td><td><code>{folderName}_ma_fileDependencies/{folderName}.zooInfo</code></td></tr>
+<tr><td>File Format</td><td><code>json</code></td></tr>
+</table>
+
+<p>Field mapping:</p>
+<table>
+<tr><th>Source Field</th><th>→</th><th>Target Field</th><th>Processor</th><th>Reason</th></tr>
+<tr><td><code>tags</code></td><td>→</td><td><code>tags</code></td><td><code>split_comma</code></td><td>The tags in the JSON are a string <code>"metal, shiny, industrial"</code> and need to be split into an array</td></tr>
+</table>
+
+<!-- ------ -->
+
+<h3 id="example-custom">6.3 Custom Assets</h3>
+
+<p><b>Scenario:</b> you made your own textures and put an <code>info.txt</code> file next to them.</p>
+
+<pre>
+custom_brick/
+├── info.txt                   ← text metadata
+├── brick_albedo.png
+├── brick_normal.png
+├── brick_roughness.png
+└── preview.jpg                ← you want to use this as the thumbnail
+</pre>
+
+<p><b>info.txt contents:</b></p>
+<pre>
+Red Clay Brick
+tags: brick, red, clay, exterior
+author: Zhang San
+</pre>
+
+<p><b>Configuration:</b></p>
+<h4>Thumbnail search path</h4>
+<pre>
+preview.jpg
+{materialName}_Preview.png
+</pre>
+<p>The tool automatically tries the next one if the first is not found.</p>
+
+<h4>Metadata source</h4>
+<table>
+<tr><th>Config Item</th><th>Value</th></tr>
+<tr><td>File Path Template</td><td><code>info.txt</code></td></tr>
+<tr><td>File Format</td><td><code>txt</code></td></tr>
+</table>
+
+<p>Field mapping:</p>
+<table>
+<tr><th>Source Field</th><th>→</th><th>Target Field</th><th>Processor</th><th>Reason</th></tr>
+<tr><td><code>content</code></td><td>→</td><td><code>description</code></td><td><code>first_line</code></td><td>Take the first line "Red Clay Brick" as the description</td></tr>
+</table>
+
+<div class="note">
+  <b>TXT format note:</b> for txt files, the entire file content is read as one string, and the source field is fixed to <code>content</code> (representing the full text).
+</div>
+
+<!-- ============================================================ -->
+<h2 id="faq">7. FAQ</h2>
+
+<h3>❌ After scanning it shows "No valid PBR textures found"</h3>
+<p>Check the following:</p>
+<ul>
+  <li>Does the file name contain <b>underscore + alias</b>? (e.g. <code>_albedo</code>, <code>_normal</code>)</li>
+  <li>Is the file name too short? It needs at least "materialName_alias.extension"</li>
+  <li>Is the extension listed in the file routing config's extension list?</li>
+</ul>
+
+<h3>❌ Metadata was not read (tags empty, no description)</h3>
+<p>Troubleshoot in this order:</p>
+<ol>
+  <li><b>Is the file path template correct?</b> — Does the path built from the template locate that JSON file in the asset folder? If unsure, verify it in the file manager</li>
+  <li><b>Are the placeholders right?</b> — if the JSON file is named <code>xhtnbhlg.json</code> (named after the texture material), use <code>{materialName}.json</code>; if it is called <code>folderName.json</code>, use <code>{folderName}.json</code></li>
+  <li><b>Does the source field name match the JSON key?</b> — if the JSON has <code>"name"</code>, your mapped source field must also be <code>name</code></li>
+  <li><b>Is the processor correct?</b> — using <code>split_comma</code> on a list crashes (see 5.5)</li>
+</ol>
+
+<h3>❌ The thumbnail was not generated (or shows a placeholder)</h3>
+<ul>
+  <li>Check whether the thumbnail search path matches (does the file at the template-built path exist?)</li>
+  <li>If the source has a BaseColor/Diffuse texture, the tool auto-generates a thumbnail from the color texture. Without a color texture it cannot generate one</li>
+</ul>
+
+<h3>❌ Resolutions (2K/4K/8K) were not separated</h3>
+<ul>
+  <li>Resolution markers in file names must match the <code>_2K_</code>, <code>_4K_</code>, etc. format (note the capital K)</li>
+  <li>If the resolution only exists in the subfolder name (e.g. a <code>2K/</code> directory), it is not recognized — the file name itself must contain the resolution marker</li>
+</ul>
+
+<h3>❌ A folder is skipped in batch mode</h3>
+<p>Empty folders, or folders with subfolders but no valid PBR textures, are skipped. You can see exactly which folders were recognized in the scan results.</p>
+
+<div class="footer">
+PBR Textures to Asset Tool — MaterialManagementPro QuickTools
+</div>
+
+</div><!-- content -->
+</div><!-- wrapper -->
+</body>
+</html>

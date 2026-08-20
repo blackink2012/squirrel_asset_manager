@@ -14,6 +14,12 @@ BatchProgressOverlay — 批量导出进度浮动面板
 
 from ..utils.maya_utils import get_qt_modules
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
@@ -35,7 +41,7 @@ class BatchProgressOverlay(QtWidgets.QFrame):
         self._current_asset = ""
         self._cancelled = False
 
-        self.setWindowTitle("批量导出进度")
+        self.setWindowTitle(t("batch_progress.window_title"))
         self.setWindowFlags(
             QtCore.Qt.WindowType.Tool
             | QtCore.Qt.WindowType.FramelessWindowHint
@@ -58,7 +64,7 @@ class BatchProgressOverlay(QtWidgets.QFrame):
 
         # 标题行
         header = QtWidgets.QHBoxLayout()
-        title = QtWidgets.QLabel("批量导出")
+        title = QtWidgets.QLabel(t("batch_progress.header"))
         title.setStyleSheet("color: #ffffff; font-size: 14px; font-weight: bold;")
         header.addWidget(title)
         header.addStretch()
@@ -74,7 +80,7 @@ class BatchProgressOverlay(QtWidgets.QFrame):
         layout.addLayout(header)
 
         # 进度文本
-        self._progress_label = QtWidgets.QLabel("准备中...")
+        self._progress_label = QtWidgets.QLabel(t("batch_progress.preparing"))
         self._progress_label.setStyleSheet("color: #c0c0c0; font-size: 12px;")
         layout.addWidget(self._progress_label)
 
@@ -95,7 +101,7 @@ class BatchProgressOverlay(QtWidgets.QFrame):
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.setSpacing(8)
 
-        skip_btn = QtWidgets.QPushButton("跳过当前")
+        skip_btn = QtWidgets.QPushButton(t("batch_progress.skip_current"))
         skip_btn.setStyleSheet(
             "QPushButton { background: #3a3a3a; color: #ff9800; border: 1px solid #555; "
             "border-radius: 4px; padding: 4px 12px; font-size: 11px; }"
@@ -106,7 +112,7 @@ class BatchProgressOverlay(QtWidgets.QFrame):
 
         btn_row.addStretch()
 
-        cancel_btn = QtWidgets.QPushButton("取消批量导出")
+        cancel_btn = QtWidgets.QPushButton(t("batch_progress.cancel_export"))
         cancel_btn.setStyleSheet(
             "QPushButton { background: #3a1a1a; color: #e06060; border: 1px solid #5a2a2a; "
             "border-radius: 4px; padding: 4px 14px; font-size: 11px; }"
@@ -135,10 +141,11 @@ class BatchProgressOverlay(QtWidgets.QFrame):
 
         if asset_name:
             self._progress_label.setText(
-                f"正在处理: {current}/{total} — {asset_name}"
+                t("batch_progress.processing_with_asset", current=current, total=total, asset_name=asset_name)
             )
         else:
-            self._progress_label.setText(f"正在处理: {current}/{total}")
+            self._progress_label.setText(
+                t("batch_progress.processing", current=current, total=total))
 
     def is_cancelled(self) -> bool:
         """是否已请求取消。"""
@@ -151,7 +158,7 @@ class BatchProgressOverlay(QtWidgets.QFrame):
         self._total = 0
         self._current_asset = ""
         self._progress_bar.setValue(0)
-        self._progress_label.setText("准备中...")
+        self._progress_label.setText(t("batch_progress.preparing"))
 
     # ── 定位 ───────────────────────────────────────────
 
@@ -169,6 +176,6 @@ class BatchProgressOverlay(QtWidgets.QFrame):
 
     def _on_cancel(self):
         self._cancelled = True
-        self._progress_label.setText("正在取消...")
+        self._progress_label.setText(t("batch_progress.cancelling"))
         self._progress_label.setStyleSheet("color: #e06060; font-size: 12px;")
         self.cancelled.emit()

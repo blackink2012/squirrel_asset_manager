@@ -1,5 +1,11 @@
 from ..utils.maya_utils import get_qt_modules
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
@@ -114,9 +120,9 @@ class DetailPanelWidget(QtWidgets.QWidget):
         preview_type_row = QtWidgets.QHBoxLayout()
         preview_type_row.setSpacing(4)
         shapes = [
-            ("\u25cf", "\u7403\u4f53\u9884\u89c8"),
-            ("\u25a0", "\u7acb\u65b9\u4f53\u9884\u89c8"),
-            ("\u25b2", "\u5e73\u9762\u9884\u89c8"),
+            ("\u25cf", t("detail_panel.preview_sphere")),
+            ("\u25a0", t("detail_panel.preview_cube")),
+            ("\u25b2", t("detail_panel.preview_plane")),
         ]
         for char, tip in shapes:
             btn = QtWidgets.QPushButton(char)
@@ -141,13 +147,13 @@ class DetailPanelWidget(QtWidgets.QWidget):
         info_layout.setSpacing(6)
 
         title_row = QtWidgets.QHBoxLayout()
-        self._name_label = QtWidgets.QLabel("\u672a\u9009\u62e9\u6750\u8d28")
+        self._name_label = QtWidgets.QLabel(t("detail_panel.no_material"))
         self._name_label.setStyleSheet("color: #ffffff; font-size: 16px; font-weight: bold;")
         title_row.addWidget(self._name_label)
 
         self._fav_btn = QtWidgets.QPushButton("\u2606")
         self._fav_btn.setFixedSize(28, 28)
-        self._fav_btn.setToolTip("\u6dfb\u52a0\u5230\u6536\u85cf\u5939")
+        self._fav_btn.setToolTip(t("detail_panel.add_to_favorites"))
         self._fav_btn.setStyleSheet(
             "QPushButton { background-color: transparent; color: #606060; border: none; font-size: 16px; }"
             "QPushButton:hover { color: #FFD700; }"
@@ -158,7 +164,7 @@ class DetailPanelWidget(QtWidgets.QWidget):
         title_row.addStretch()
         info_layout.addLayout(title_row)
 
-        self._info_label = QtWidgets.QLabel("\u7c7b\u578b: -  |  \u5206\u7c7b: -")
+        self._info_label = QtWidgets.QLabel(t("detail_panel.type_category_placeholder"))
         self._info_label.setStyleSheet("color: #a0a0a0; font-size: 13px;")
         info_layout.addWidget(self._info_label)
 
@@ -173,7 +179,7 @@ class DetailPanelWidget(QtWidgets.QWidget):
         divider1.setStyleSheet("color: #3a3a3a;")
         info_layout.addWidget(divider1)
 
-        tags_header = QtWidgets.QLabel("\u6807\u7b7e")
+        tags_header = QtWidgets.QLabel(t("detail_panel.tags"))
         tags_header.setStyleSheet("color: #909090; font-size: 12px;")
         info_layout.addWidget(tags_header)
 
@@ -213,12 +219,12 @@ class DetailPanelWidget(QtWidgets.QWidget):
         font = painter.font()
         font.setPointSize(11)
         painter.setFont(font)
-        painter.drawText(QtCore.QRect(0, 100, 140, 30), QtCore.Qt.AlignmentFlag.AlignCenter, "\u672a\u9009\u62e9")
+        painter.drawText(QtCore.QRect(0, 100, 140, 30), QtCore.Qt.AlignmentFlag.AlignCenter, t("detail_panel.no_selection"))
         painter.end()
         self._swatch_label.setPixmap(pix)
 
-        self._name_label.setText("\u672a\u9009\u62e9\u6750\u8d28")
-        self._info_label.setText("\u7c7b\u578b: -  |  \u5206\u7c7b: -")
+        self._name_label.setText(t("detail_panel.no_material"))
+        self._info_label.setText(t("detail_panel.type_category_placeholder"))
         self._desc_label.setText("")
         self._fav_btn.setVisible(False)
         self._clear_tags()
@@ -234,8 +240,9 @@ class DetailPanelWidget(QtWidgets.QWidget):
 
         self._name_label.setText(material.get("name_cn", material.get("name", "")))
         self._info_label.setText(
-            f"\u7c7b\u578b: {material.get('node_type', '-')}  |  "
-            f"\u5206\u7c7b: {self._category_cn(material.get('category', ''))}"
+            t("detail_panel.type_category",
+              type=material.get('node_type', '-'),
+              category=self._category_cn(material.get('category', '')))
         )
         self._desc_label.setText(material.get("description", ""))
 
@@ -252,7 +259,7 @@ class DetailPanelWidget(QtWidgets.QWidget):
 
         notes = material.get("notes", "")
         if notes:
-            self._notes_label.setText("\u6ce8\u91ca: " + notes)
+            self._notes_label.setText(t("detail_panel.notes_prefix", notes=notes))
             self._notes_label.setVisible(True)
         else:
             self._notes_label.setVisible(False)

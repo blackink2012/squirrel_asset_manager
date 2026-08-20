@@ -14,6 +14,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # 预设目录：相对于脚本目录的 Assets/material_mapper_presets
 PRESET_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "Assets", "material_mapper_presets"))
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # 尝试导入 PySide6
 try:
     from PySide6 import QtWidgets, QtCore, QtGui
@@ -46,6 +48,22 @@ try:
     IN_MAYA = True
 except ImportError:
     IN_MAYA = False
+
+
+_T = None
+_help_path = lambda p: p
+try:
+    from utils.i18n import t as _T, help_path as _hpath
+    _help_path = _hpath
+except ImportError:
+    try:
+        from squirrel_asset_manager.utils.i18n import t as _T, help_path as _hpath
+        _help_path = _hpath
+    except ImportError:
+        _T = None
+
+def t(key, **kwargs):
+    return _T(key, **kwargs) if _T is not None else (key.format(**kwargs) if kwargs else key)
 
 
 # ==================== 转换函数列表 ====================
@@ -163,7 +181,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
 
         super(MaterialPropertyMapper, self).__init__(parent)
 
-        self.setWindowTitle("材质属性映射工具 - Maya 2025")
+        self.setWindowTitle(t("qtool.matprop.window_title"))
         self.setMinimumSize(600, 1000)
 
         # 增大下拉按钮宽度
@@ -241,29 +259,29 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
 
         button_layout = QtWidgets.QHBoxLayout()
 
-        self.add_btn = QtWidgets.QPushButton("添加行")
+        self.add_btn = QtWidgets.QPushButton(t("btn.add_row"))
         self.add_btn.clicked.connect(lambda: self.add_row_with_options())
         button_layout.addWidget(self.add_btn)
 
-        self.remove_btn = QtWidgets.QPushButton("移除选中行")
+        self.remove_btn = QtWidgets.QPushButton(t("btn.remove_selected"))
         self.remove_btn.clicked.connect(self.remove_selected_rows)
         button_layout.addWidget(self.remove_btn)
 
-        self.browser_btn = QtWidgets.QPushButton("属性浏览器")
+        self.browser_btn = QtWidgets.QPushButton(t("btn.attribute_browser"))
         self.browser_btn.clicked.connect(self.show_attribute_browser)
         button_layout.addWidget(self.browser_btn)
 
         button_layout.addStretch()
 
-        self.help_btn = QtWidgets.QPushButton("使用帮助")
+        self.help_btn = QtWidgets.QPushButton(t("btn.help"))
         self.help_btn.clicked.connect(self.show_help_dialog)
         button_layout.addWidget(self.help_btn)
 
-        self.save_preset_btn = QtWidgets.QPushButton("保存预设")
+        self.save_preset_btn = QtWidgets.QPushButton(t("btn.save_preset"))
         self.save_preset_btn.clicked.connect(self.save_preset_dialog)
         button_layout.addWidget(self.save_preset_btn)
 
-        self.load_preset_btn = QtWidgets.QPushButton("加载预设")
+        self.load_preset_btn = QtWidgets.QPushButton(t("btn.load_preset"))
         self.load_preset_btn.clicked.connect(self.load_preset_dialog)
         button_layout.addWidget(self.load_preset_btn)
 
@@ -277,10 +295,10 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
         # 源节点选择
         source_layout = QtWidgets.QVBoxLayout()
         source_node_layout = QtWidgets.QHBoxLayout()
-        source_node_label = QtWidgets.QLabel("源节点类型:")
+        source_node_label = QtWidgets.QLabel(t("qtool.matprop.label.source_node_type"))
         self.source_node_type = QtWidgets.QLineEdit()
         self.source_node_type.setReadOnly(True)
-        source_node_browse_btn = QtWidgets.QPushButton("浏览")
+        source_node_browse_btn = QtWidgets.QPushButton(t("btn.browse"))
         source_node_browse_btn.clicked.connect(lambda: self.browse_node(True))
         source_node_layout.addWidget(source_node_label)
         source_node_layout.addWidget(self.source_node_type)
@@ -289,7 +307,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
         
         # 源节点操作按钮
         source_buttons_layout = QtWidgets.QHBoxLayout()
-        clear_source_btn = QtWidgets.QPushButton("清空源属性")
+        clear_source_btn = QtWidgets.QPushButton(t("qtool.matprop.btn.clear_source"))
         clear_source_btn.clicked.connect(self.clear_source_attributes)
         source_buttons_layout.addWidget(clear_source_btn)
         source_layout.addLayout(source_buttons_layout)
@@ -299,10 +317,10 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
         # 目标节点选择
         target_layout = QtWidgets.QVBoxLayout()
         target_node_layout = QtWidgets.QHBoxLayout()
-        target_node_label = QtWidgets.QLabel("目标节点类型:")
+        target_node_label = QtWidgets.QLabel(t("qtool.matprop.label.target_node_type"))
         self.target_node_type = QtWidgets.QLineEdit()
         self.target_node_type.setReadOnly(True)
-        target_node_browse_btn = QtWidgets.QPushButton("浏览")
+        target_node_browse_btn = QtWidgets.QPushButton(t("btn.browse"))
         target_node_browse_btn.clicked.connect(lambda: self.browse_node(False))
         target_node_layout.addWidget(target_node_label)
         target_node_layout.addWidget(self.target_node_type)
@@ -311,7 +329,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
         
         # 目标节点操作按钮
         target_buttons_layout = QtWidgets.QHBoxLayout()
-        clear_target_btn = QtWidgets.QPushButton("清空目标属性")
+        clear_target_btn = QtWidgets.QPushButton(t("qtool.matprop.btn.clear_target"))
         clear_target_btn.clicked.connect(self.clear_target_attributes)
         target_buttons_layout.addWidget(clear_target_btn)
         target_layout.addLayout(target_buttons_layout)
@@ -323,7 +341,13 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
 
         self.table = QtWidgets.QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["选择", "材质属性", "目标属性", "转换函数", "默认值"])
+        self.table.setHorizontalHeaderLabels([
+            t("qtool.matprop.header.select"),
+            t("qtool.matprop.header.material_attr"),
+            t("qtool.matprop.header.target_attr"),
+            t("qtool.matprop.header.transform"),
+            t("qtool.matprop.header.default")
+        ])
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._show_table_context_menu)
 
@@ -355,11 +379,11 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
         main_layout.addWidget(self.table)
 
         info_layout = QtWidgets.QHBoxLayout()
-        info_label = QtWidgets.QLabel(f"预设路径: {self.preset_dir}")
+        info_label = QtWidgets.QLabel(f'{t("qtool.matprop.label.preset_path")}: {self.preset_dir}')
         info_label.setWordWrap(True)
         info_layout.addWidget(info_label)
 
-        self.open_folder_btn = QtWidgets.QPushButton("打开文件夹")
+        self.open_folder_btn = QtWidgets.QPushButton(t("common.open_folder"))
         self.open_folder_btn.clicked.connect(self.open_preset_folder)
         info_layout.addWidget(self.open_folder_btn)
 
@@ -372,15 +396,15 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
 
         button_layout2 = QtWidgets.QHBoxLayout()
 
-        self.reverse_btn = QtWidgets.QPushButton("反向映射")
+        self.reverse_btn = QtWidgets.QPushButton(t("qtool.matprop.btn.reverse_mapping"))
         self.reverse_btn.clicked.connect(self.reverse_mapping)
         button_layout2.addWidget(self.reverse_btn)
 
-        self.clear_btn = QtWidgets.QPushButton("清空表格")
+        self.clear_btn = QtWidgets.QPushButton(t("qtool.matprop.btn.clear_table"))
         self.clear_btn.clicked.connect(self.clear_table)
         button_layout2.addWidget(self.clear_btn)
 
-        example_btn = QtWidgets.QPushButton("加载示例数据")
+        example_btn = QtWidgets.QPushButton(t("qtool.matprop.btn.load_example"))
         example_btn.clicked.connect(self.load_example_data)
         button_layout2.addWidget(example_btn)
 
@@ -513,7 +537,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
 
         # 默认值输入 - 文本框
         default_edit = QtWidgets.QLineEdit()
-        default_edit.setPlaceholderText("默认值")
+        default_edit.setPlaceholderText(t("qtool.matprop.placeholder.default_value"))
         if default_value:
             default_edit.setText(default_value)
         self.table.setCellWidget(row_position, 4, default_edit)
@@ -534,9 +558,9 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
             if column in [1, 2]:
                 menu = QtWidgets.QMenu()
                 if column == 1:
-                    clear_action = menu.addAction("清空源属性")
+                    clear_action = menu.addAction(t("qtool.matprop.menu.clear_source"))
                 else:
-                    clear_action = menu.addAction("清空目标属性")
+                    clear_action = menu.addAction(t("qtool.matprop.menu.clear_target"))
 
                 action = menu.exec_(event.globalPos())
                 if action == clear_action:
@@ -577,9 +601,9 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
         menu = QtWidgets.QMenu()
 
         if column == 1:
-            clear_action = menu.addAction("清空源属性")
+            clear_action = menu.addAction(t("qtool.matprop.menu.clear_source"))
         else:
-            clear_action = menu.addAction("清空目标属性")
+            clear_action = menu.addAction(t("qtool.matprop.menu.clear_target"))
 
         # 显示菜单并获取选中的动作
         action = menu.exec_(self.table.viewport().mapToGlobal(pos))
@@ -613,7 +637,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
             # 清空重复的属性
             for row in duplicates:
                 self._clear_single_attribute(row, 1)
-            QMessageBox.warning(self, "警告", f"属性 '{new_text}' 已在其他行存在，已清空重复项")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matprop.msg.duplicate_attr", new_text=new_text))
 
     def _on_right_attribute_changed(self, changed_row, new_text):
         """右侧属性变更检测"""
@@ -632,7 +656,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
             # 清空重复的属性
             for row in duplicates:
                 self._clear_single_attribute(row, 2)
-            QMessageBox.warning(self, "警告", f"属性 '{new_text}' 已在其他行存在，已清空重复项")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matprop.msg.duplicate_attr", new_text=new_text))
 
     def remove_selected_rows(self):
         """移除选中行"""
@@ -654,7 +678,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
             self.table.removeRow(row)
         
         if not selected_rows:
-            QMessageBox.information(self, "提示", "请先选择要删除的行（选中行或勾选复选框）")
+            QMessageBox.information(self, t("common.tip"), t("qtool.matprop.msg.select_row_to_delete"))
     
     def clear_table(self):
         """清空表格"""
@@ -757,7 +781,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
         """保存预设到文件"""
         mappings = self.get_mapping_data()
         if not mappings:
-            QMessageBox.warning(self, "警告", "没有可保存的映射数据")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matprop.msg.no_mapping_data"))
             return False
 
         from datetime import datetime
@@ -781,10 +805,10 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(preset_data, f, indent=4, ensure_ascii=False)
 
-            QMessageBox.information(self, "成功", f"预设已保存到:\n{filepath}")
+            QMessageBox.information(self, t("msg.success"), t("qtool.matprop.msg.preset_saved", filepath=filepath))
             return True
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"保存失败:\n{str(e)}")
+            QMessageBox.critical(self, t("msg.error"), t("qtool.matprop.msg.save_failed", e=str(e)))
             return False
 
     def load_preset(self, filepath):
@@ -818,7 +842,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
 
             return True
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"加载失败:\n{str(e)}")
+            QMessageBox.critical(self, t("msg.error"), t("qtool.matprop.msg.load_failed", e=str(e)))
             return False
     
     def save_preset_dialog(self):
@@ -830,18 +854,18 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
         default_filepath = os.path.join(self.preset_dir, default_filename)
         
         filepath, _ = QFileDialog.getSaveFileName(
-            self, "保存预设", default_filepath, "Mapping Files (*.mmap)"
+            self, t("qtool.matprop.dialog.save_preset"), default_filepath, t("qtool.matprop.dialog.mapping_filter")
         )
-        
+
         if filepath:
             if not filepath.endswith('.mmap'):
                 filepath += '.mmap'
             self.save_preset(filepath)
-    
+
     def load_preset_dialog(self):
         """打开加载预设对话框"""
         filepath, _ = QFileDialog.getOpenFileName(
-            self, "加载预设", self.preset_dir, "Mapping Files (*.mmap)"
+            self, t("qtool.matprop.dialog.load_preset"), self.preset_dir, t("qtool.matprop.dialog.mapping_filter")
         )
         
         if filepath:
@@ -889,7 +913,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
                 os.makedirs(folder_path)
             subprocess.Popen(['explorer', folder_path])
         except Exception as e:
-            QMessageBox.warning(self, "错误", f"无法打开文件夹:\n{str(e)}")
+            QMessageBox.warning(self, t("msg.error"), t("qtool.matprop.msg.open_folder_failed", e=str(e)))
 
     def load_example_data(self):
         """加载示例数据"""
@@ -1252,15 +1276,15 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
                     self.load_node_attributes(node, False)
             except Exception as e:
                 print(f"获取节点类型失败: {e}")
-                QMessageBox.warning(self, "错误", f"获取节点类型失败: {e}")
+                QMessageBox.warning(self, t("msg.error"), t("qtool.matprop.msg.get_node_type_failed", e=e))
         else:
-            QMessageBox.warning(self, "警告", "请先在Maya中选择一个节点")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matprop.msg.select_node_in_maya"))
 
     def show_attribute_browser(self):
         """显示属性浏览器对话框"""
         selected_objects = cmds.ls(selection=True)
         if not selected_objects:
-            QMessageBox.warning(self, "警告", "请先在Maya中选择一个对象")
+            QMessageBox.warning(self, t("msg.warning"), t("qtool.matprop.msg.select_object_in_maya"))
             return
 
         dialog = AttributeBrowserDialog(selected_objects[0], self)
@@ -1301,12 +1325,12 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
         import os
         import webbrowser
         plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        help_path = os.path.join(plugin_root, "Assets", "help", "材质节点属性映射工具", "help.html")
+        help_path = _help_path(os.path.join(plugin_root, "Assets", "help", "材质节点属性映射工具", "help.html"))
         if os.path.isfile(help_path):
             webbrowser.open("file:///" + help_path.replace(os.sep, "/"))
         else:
-            QtWidgets.QMessageBox.information(self, "使用帮助",
-                "帮助文件未找到: " + help_path)
+            QtWidgets.QMessageBox.information(self, t("btn.help"),
+                t("qtool.matprop.msg.help_not_found", path=help_path))
 
 
 class AttributeBrowserDialog(QtWidgets.QDialog):
@@ -1315,33 +1339,33 @@ class AttributeBrowserDialog(QtWidgets.QDialog):
     attribute_selected = QtCore.Signal(str, bool)
 
     ATTRIBUTE_TYPE_MAP = {
-        'double': '数值',
-        'float': '数值',
-        'int': '整数',
-        'long': '整数',
-        'short': '整数',
-        'byte': '整数',
-        'char': '整数',
-        'bool': '布尔',
-        'double2': '二维向量',
-        'double3': '三维向量',
-        'float2': '二维向量',
-        'float3': '三维向量',
-        'vector': '向量',
-        'string': '字符串',
-        'message': '消息',
-        'time': '时间',
-        'doubleArray': '数值数组',
-        'floatArray': '数值数组',
-        'intArray': '整数数组',
-        'stringArray': '字符串数组',
-        'vectorArray': '向量数组',
+        'double': 'qtool.matprop.attrtype.numeric',
+        'float': 'qtool.matprop.attrtype.numeric',
+        'int': 'qtool.matprop.attrtype.integer',
+        'long': 'qtool.matprop.attrtype.integer',
+        'short': 'qtool.matprop.attrtype.integer',
+        'byte': 'qtool.matprop.attrtype.integer',
+        'char': 'qtool.matprop.attrtype.integer',
+        'bool': 'qtool.matprop.attrtype.boolean',
+        'double2': 'qtool.matprop.attrtype.vector2',
+        'double3': 'qtool.matprop.attrtype.vector3',
+        'float2': 'qtool.matprop.attrtype.vector2',
+        'float3': 'qtool.matprop.attrtype.vector3',
+        'vector': 'qtool.matprop.attrtype.vector',
+        'string': 'qtool.matprop.attrtype.string',
+        'message': 'qtool.matprop.attrtype.message',
+        'time': 'qtool.matprop.attrtype.time',
+        'doubleArray': 'qtool.matprop.attrtype.numeric_array',
+        'floatArray': 'qtool.matprop.attrtype.numeric_array',
+        'intArray': 'qtool.matprop.attrtype.integer_array',
+        'stringArray': 'qtool.matprop.attrtype.string_array',
+        'vectorArray': 'qtool.matprop.attrtype.vector_array',
     }
 
     def __init__(self, node_name, parent=None):
         super(AttributeBrowserDialog, self).__init__(parent)
         self.node_name = node_name
-        self.setWindowTitle(f"属性浏览器 - {node_name}")
+        self.setWindowTitle(t("qtool.matprop.dialog.attribute_browser_title", node_name=node_name))
         self.setMinimumSize(500, 400)
         self.setup_ui()
         self.load_attributes()
@@ -1350,7 +1374,7 @@ class AttributeBrowserDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
 
         search_layout = QtWidgets.QHBoxLayout()
-        search_layout.addWidget(QtWidgets.QLabel("搜索:"))
+        search_layout.addWidget(QtWidgets.QLabel(t("qtool.matprop.label.search")))
         self.search_input = QtWidgets.QLineEdit()
         self.search_input.textChanged.connect(self.filter_attributes)
         search_layout.addWidget(self.search_input)
@@ -1358,7 +1382,12 @@ class AttributeBrowserDialog(QtWidgets.QDialog):
 
         self.table = QtWidgets.QTableWidget()
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["属性名", "类型", "当前值", "操作"])
+        self.table.setHorizontalHeaderLabels([
+            t("qtool.matprop.header.attr_name"),
+            t("qtool.matprop.header.type"),
+            t("qtool.matprop.header.current_value"),
+            t("qtool.matprop.header.action")
+        ])
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.table.itemDoubleClicked.connect(self.on_attribute_double_clicked)
@@ -1382,17 +1411,17 @@ class AttributeBrowserDialog(QtWidgets.QDialog):
 
         button_layout = QtWidgets.QHBoxLayout()
 
-        self.use_as_source_btn = QtWidgets.QPushButton("用作源属性")
+        self.use_as_source_btn = QtWidgets.QPushButton(t("qtool.matprop.btn.use_as_source"))
         self.use_as_source_btn.clicked.connect(lambda: self.use_attribute(True))
         button_layout.addWidget(self.use_as_source_btn)
 
-        self.use_as_target_btn = QtWidgets.QPushButton("用作目标属性")
+        self.use_as_target_btn = QtWidgets.QPushButton(t("qtool.matprop.btn.use_as_target"))
         self.use_as_target_btn.clicked.connect(lambda: self.use_attribute(False))
         button_layout.addWidget(self.use_as_target_btn)
 
         button_layout.addStretch()
 
-        close_btn = QtWidgets.QPushButton("关闭")
+        close_btn = QtWidgets.QPushButton(t("common.close"))
         close_btn.clicked.connect(self.close)
         button_layout.addWidget(close_btn)
 
@@ -1424,7 +1453,7 @@ class AttributeBrowserDialog(QtWidgets.QDialog):
                 except RuntimeError:
                     value_str = "N/A"
 
-                type_text = self.ATTRIBUTE_TYPE_MAP.get(attr_type, attr_type)
+                type_text = t(self.ATTRIBUTE_TYPE_MAP.get(attr_type, attr_type))
 
                 row = self.table.rowCount()
                 self.table.insertRow(row)
@@ -1437,7 +1466,7 @@ class AttributeBrowserDialog(QtWidgets.QDialog):
 
                 self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(value_str))
 
-                use_btn = QtWidgets.QPushButton("使用")
+                use_btn = QtWidgets.QPushButton(t("btn.use"))
                 use_btn.clicked.connect(partial(self.on_use_clicked, row))
                 self.table.setCellWidget(row, 3, use_btn)
 
@@ -1475,7 +1504,7 @@ class AttributeBrowserDialog(QtWidgets.QDialog):
         """使用选中的属性"""
         selected_rows = self.table.selectedItems()
         if not selected_rows:
-            QMessageBox.information(self, "提示", "请先选择一个属性")
+            QMessageBox.information(self, t("common.tip"), t("qtool.matprop.msg.select_attribute_first"))
             return
 
         row = selected_rows[0].row()
@@ -1572,7 +1601,7 @@ def show_material_property_mapper():
         print(f"创建窗口时出错: {str(e)}")
         import traceback
         traceback.print_exc()
-        QMessageBox.critical(None, "错误", f"创建窗口时出错:\n{str(e)}")
+        QMessageBox.critical(None, t("msg.error"), t("qtool.matprop.msg.create_window_failed", e=str(e)))
         return None
 
 
@@ -1591,7 +1620,7 @@ if __name__ == "__main__":
         print(f"运行脚本时出错: {e}")
         # 尝试使用简单错误对话框
         try:
-            error_msg = f"脚本运行失败:\n{str(e)}"
-            QtWidgets.QMessageBox.critical(None, "错误", error_msg)
+            error_msg = t("qtool.matprop.msg.script_run_failed", e=str(e))
+            QtWidgets.QMessageBox.critical(None, t("msg.error"), error_msg)
         except Exception:
             print(error_msg)

@@ -13,6 +13,14 @@ import sys as _sys
 from ..utils.maya_utils import get_qt_modules
 from ..utils.settings import SettingsManager, apply_font_size_to_widget
 
+try:
+    from ..utils.i18n import t, help_path as _i18n_help_path
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+    def _i18n_help_path(p):
+        return p
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
@@ -164,7 +172,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
                 self._export_redshift = True
             # 其他格式（dae/dxf/igs/stl/wrl）在 UI 中默认不勾选，由用户手动展开
 
-        self.setWindowTitle("导出资产")
+        self.setWindowTitle(t("dialog.asset_create.title"))
         self.setMinimumSize(780, 760)
         self.setStyleSheet("background-color: #2a2a2a;")
         # 独立窗口（在 Maya 层级内，但不受插件窗口最小化影响）
@@ -299,7 +307,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         btn_layout = QtWidgets.QHBoxLayout(btn_row)
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(6)
-        confirm_btn = QtWidgets.QPushButton("导出资产")
+        confirm_btn = QtWidgets.QPushButton(t("btn.export_asset"))
         confirm_btn.setStyleSheet(
             "QPushButton { background-color: #5294e2; color: #ffffff; border: none; "
             "padding: 9px 0; font-size: 13px; border-radius: 4px; }"
@@ -311,7 +319,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         help_btn = QtWidgets.QPushButton("?")
         help_btn.setFixedWidth(32)
         help_btn.setMinimumHeight(32)
-        help_btn.setToolTip("导出帮助")
+        help_btn.setToolTip(t("btn.export_help.tooltip"))
         help_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #ffa502; border: none; "
             "font-size: 16px; font-weight: bold; border-radius: 4px; }"
@@ -323,7 +331,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         left.addWidget(btn_row)
 
         # 导出模式（三选一）
-        mode_section = QtWidgets.QLabel("导出模式")
+        mode_section = QtWidgets.QLabel(t("section.export_mode"))
         mode_section.setStyleSheet("color: #c0c0c0; font-size: 13px; font-weight: bold;")
         left.addWidget(mode_section)
 
@@ -335,11 +343,11 @@ class AssetCreateDialog(QtWidgets.QDialog):
         )
 
         self._mode_group = QtWidgets.QButtonGroup(self)
-        self._rb_auto = QtWidgets.QRadioButton("全自动（各物体独立资产，自动截图）")
+        self._rb_auto = QtWidgets.QRadioButton(t("mode.auto"))
         self._rb_auto.setStyleSheet(mode_style)
-        self._rb_semi = QtWidgets.QRadioButton("半自动（各物体独立资产，手动截图）")
+        self._rb_semi = QtWidgets.QRadioButton(t("mode.semi"))
         self._rb_semi.setStyleSheet(mode_style)
-        self._rb_single = QtWidgets.QRadioButton("单资产（合并为一个资产，手动截图）")
+        self._rb_single = QtWidgets.QRadioButton(t("mode.single"))
         self._rb_single.setStyleSheet(mode_style)
         self._rb_single.setChecked(True)
 
@@ -354,20 +362,20 @@ class AssetCreateDialog(QtWidgets.QDialog):
 
         # 截图延迟（仅全自动可用）
         delay_row = QtWidgets.QHBoxLayout()
-        delay_label = QtWidgets.QLabel("截图延迟:")
+        delay_label = QtWidgets.QLabel(t("label.capture_delay"))
         delay_label.setStyleSheet("color: #808080; font-size: 12px;")
         delay_row.addWidget(delay_label)
         self._delay_spin = QtWidgets.QSpinBox()
         self._delay_spin.setRange(0, 60)
         self._delay_spin.setValue(self._preset_delay_ms // 1000)
-        self._delay_spin.setSuffix(" 秒")
+        self._delay_spin.setSuffix(t("spin.seconds"))
         self._delay_spin.setStyleSheet(
             "QSpinBox { background: #333; color: #d0d0d0; border: 1px solid #555; "
             "border-radius: 3px; padding: 2px 6px; font-size: 12px; min-width: 80px; }"
             "QSpinBox::up-button, QSpinBox::down-button { "
             "background: #444; border: none; width: 16px; }")
         delay_row.addWidget(self._delay_spin)
-        delay_hint = QtWidgets.QLabel("（0=无延迟）")
+        delay_hint = QtWidgets.QLabel(t("label.capture_delay_hint"))
         delay_hint.setStyleSheet("color: #606060; font-size: 11px;")
         delay_row.addWidget(delay_hint)
         delay_row.addStretch()
@@ -378,19 +386,19 @@ class AssetCreateDialog(QtWidgets.QDialog):
 
         # 信息行
         asset_type_names = {
-            "materials": "材质", "models": "模型", "lights": "灯光",
-            "textures": "贴图", "scenes": "场景", "hdr": "HDR",
+            "materials": t("library.materials"), "models": t("library.models"), "lights": t("library.lights"),
+            "textures": t("library.textures"), "scenes": t("library.scenes"), "hdr": t("library.hdr"),
         }
         at_display = asset_type_names.get(self._asset_type, self._asset_type)
         obj_count = len(self._associated_objects)
 
-        info_lines = [f"目标分类: {self._category_display or '未选择'}    资产类型: {at_display}"]
+        info_lines = [t("info.target_category", cat=self._category_display or t("info.no_category"), type=at_display)]
         if self._material_name:
-            info_lines.append(f"源节点: {self._material_name}")
+            info_lines.append(t("info.source_node", name=self._material_name))
         if obj_count > 0:
-            info_lines.append(f"关联物体: {obj_count} 个")
+            info_lines.append(t("info.associated_count", count=obj_count))
         if self._material_count > 1:
-            info_lines.append(f"检测到 {self._material_count} 个材质（将附带 .mcm）")
+            info_lines.append(t("info.material_count", count=self._material_count))
 
         info = QtWidgets.QLabel("\n".join(info_lines))
         info.setStyleSheet("color: #909090; font-size: 11px;")
@@ -400,24 +408,24 @@ class AssetCreateDialog(QtWidgets.QDialog):
         left.addWidget(self._make_sep())
 
         # 命名信息
-        left.addWidget(self._make_section("命名信息"))
-        left.addWidget(self._make_label("名称（英文，Maya 节点用）"))
+        left.addWidget(self._make_section(t("section.naming")))
+        left.addWidget(self._make_label(t("label.name_en")))
         self._e_name = QtWidgets.QLineEdit(self._material_name)
         self._e_name.setStyleSheet(self._input_style())
         left.addWidget(self._e_name)
 
-        left.addWidget(self._make_label("易读名（中文显示，可空）"))
+        left.addWidget(self._make_label(t("label.name_cn")))
         self._e_name_cn = QtWidgets.QLineEdit(self._name_cn)
-        self._e_name_cn.setPlaceholderText("留空则使用英文名")
+        self._e_name_cn.setPlaceholderText(t("ph.name_cn_empty"))
         self._e_name_cn.setStyleSheet(self._input_style())
         left.addWidget(self._e_name_cn)
 
         # 缩略图来源
-        left.addWidget(self._make_label("缩略图来源"))
+        left.addWidget(self._make_label(t("section.thumb_source")))
         thumb_src_grp = QtWidgets.QButtonGroup(self)
-        self._thumb_screenshot = QtWidgets.QRadioButton("截屏工具")
-        self._thumb_playblast = QtWidgets.QRadioButton("Maya 拍屏")
-        self._thumb_render = QtWidgets.QRadioButton("渲染图")
+        self._thumb_screenshot = QtWidgets.QRadioButton(t("thumb.screenshot"))
+        self._thumb_playblast = QtWidgets.QRadioButton(t("thumb.playblast"))
+        self._thumb_render = QtWidgets.QRadioButton(t("thumb.render"))
         for rb in (self._thumb_screenshot, self._thumb_playblast, self._thumb_render):
             rb.setStyleSheet("color: #cccccc; font-size: 12px; spacing: 4px;")
             thumb_src_grp.addButton(rb)
@@ -430,7 +438,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         thumb_src_row.addWidget(self._thumb_render)
         thumb_src_row.addStretch()
 
-        create_light_btn = QtWidgets.QPushButton("创建灯光")
+        create_light_btn = QtWidgets.QPushButton(t("btn.create_light"))
         create_light_btn.setFixedHeight(24)
         create_light_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #ffa502; border: none; "
@@ -443,12 +451,12 @@ class AssetCreateDialog(QtWidgets.QDialog):
         left.addLayout(thumb_src_row)
 
         # 标签
-        left.addWidget(self._make_label("已选标签"))
+        left.addWidget(self._make_label(t("label.selected_tags")))
         self._tags_flow = _FlowWidget()
         self._tags_flow.setMinimumHeight(28)
         left.addWidget(self._tags_flow)
 
-        left.addWidget(self._make_label("常用标签"))
+        left.addWidget(self._make_label(t("label.common_tags")))
         self._common_flow = _FlowWidget()
         self._common_flow.setMinimumHeight(28)
         left.addWidget(self._common_flow)
@@ -456,12 +464,12 @@ class AssetCreateDialog(QtWidgets.QDialog):
         tag_row = QtWidgets.QHBoxLayout()
         tag_row.setSpacing(6)
         self._custom_tag = QtWidgets.QLineEdit()
-        self._custom_tag.setPlaceholderText("输入自定义标签...")
+        self._custom_tag.setPlaceholderText(t("ph.custom_tag"))
         self._custom_tag.setStyleSheet(self._input_style())
         self._custom_tag.returnPressed.connect(self._add_custom_tag)
         tag_row.addWidget(self._custom_tag)
 
-        add_btn = QtWidgets.QPushButton("+ 添加")
+        add_btn = QtWidgets.QPushButton(t("btn.add_tag_plus"))
         add_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #5294e2; border: none; "
             "padding: 6px 14px; font-size: 12px; border-radius: 4px; }"
@@ -479,13 +487,13 @@ class AssetCreateDialog(QtWidgets.QDialog):
         right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(6)
 
-        right.addWidget(self._make_section("导出格式"))
+        right.addWidget(self._make_section(t("section.export_formats")))
 
         # ▸ 收集关联文件（置顶）
-        right.addWidget(self._make_subsection("收集关联文件"))
+        right.addWidget(self._make_subsection(t("subsection.collect_associated")))
 
         self._cb_collect_associated = QtWidgets.QCheckBox(
-            "收集场景中已挂载的缓存/代理/引用文件")
+            t("cb.collect_associated"))
         self._cb_collect_associated.setStyleSheet(
             self._checkbox_style() + "QCheckBox { color: #a0a0a0; }")
         self._cb_collect_associated.setChecked(self._preset_collect_associated)
@@ -499,7 +507,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         # 贴图：可选复选框，默认勾选
         tex_row = QtWidgets.QHBoxLayout()
         tex_row.setContentsMargins(8, 2, 0, 2)
-        cb_tex = QtWidgets.QCheckBox("\u2611 \u8d34\u56fe textures/")
+        cb_tex = QtWidgets.QCheckBox(t("cb.textures"))
         cb_tex.setChecked(self._preset_textures)
         cb_tex.setStyleSheet(self._checkbox_style())
         self._checkboxes["textures"] = cb_tex
@@ -510,7 +518,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         right.addWidget(self._make_sep())
 
         # ▸ 仅材质模式（放在核心之后、材质格式之前）
-        self._cb_material_only = QtWidgets.QCheckBox("仅导出材质（跳过几何体/代理）")
+        self._cb_material_only = QtWidgets.QCheckBox(t("cb.material_only"))
         self._cb_material_only.setStyleSheet(self._checkbox_style())
         self._cb_material_only.setChecked(self._preset_material_only)
         self._cb_material_only.toggled.connect(self._on_material_only_toggled)
@@ -531,20 +539,20 @@ class AssetCreateDialog(QtWidgets.QDialog):
         self._is_material_asset = is_material_asset
         self._is_light_asset = is_light_asset
         if is_light_asset:
-            subsection_title = "灯光格式"
+            subsection_title = t("subsection.light_formats")
         elif is_material_asset:
-            subsection_title = "材质格式"
+            subsection_title = t("subsection.material_formats")
         else:
-            subsection_title = "节点格式"
+            subsection_title = t("subsection.node_formats")
         self._subsection_nodes = self._make_subsection(subsection_title)
         right.addWidget(self._subsection_nodes)
         # 灯光 → .zlight，材质/其他 → .zmetal
         if is_light_asset:
-            self._cb_zmetal = self._add_checkbox_row(right, "灯光预设 .zlight", self._export_zmetal)
+            self._cb_zmetal = self._add_checkbox_row(right, t("cb.zmetal_light"), self._export_zmetal)
         elif is_material_asset:
-            self._cb_zmetal = self._add_checkbox_row(right, "材质预设 .zmetal", self._export_zmetal)
+            self._cb_zmetal = self._add_checkbox_row(right, t("cb.zmetal_material"), self._export_zmetal)
         else:
-            self._cb_zmetal = self._add_checkbox_row(right, "节点预设 .zmetal", self._export_zmetal)
+            self._cb_zmetal = self._add_checkbox_row(right, t("cb.zmetal_node"), self._export_zmetal)
         self._checkboxes["zmetal"] = self._cb_zmetal
         self._cb_zmetal.toggled.connect(self._on_zmetal_toggled)
 
@@ -553,7 +561,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         mcm_layout = QtWidgets.QHBoxLayout(self._mcm_row)
         mcm_layout.setContentsMargins(24, 0, 0, 0)
         self._cb_mcm = QtWidgets.QCheckBox(
-            f"材质映射 .mcm    (检测到 {self._material_count} 个材质)"
+            t("cb.mcm", count=self._material_count)
         )
         self._cb_mcm.setStyleSheet(self._checkbox_style())
         self._cb_mcm.setChecked(self._preset_mcm_enabled)
@@ -566,7 +574,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         self._merge_zmetal_row = QtWidgets.QWidget()
         mz_layout = QtWidgets.QHBoxLayout(self._merge_zmetal_row)
         mz_layout.setContentsMargins(24, 0, 0, 0)
-        self._cb_merge_zmetal = QtWidgets.QCheckBox("全部材质写入一个 .zmetal" if is_material_asset else "全部节点写入一个 .zmetal")
+        self._cb_merge_zmetal = QtWidgets.QCheckBox(t("cb.merge_materials") if is_material_asset else t("cb.merge_nodes"))
         self._cb_merge_zmetal.setStyleSheet(self._checkbox_style())
         self._cb_merge_zmetal.setChecked(self._preset_zmetal_merge)
         mz_layout.addWidget(self._cb_merge_zmetal)
@@ -575,21 +583,21 @@ class AssetCreateDialog(QtWidgets.QDialog):
         self._merge_zmetal_row.setVisible(self._cb_zmetal.isChecked() and not is_light_asset)
 
         # ▸ 几何体格式
-        right.addWidget(self._make_subsection("几何体格式（通过 Maya 原生导出）"))
+        right.addWidget(self._make_subsection(t("subsection.geometry")))
         for field, display, ext in self.GEOMETRY_FORMATS:
             checked = getattr(self, f"_export_{field}", False)
             cb = self._add_format_checkbox_row(right, f"{display} {ext}", field, checked)
             self._checkboxes[field] = cb
 
         # ▸ 动画导出（对 abc/usd/ass/rs/vrmesh 生效）
-        right.addWidget(self._make_subsection("动画导出"))
+        right.addWidget(self._make_subsection(t("subsection.animation")))
         ani_row = QtWidgets.QWidget()
         ani_layout = QtWidgets.QHBoxLayout(ani_row)
         ani_layout.setContentsMargins(8, 2, 0, 2)
         ani_layout.setSpacing(10)
-        self._rb_ani_current = QtWidgets.QRadioButton("当前帧")
-        self._rb_ani_timeline = QtWidgets.QRadioButton("时间轴")
-        self._rb_ani_keyframe = QtWidgets.QRadioButton("关键帧")
+        self._rb_ani_current = QtWidgets.QRadioButton(t("ani.current"))
+        self._rb_ani_timeline = QtWidgets.QRadioButton(t("ani.timeline"))
+        self._rb_ani_keyframe = QtWidgets.QRadioButton(t("ani.keyframe"))
         self._rb_ani_current.setChecked(self._preset_ani_frame_mode == "current")
         self._rb_ani_timeline.setChecked(self._preset_ani_frame_mode == "timeline")
         self._rb_ani_keyframe.setChecked(self._preset_ani_frame_mode == "keyframe")
@@ -605,16 +613,14 @@ class AssetCreateDialog(QtWidgets.QDialog):
         right.addWidget(ani_row)
 
         # ▸ 缓存格式
-        right.addWidget(self._make_subsection("缓存格式"))
+        right.addWidget(self._make_subsection(t("subsection.cache")))
         self._cb_abc = self._add_format_checkbox_row(
             right, "Alembic .abc", "abc", getattr(self, "_export_abc", False)
         )
         self._checkboxes["abc"] = self._cb_abc
 
         # ▸ 代理格式
-
-        # ▸ 代理格式
-        right.addWidget(self._make_subsection("代理格式"))
+        right.addWidget(self._make_subsection(t("subsection.proxy")))
         self._cb_arnold = self._add_format_checkbox_row(
             right, "Arnold .ass", "arnold", self._export_arnold
         )
@@ -744,29 +750,29 @@ class AssetCreateDialog(QtWidgets.QDialog):
                 plugin_key = fmt_key  # fbx, obj, usd, glb
 
             if plugin_key is None:
-                label.setText("🟢 已就绪")
+                label.setText(t("status.ready"))
                 label.setStyleSheet("color: #4caf50; font-size: 10px;")
                 continue
 
             # 从 plugin_statuses 读取（key 是插件名）
             status = self._plugin_statuses.get(plugin_key)
             if status is None:
-                label.setText("🟢 已就绪")
+                label.setText(t("status.ready"))
                 label.setStyleSheet("color: #4caf50; font-size: 10px;")
             elif hasattr(status, 'value'):
                 if status.value == "loaded":
-                    label.setText("🟢 已就绪")
+                    label.setText(t("status.ready"))
                     label.setStyleSheet("color: #4caf50; font-size: 10px;")
                 elif status.value == "not_loaded":
-                    label.setText("🟡 未加载")
+                    label.setText(t("status.not_loaded"))
                     label.setStyleSheet("color: #ff9800; font-size: 10px;")
                 else:
-                    label.setText("🔴 不可用")
+                    label.setText(t("status.unavailable"))
                     label.setStyleSheet("color: #f44336; font-size: 10px;")
                     checkbox.setEnabled(False)
-                    checkbox.setToolTip("需要安装对应渲染器插件")
+                    checkbox.setToolTip(t("tooltip.plugin_needed"))
             else:
-                label.setText("🟢 已就绪")
+                label.setText(t("status.ready"))
                 label.setStyleSheet("color: #4caf50; font-size: 10px;")
 
     # ── 导出模式切换 ────────────────────────────────────
@@ -777,12 +783,12 @@ class AssetCreateDialog(QtWidgets.QDialog):
             return
         if btn_id in (1, 2):  # 全自动 / 半自动
             self._export_mode = "batch_auto" if btn_id == 1 else "batch_semi"
-            self._e_name.setPlaceholderText("首个资产手动命名 → 后续自动使用节点名")
-            self._e_name_cn.setPlaceholderText("后续资产留空")
+            self._e_name.setPlaceholderText(t("ph.first_asset_name"))
+            self._e_name_cn.setPlaceholderText(t("ph.next_assets_empty"))
         else:  # 单资产
             self._export_mode = "single"
             self._e_name.setPlaceholderText("")
-            self._e_name_cn.setPlaceholderText("留空则使用英文名")
+            self._e_name_cn.setPlaceholderText(t("ph.name_cn_empty"))
         # 延迟输入仅全自动可见
         self._delay_widget.setVisible(btn_id == 1)
 
@@ -861,7 +867,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
         import webbrowser
         import os
         plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        help_path = os.path.join(plugin_root, "Assets", "help", "help_export.html")
+        help_path = _i18n_help_path(os.path.join(plugin_root, "Assets", "help", "help_export.html"))
         if os.path.isfile(help_path):
             webbrowser.open("file:///" + help_path.replace(os.sep, "/"))
         else:

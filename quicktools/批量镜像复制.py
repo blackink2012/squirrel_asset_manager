@@ -7,6 +7,22 @@ import threading
 import queue
 from datetime import datetime
 
+_T = None
+_help_path = lambda p: p
+try:
+    from utils.i18n import t as _T, help_path as _hpath
+    _help_path = _hpath
+except ImportError:
+    try:
+        from squirrel_asset_manager.utils.i18n import t as _T, help_path as _hpath
+        _help_path = _hpath
+    except ImportError:
+        _T = None
+
+def t(key, **kwargs):
+    return _T(key, **kwargs) if _T is not None else (key.format(**kwargs) if kwargs else key)
+
+
 def get_qt_modules():
     """获取 Qt 绑定（PySide6 优先，失败自动降级 PySide2）
 
@@ -75,7 +91,7 @@ class FileMirrorCopier:
             total = len(files)
 
             if total == 0:
-                self.progress_queue.put(("error", "未找到匹配的文件"))
+                self.progress_queue.put(("error", t("qtool.mirror.error_no_files")))
                 return
 
             copied = 0
@@ -109,11 +125,11 @@ class FileMirrorCopier:
 
                 if dest_file.exists():
                     skipped += 1
-                    self.progress_queue.put(("log", f"[跳过] 已存在: {display_path}"))
+                    self.progress_queue.put(("log", t("qtool.mirror.log_skip_exists", path=display_path)))
                     continue
 
                 if dry_run:
-                    self.progress_queue.put(("log", f"[预览] 将复制: {display_path}"))
+                    self.progress_queue.put(("log", t("qtool.mirror.log_preview_will_copy", path=display_path)))
                     continue
 
                 try:
@@ -123,11 +139,11 @@ class FileMirrorCopier:
                         dest_path.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(str(src_file), str(dest_file))
                     copied += 1
-                    self.progress_queue.put(("log", f"[复制] {display_path}"))
+                    self.progress_queue.put(("log", t("qtool.mirror.log_copied", path=display_path)))
                 except Exception as e:
                     failed += 1
                     failed_files.append((display_path, str(e)))
-                    self.progress_queue.put(("log", f"[失败] {display_path} - {e}"))
+                    self.progress_queue.put(("log", t("qtool.mirror.log_failed", path=display_path, err=e)))
 
             if dry_run:
                 self.progress_queue.put(("complete", (total, 0, 0, 0, [])))
@@ -135,7 +151,7 @@ class FileMirrorCopier:
                 self.progress_queue.put(("complete", (total, copied, skipped, failed, failed_files)))
 
         except Exception as e:
-            self.progress_queue.put(("error", f"操作失败: {str(e)}"))
+            self.progress_queue.put(("error", t("qtool.mirror.error_operation_failed", err=str(e))))
 
 
 class MirrorCopyWindow(QWidget):
@@ -151,7 +167,7 @@ class MirrorCopyWindow(QWidget):
         self._timer.start(100)
 
     def _init_ui(self):
-        self.setWindowTitle("批量镜像复制工具")
+        self.setWindowTitle(t("qtool.mirror.title"))
         self.resize(750, 620)
 
         layout = QVBoxLayout(self)
@@ -159,7 +175,7 @@ class MirrorCopyWindow(QWidget):
         layout.setSpacing(8)
 
         title_row = QHBoxLayout()
-        title = QLabel("批量镜像复制工具")
+        title = QLabel(t("qtool.mirror.title"))
         title_font = QFont("Arial", 16)
         title_font.setBold(True)
         title.setFont(title_font)
@@ -169,7 +185,7 @@ class MirrorCopyWindow(QWidget):
 
         help_btn = QPushButton("?")
         help_btn.setFixedSize(34, 34)
-        help_btn.setToolTip("使用帮助")
+        help_btn.setToolTip(t("qtool.mirror.help_tooltip"))
         help_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #ffa502; border: none;"
             "font-size: 18px; font-weight: bold; border-radius: 4px; }"
@@ -184,7 +200,7 @@ class MirrorCopyWindow(QWidget):
         # 源文件夹
         src_layout = QVBoxLayout()
         src_layout.setSpacing(3)
-        src_label = QLabel("源文件夹:")
+        src_label = QLabel(t("qtool.mirror.source_folder") + ":")
         src_label.setFont(QFont("Arial", 10))
         src_layout.addWidget(src_label)
 
@@ -194,7 +210,7 @@ class MirrorCopyWindow(QWidget):
         self.src_edit.setFont(QFont("Arial", 10))
         src_row.addWidget(self.src_edit)
 
-        self.src_btn = QPushButton("浏览")
+        self.src_btn = QPushButton(t("qtool.mirror.browse"))
         self.src_btn.clicked.connect(self._browse_source)
         src_row.addWidget(self.src_btn)
         src_layout.addLayout(src_row)
@@ -203,7 +219,7 @@ class MirrorCopyWindow(QWidget):
         # 目标文件夹
         dest_layout = QVBoxLayout()
         dest_layout.setSpacing(3)
-        dest_label = QLabel("目标文件夹:")
+        dest_label = QLabel(t("qtool.mirror.dest_folder") + ":")
         dest_label.setFont(QFont("Arial", 10))
         dest_layout.addWidget(dest_label)
 
@@ -213,7 +229,7 @@ class MirrorCopyWindow(QWidget):
         self.dest_edit.setFont(QFont("Arial", 10))
         dest_row.addWidget(self.dest_edit)
 
-        self.dest_btn = QPushButton("浏览")
+        self.dest_btn = QPushButton(t("qtool.mirror.browse"))
         self.dest_btn.clicked.connect(self._browse_dest)
         dest_row.addWidget(self.dest_btn)
         dest_layout.addLayout(dest_row)
@@ -222,7 +238,7 @@ class MirrorCopyWindow(QWidget):
         # 文件格式
         fmt_layout = QVBoxLayout()
         fmt_layout.setSpacing(3)
-        fmt_label = QLabel("文件格式（用逗号分隔，例: .exr, .hdr, .png）:")
+        fmt_label = QLabel(t("qtool.mirror.fmt_label") + ":")
         fmt_label.setFont(QFont("Arial", 10))
         fmt_layout.addWidget(fmt_label)
 
@@ -235,11 +251,11 @@ class MirrorCopyWindow(QWidget):
         action_layout = QHBoxLayout()
         action_layout.setSpacing(15)
 
-        self.preview_cb = QCheckBox("仅预览（不实际复制）")
+        self.preview_cb = QCheckBox(t("qtool.mirror.preview_only"))
         self.preview_cb.setFont(QFont("Arial", 10))
         action_layout.addWidget(self.preview_cb)
 
-        self.structure_cb = QCheckBox("复制层级结构")
+        self.structure_cb = QCheckBox(t("qtool.mirror.copy_structure"))
         self.structure_cb.setFont(QFont("Arial", 10))
         self.structure_cb.setChecked(True)
         self.structure_cb.stateChanged.connect(self._on_structure_changed)
@@ -247,15 +263,15 @@ class MirrorCopyWindow(QWidget):
 
         action_layout.addStretch()
 
-        self.start_btn = QPushButton("开始复制")
+        self.start_btn = QPushButton(t("qtool.mirror.start_copy"))
         self.start_btn.clicked.connect(self._start_copy)
         action_layout.addWidget(self.start_btn)
 
-        self.clear_btn = QPushButton("清除日志")
+        self.clear_btn = QPushButton(t("qtool.mirror.clear_log"))
         self.clear_btn.clicked.connect(self._clear_log)
         action_layout.addWidget(self.clear_btn)
 
-        self.quit_btn = QPushButton("退出")
+        self.quit_btn = QPushButton(t("common.close"))
         self.quit_btn.clicked.connect(self.close)
         action_layout.addWidget(self.quit_btn)
 
@@ -264,7 +280,7 @@ class MirrorCopyWindow(QWidget):
         # 进度
         progress_layout = QVBoxLayout()
         progress_layout.setSpacing(3)
-        self.progress_label = QLabel("等待开始...")
+        self.progress_label = QLabel(t("qtool.mirror.waiting"))
         self.progress_label.setFont(QFont("Arial", 10))
         progress_layout.addWidget(self.progress_label)
 
@@ -274,7 +290,7 @@ class MirrorCopyWindow(QWidget):
         layout.addLayout(progress_layout)
 
         # 日志
-        log_label = QLabel("操作日志:")
+        log_label = QLabel(t("qtool.mirror.operation_log") + ":")
         log_label.setFont(QFont("Arial", 10))
         log_label.setStyleSheet("font-weight: bold;")
         layout.addWidget(log_label)
@@ -285,12 +301,12 @@ class MirrorCopyWindow(QWidget):
         layout.addWidget(self.log_text, stretch=1)
 
     def _browse_source(self):
-        folder = QFileDialog.getExistingDirectory(self, "选择源文件夹")
+        folder = QFileDialog.getExistingDirectory(self, t("qtool.mirror.select_source_title"))
         if folder:
             self.src_edit.setText(folder)
 
     def _browse_dest(self):
-        folder = QFileDialog.getExistingDirectory(self, "选择目标文件夹")
+        folder = QFileDialog.getExistingDirectory(self, t("qtool.mirror.select_dest_title"))
         if folder:
             self.dest_edit.setText(folder)
 
@@ -313,31 +329,31 @@ class MirrorCopyWindow(QWidget):
         exts = self._parse_extensions()
 
         if not source:
-            QMessageBox.critical(self, "错误", "请选择源文件夹")
+            QMessageBox.critical(self, t("qtool.mirror.error"), t("qtool.mirror.err_no_source"))
             return
         if not dest:
-            QMessageBox.critical(self, "错误", "请选择目标文件夹")
+            QMessageBox.critical(self, t("qtool.mirror.error"), t("qtool.mirror.err_no_dest"))
             return
         if not exts:
-            QMessageBox.critical(self, "错误", "请输入要复制的文件格式")
+            QMessageBox.critical(self, t("qtool.mirror.error"), t("qtool.mirror.err_no_formats"))
             return
         if source == dest:
-            QMessageBox.critical(self, "错误", "源文件夹和目标文件夹不能相同")
+            QMessageBox.critical(self, t("qtool.mirror.error"), t("qtool.mirror.err_same_folder"))
             return
         if not os.path.isdir(source):
-            QMessageBox.critical(self, "错误", "源文件夹不存在")
+            QMessageBox.critical(self, t("qtool.mirror.error"), t("qtool.mirror.err_source_not_exist"))
             return
 
         self.start_btn.setEnabled(False)
         self.progress_bar.setValue(0)
-        self.progress_label.setText("正在扫描文件...")
+        self.progress_label.setText(t("qtool.mirror.scanning"))
 
         self.dry_run = self.preview_cb.isChecked()
         if self.dry_run:
-            self._log_message("===== 预览模式（不会实际复制文件） =====")
-        self._log_message(f"源文件夹: {source}")
-        self._log_message(f"目标文件夹: {dest}")
-        self._log_message(f"文件格式: {', '.join(exts)}")
+            self._log_message(t("qtool.mirror.preview_mode_header"))
+        self._log_message(t("qtool.mirror.log_source", folder=source))
+        self._log_message(t("qtool.mirror.log_dest", folder=dest))
+        self._log_message(t("qtool.mirror.log_formats", fmts=', '.join(exts)))
 
         thread = threading.Thread(
             target=self.copier.mirror_copy,
@@ -355,7 +371,7 @@ class MirrorCopyWindow(QWidget):
 
     def _on_help(self):
         plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        help_path = os.path.join(plugin_root, "Assets", "help", "批量镜像复制", "help.html")
+        help_path = _help_path(os.path.join(plugin_root, "Assets", "help", "批量镜像复制", "help.html"))
         if os.path.isfile(help_path):
             webbrowser.open("file:///" + help_path.replace(os.sep, "/"))
         else:
@@ -373,7 +389,7 @@ class MirrorCopyWindow(QWidget):
                     current, total, filename = data
                     percent = int((current / total) * 100)
                     self.progress_bar.setValue(percent)
-                    self.progress_label.setText(f"处理中: {current}/{total}")
+                    self.progress_label.setText(f"{t('qtool.mirror.processing')}: {current}/{total}")
 
                 elif msg_type == "log":
                     self._log_message(data)
@@ -383,28 +399,29 @@ class MirrorCopyWindow(QWidget):
                     self.progress_bar.setValue(100)
 
                     if self.dry_run:
-                        self.progress_label.setText("预览完成")
-                        self._log_message(f"===== 预览完成，共匹配 {total} 个文件 =====")
+                        self.progress_label.setText(t("qtool.mirror.preview_done"))
+                        self._log_message(t("qtool.mirror.preview_done_count", total=total))
                     else:
-                        self.progress_label.setText("复制完成")
-                        summary = (f"操作完成！\n"
-                                   f"总计: {total} 个文件\n"
-                                   f"已复制: {copied} 个\n"
-                                   f"已跳过: {skipped} 个\n"
-                                   f"失败: {failed} 个")
+                        self.progress_label.setText(t("qtool.mirror.copy_done"))
+                        summary = (t("qtool.mirror.operation_done") + "\n"
+                                   + t("qtool.mirror.summary_total", total=total) + "\n"
+                                   + t("qtool.mirror.summary_copied", copied=copied) + "\n"
+                                   + t("qtool.mirror.summary_skipped", skipped=skipped) + "\n"
+                                   + t("qtool.mirror.summary_failed", failed=failed))
                         if failed_files:
-                            summary += "\n\n失败文件:"
+                            summary += "\n\n" + t("qtool.mirror.failed_files") + ":"
                             for f, err in failed_files:
                                 summary += f"\n  - {f}: {err}"
-                        QMessageBox.information(self, "完成", summary)
-                        self._log_message(f"操作完成: 总计{total}, 复制{copied}, 跳过{skipped}, 失败{failed}")
+                        QMessageBox.information(self, t("qtool.mirror.done"), summary)
+                        self._log_message(t("qtool.mirror.operation_done_summary",
+                                            total=total, copied=copied, skipped=skipped, failed=failed))
 
                     self.start_btn.setEnabled(True)
 
                 elif msg_type == "error":
-                    QMessageBox.critical(self, "错误", data)
-                    self._log_message(f"错误: {data}")
-                    self.progress_label.setText("出错")
+                    QMessageBox.critical(self, t("qtool.mirror.error"), data)
+                    self._log_message(t("qtool.mirror.log_error", err=data))
+                    self.progress_label.setText(t("qtool.mirror.error_status"))
                     self.start_btn.setEnabled(True)
 
         except queue.Empty:

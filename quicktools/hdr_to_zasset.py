@@ -32,6 +32,21 @@ from core.zasset_builder import ZassetBuilder
 
 HDR_EXTENSIONS = {'.hdr', '.exr'}
 
+_T = None
+_help_path = lambda p: p
+try:
+    from utils.i18n import t as _T, help_path as _hpath
+    _help_path = _hpath
+except ImportError:
+    try:
+        from squirrel_asset_manager.utils.i18n import t as _T, help_path as _hpath
+        _help_path = _hpath
+    except ImportError:
+        _T = None
+
+def t(key, **kwargs):
+    return _T(key, **kwargs) if _T is not None else (key.format(**kwargs) if kwargs else key)
+
 
 def get_qt_modules():
     """动态获取Qt模块，兼容PySide6和PySide2"""
@@ -211,20 +226,20 @@ def _check_thumb_deps():
     """检查缩略图生成依赖，返回 (ok, message)"""
     converter = _get_converter_module()
     if converter is None:
-        return False, "无法加载图像格式转换工具模块（图像格式转换工具.py）"
+        return False, t("qtool.hdr.deps_converter_missing")
 
     try:
         import cv2
         import numpy as np
     except ImportError:
-        return False, "缺少 cv2 或 numpy 依赖（opencv-python, numpy）"
+        return False, t("qtool.hdr.deps_cv2_missing")
 
     try:
         from PIL import Image
     except ImportError:
-        return False, "缺少 Pillow 依赖"
+        return False, t("qtool.hdr.deps_pillow_missing")
 
-    return True, "就绪"
+    return True, t("common.ready")
 
 
 def _find_existing_thumbnail(hdr_filepath, thumb_exts=None):
@@ -452,7 +467,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
 
     def __init__(self, parent=None):
         super(HDRToZAssetDialog, self).__init__(parent)
-        self.setWindowTitle("HDR环境贴图转资产")
+        self.setWindowTitle(t("qtool.hdr.window_title"))
         self.setMinimumSize(850, 620)
         self.setStyleSheet("""
             QDialog { background-color: #2a2a2a; }
@@ -491,7 +506,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
         if getattr(self, '_is_converting', False):
             self._is_cancelled = True
             self._cancel_btn.setEnabled(False)
-            self._status_label.setText("正在中止...")
+            self._status_label.setText(t("qtool.common.aborting"))
             try:
                 import maya.cmds as _cmds
                 _cmds.refresh()
@@ -504,7 +519,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
         import webbrowser
         import os
         plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        help_path = os.path.join(plugin_root, "Assets", "help", "hdr_to_zasset", "help.html")
+        help_path = _help_path(os.path.join(plugin_root, "Assets", "help", "hdr_to_zasset", "help.html"))
         if os.path.isfile(help_path):
             webbrowser.open("file:///" + help_path.replace(os.sep, "/"))
         else:
@@ -525,91 +540,91 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(12)
 
-        mode_group = QtWidgets.QGroupBox("输入模式")
+        mode_group = QtWidgets.QGroupBox(t("qtool.hdr.input_mode_group"))
         mode_layout = QtWidgets.QHBoxLayout(mode_group)
         mode_layout.setContentsMargins(8, 8, 8, 8)
 
-        self._mode_files = QtWidgets.QRadioButton("选择文件")
+        self._mode_files = QtWidgets.QRadioButton(t("qtool.hdr.mode_files"))
         self._mode_files.setChecked(True)
         self._mode_files.toggled.connect(self._on_mode_changed)
         mode_layout.addWidget(self._mode_files)
 
-        self._mode_folder = QtWidgets.QRadioButton("选择文件夹")
+        self._mode_folder = QtWidgets.QRadioButton(t("qtool.hdr.mode_folder"))
         self._mode_folder.toggled.connect(self._on_mode_changed)
         mode_layout.addWidget(self._mode_folder)
 
         left_layout.addWidget(mode_group)
 
-        input_group = QtWidgets.QGroupBox("输入")
+        input_group = QtWidgets.QGroupBox(t("qtool.hdr.input_group"))
         input_layout = QtWidgets.QHBoxLayout(input_group)
         input_layout.setContentsMargins(8, 8, 8, 8)
 
         self._input_path = QtWidgets.QLineEdit()
-        self._input_path.setPlaceholderText("选择要转换的HDR/EXR文件...")
+        self._input_path.setPlaceholderText(t("qtool.hdr.input_placeholder"))
         input_layout.addWidget(self._input_path, 1)
 
-        browse_btn = QtWidgets.QPushButton("浏览...")
+        browse_btn = QtWidgets.QPushButton(t("common.browse"))
         browse_btn.clicked.connect(self._browse_input)
         input_layout.addWidget(browse_btn)
 
         left_layout.addWidget(input_group)
 
-        output_group = QtWidgets.QGroupBox("输出位置")
+        output_group = QtWidgets.QGroupBox(t("qtool.common.output_group"))
         output_layout = QtWidgets.QHBoxLayout(output_group)
         output_layout.setContentsMargins(8, 8, 8, 8)
 
         self._output_path = QtWidgets.QLineEdit()
-        self._output_path.setPlaceholderText("选择资产输出文件夹...")
+        self._output_path.setPlaceholderText(t("qtool.common.output_placeholder"))
         output_layout.addWidget(self._output_path, 1)
 
-        output_browse_btn = QtWidgets.QPushButton("浏览...")
+        output_browse_btn = QtWidgets.QPushButton(t("common.browse"))
         output_browse_btn.clicked.connect(self._browse_output_folder)
         output_layout.addWidget(output_browse_btn)
 
         left_layout.addWidget(output_group)
 
-        options_group = QtWidgets.QGroupBox("转换选项")
+        options_group = QtWidgets.QGroupBox(t("qtool.hdr.options_group"))
         options_layout = QtWidgets.QVBoxLayout(options_group)
         options_layout.setContentsMargins(8, 8, 8, 8)
 
-        self._generate_thumb = QtWidgets.QCheckBox("生成缩略图预览")
+        self._generate_thumb = QtWidgets.QCheckBox(t("qtool.hdr.generate_thumb"))
         self._generate_thumb.setChecked(True)
-        self._generate_thumb.setToolTip("自动从HDR生成色调映射后的PNG缩略图")
+        self._generate_thumb.setToolTip(t("qtool.hdr.generate_thumb_tooltip"))
         options_layout.addWidget(self._generate_thumb)
 
         thumb_search_layout = QtWidgets.QHBoxLayout()
-        self._search_existing_thumb = QtWidgets.QCheckBox("优先使用已有缩略图")
+        self._search_existing_thumb = QtWidgets.QCheckBox(t("qtool.hdr.search_existing_thumb"))
         self._search_existing_thumb.setChecked(True)
-        self._search_existing_thumb.setToolTip("在同目录搜索同名PNG/JPG作为缩略图，避免重新解码HDR/EXR")
+        self._search_existing_thumb.setToolTip(t("qtool.hdr.search_existing_thumb_tooltip"))
         thumb_search_layout.addWidget(self._search_existing_thumb)
 
         self._thumb_exts_input = QtWidgets.QLineEdit()
         self._thumb_exts_input.setMaximumWidth(120)
-        self._thumb_exts_input.setPlaceholderText("png, jpg")
-        self._thumb_exts_input.setToolTip("搜索的缩略图格式，逗号分隔（如 png, jpg）")
+        self._thumb_exts_input.setPlaceholderText(t("qtool.hdr.thumb_exts_placeholder"))
+        self._thumb_exts_input.setToolTip(t("qtool.hdr.thumb_exts_tooltip"))
         thumb_search_layout.addWidget(self._thumb_exts_input)
         thumb_search_layout.addStretch()
         options_layout.addLayout(thumb_search_layout)
 
-        self._recursive_mode = QtWidgets.QCheckBox("递归扫描子文件夹")
+        self._recursive_mode = QtWidgets.QCheckBox(t("qtool.hdr.recursive_mode"))
         self._recursive_mode.setChecked(True)
-        self._recursive_mode.setToolTip("递归扫描所有子文件夹中的HDR/EXR文件")
+        self._recursive_mode.setToolTip(t("qtool.hdr.recursive_mode_tooltip"))
         options_layout.addWidget(self._recursive_mode)
 
-        self._keep_hierarchy = QtWidgets.QCheckBox("保持层级结构")
+        self._keep_hierarchy = QtWidgets.QCheckBox(t("qtool.hdr.keep_hierarchy"))
         self._keep_hierarchy.setChecked(True)
-        self._keep_hierarchy.setToolTip("勾选时保持原始文件夹层级结构，取消则所有文件输出到同一目录")
+        self._keep_hierarchy.setToolTip(t("qtool.hdr.keep_hierarchy_tooltip"))
         options_layout.addWidget(self._keep_hierarchy)
 
-        self._import_to_category = QtWidgets.QCheckBox("转换后导入当前分类")
+        self._import_to_category = QtWidgets.QCheckBox(t("qtool.hdr.import_to_category"))
         self._import_to_category.setChecked(False)
-        self._import_to_category.setToolTip("转换完成后将zasset文件拷贝到当前资产库分类文件夹（只拷贝zasset，不拷贝文件夹结构）")
+        self._import_to_category.setToolTip(t("qtool.hdr.import_to_category_tooltip"))
         options_layout.addWidget(self._import_to_category)
 
         filter_layout = QtWidgets.QHBoxLayout()
-        filter_layout.addWidget(QtWidgets.QLabel("格式过滤:"))
+        filter_layout.addWidget(QtWidgets.QLabel(t("qtool.hdr.format_filter")))
         self._filter_input = QtWidgets.QLineEdit()
-        self._filter_input.setPlaceholderText("留空扫描.hdr和.exr，例: hdr 或 exr")
+        self._filter_input.setPlaceholderText(t("qtool.hdr.format_filter_placeholder"))
         self._filter_input.setStyleSheet("font-size: 13px;")
         filter_layout.addWidget(self._filter_input, 1)
         options_layout.addLayout(filter_layout)
@@ -626,16 +641,16 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(12)
 
-        preview_group = QtWidgets.QGroupBox("识别到的HDR文件")
+        preview_group = QtWidgets.QGroupBox(t("qtool.hdr.preview_group"))
         preview_layout = QtWidgets.QVBoxLayout(preview_group)
         preview_layout.setContentsMargins(8, 8, 8, 8)
 
         self._file_tree = QtWidgets.QTreeWidget()
-        self._file_tree.setHeaderLabel("HDR环境贴图")
+        self._file_tree.setHeaderLabel(t("qtool.hdr.file_tree_header"))
         self._file_tree.setMinimumHeight(200)
         preview_layout.addWidget(self._file_tree, 1)
 
-        self._scan_btn = QtWidgets.QPushButton("扫描HDR文件")
+        self._scan_btn = QtWidgets.QPushButton(t("qtool.hdr.scan"))
         self._scan_btn.clicked.connect(self._scan_files)
         preview_layout.addWidget(self._scan_btn)
 
@@ -645,7 +660,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
         self._progress.setVisible(False)
         right_layout.addWidget(self._progress)
 
-        self._status_label = QtWidgets.QLabel("就绪")
+        self._status_label = QtWidgets.QLabel(t("common.ready"))
         self._status_label.setStyleSheet("color: #808080; font-size: 13px;")
         right_layout.addWidget(self._status_label)
         main_splitter.addWidget(right_widget)
@@ -658,7 +673,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
 
         help_btn = QtWidgets.QPushButton("?")
         help_btn.setFixedSize(34, 34)
-        help_btn.setToolTip("使用帮助")
+        help_btn.setToolTip(t("btn.help.tooltip"))
         help_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #ffa502; border: none;"
             "font-size: 18px; font-weight: bold; border-radius: 4px; }"
@@ -667,11 +682,11 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
         help_btn.clicked.connect(self._on_help)
         btn_layout.addWidget(help_btn)
 
-        self._cancel_btn = QtWidgets.QPushButton("取消")
+        self._cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         self._cancel_btn.clicked.connect(self._on_cancel)
         btn_layout.addWidget(self._cancel_btn)
 
-        self._ok_btn = QtWidgets.QPushButton("转换")
+        self._ok_btn = QtWidgets.QPushButton(t("qtool.common.convert"))
         self._ok_btn.setObjectName("okBtn")
         self._ok_btn.setFixedWidth(180)
         self._ok_btn.clicked.connect(self._convert)
@@ -684,9 +699,9 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
             return
         is_files = self._mode_files.isChecked()
         if is_files:
-            self._input_path.setPlaceholderText("选择要转换的HDR/EXR文件...")
+            self._input_path.setPlaceholderText(t("qtool.hdr.input_placeholder"))
         else:
-            self._input_path.setPlaceholderText("选择包含.hdr/.exr文件的文件夹...")
+            self._input_path.setPlaceholderText(t("qtool.hdr.folder_placeholder"))
         self._input_files = []
         self._input_folder = ""
         self._hdr_files = []
@@ -694,7 +709,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
         self._recursive_files = []
         self._input_path.clear()
         self._file_tree.clear()
-        self._status_label.setText("就绪")
+        self._status_label.setText(t("common.ready"))
         if hasattr(self, '_recursive_mode'):
             self._recursive_mode.setEnabled(not is_files)
             self._recursive_mode.setChecked(False if is_files else True)
@@ -714,9 +729,9 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
     def _browse_input_files(self):
         from PySide6 import QtWidgets as _QW
         files, _ = QtWidgets.QFileDialog.getOpenFileNames(
-            self, "选择HDR/EXR文件",
+            self, t("qtool.hdr.dlg_input_files"),
             "",
-            "HDR/EXR (*.hdr *.HDR *.exr *.EXR);;HDR (*.hdr *.HDR);;EXR (*.exr *.EXR);;所有文件 (*.*)"
+            "HDR/EXR (*.hdr *.HDR *.exr *.EXR);;HDR (*.hdr *.HDR);;EXR (*.exr *.EXR);;" + t("qtool.hdr.all_files") + " (*.*)"
         )
         if files:
             self._input_files = [(f, os.path.basename(f)) for f in files]
@@ -727,14 +742,14 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
             if len(files) == 1:
                 self._input_path.setText(files[0])
             else:
-                self._input_path.setText(f"{len(files)} 个文件已选择")
-            self._status_label.setText(f"已选择 {len(files)} 个文件")
+                self._input_path.setText(t("qtool.hdr.files_selected", count=len(files)))
+            self._status_label.setText(t("qtool.hdr.selected_files", count=len(files)))
             self._update_file_tree()
 
     def _browse_input_folder(self):
         """浏览输入文件夹"""
         folder = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "选择HDR文件夹", "",
+            self, t("qtool.hdr.dlg_input_folder"), "",
             QtWidgets.QFileDialog.ShowDirsOnly | QtWidgets.QFileDialog.DontResolveSymlinks
         )
         if folder:
@@ -745,7 +760,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
     def _browse_output_folder(self):
         """浏览输出文件夹"""
         folder = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "选择输出文件夹", "",
+            self, t("qtool.common.dlg_output"), "",
             QtWidgets.QFileDialog.ShowDirsOnly | QtWidgets.QFileDialog.DontResolveSymlinks
         )
         if folder:
@@ -755,17 +770,17 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
         """扫描HDR文件"""
         if self._mode_files.isChecked():
             if not self._hdr_files:
-                QtWidgets.QMessageBox.warning(self, "警告", "请先选择HDR/EXR文件")
+                QtWidgets.QMessageBox.warning(self, t("common.warning"), t("qtool.hdr.please_select_files"))
                 return
-            self._status_label.setText(f"已选择 {len(self._hdr_files)} 个文件")
+            self._status_label.setText(t("qtool.hdr.selected_files", count=len(self._hdr_files)))
             return
 
         folder_path = self._input_path.text()
         if not folder_path or not os.path.exists(folder_path):
-            QtWidgets.QMessageBox.warning(self, "警告", "请选择有效的文件夹")
+            QtWidgets.QMessageBox.warning(self, t("common.warning"), t("qtool.hdr.please_select_folder"))
             return
 
-        self._status_label.setText("正在扫描...")
+        self._status_label.setText(t("qtool.hdr.scanning"))
         QtWidgets.QApplication.processEvents()
 
         self._batch_results = []
@@ -790,18 +805,18 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
                 for file_path, rel_path in found:
                     info = get_hdr_info(file_path)
                     self._recursive_files.append((info, rel_path))
-                self._status_label.setText(f"递归发现 {len(self._recursive_files)} 个HDR文件")
+                self._status_label.setText(t("qtool.hdr.recursive_found", count=len(self._recursive_files)))
             else:
-                self._status_label.setText("未发现.hdr或.exr文件")
+                self._status_label.setText(t("qtool.hdr.no_hdr_found"))
         else:
             self._hdr_files = scan_hdr_files(folder_path)
             if input_formats:
                 self._hdr_files = [info for info in self._hdr_files
                                    if os.path.splitext(info['path'])[1].lower() in input_formats]
             if self._hdr_files:
-                self._status_label.setText(f"发现 {len(self._hdr_files)} 个HDR文件")
+                self._status_label.setText(t("qtool.hdr.found_count", count=len(self._hdr_files)))
             else:
-                self._status_label.setText("未发现.hdr或.exr文件")
+                self._status_label.setText(t("qtool.hdr.no_hdr_found"))
 
         self._update_file_tree()
 
@@ -825,7 +840,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
                     for info, rel_path in folders[folder_name]:
                         child = QtWidgets.QTreeWidgetItem([info['filename']])
                         child.setForeground(0, QtGui.QColor("#d0d0d0"))
-                        res_item = QtWidgets.QTreeWidgetItem([f"  分辨率: {info.get('resolution', 'unknown')}"])
+                        res_item = QtWidgets.QTreeWidgetItem([t("qtool.hdr.resolution", res=info.get('resolution', 'unknown'))])
                         res_item.setForeground(0, QtGui.QColor("#909090"))
                         child.addChild(res_item)
                         folder_item.addChild(child)
@@ -834,7 +849,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
                     for info, rel_path in folders[folder_name]:
                         item = QtWidgets.QTreeWidgetItem([info['filename']])
                         item.setForeground(0, QtGui.QColor("#5294e2"))
-                        res_item = QtWidgets.QTreeWidgetItem([f"  分辨率: {info.get('resolution', 'unknown')}"])
+                        res_item = QtWidgets.QTreeWidgetItem([t("qtool.hdr.resolution", res=info.get('resolution', 'unknown'))])
                         res_item.setForeground(0, QtGui.QColor("#909090"))
                         item.addChild(res_item)
                         item.setExpanded(True)
@@ -845,7 +860,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
                 item.setForeground(0, QtGui.QColor("#5294e2"))
                 child = QtWidgets.QTreeWidgetItem([info['filename']])
                 child.setForeground(0, QtGui.QColor("#d0d0d0"))
-                res_text = f"  分辨率: {info.get('resolution', 'unknown')}"
+                res_text = t("qtool.hdr.resolution", res=info.get('resolution', 'unknown'))
                 res_item = QtWidgets.QTreeWidgetItem([res_text])
                 res_item.setForeground(0, QtGui.QColor("#909090"))
                 item.addChild(child)
@@ -856,7 +871,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
             for info in self._hdr_files:
                 item = QtWidgets.QTreeWidgetItem([info['filename']])
                 item.setForeground(0, QtGui.QColor("#5294e2"))
-                res_text = f"  分辨率: {info.get('resolution', 'unknown')}"
+                res_text = t("qtool.hdr.resolution", res=info.get('resolution', 'unknown'))
                 res_item = QtWidgets.QTreeWidgetItem([res_text])
                 res_item.setForeground(0, QtGui.QColor("#909090"))
                 item.addChild(res_item)
@@ -870,7 +885,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
 
         has_data = bool(self._hdr_files) or bool(self._batch_results) or bool(self._recursive_files)
         if not has_data:
-            QtWidgets.QMessageBox.warning(self, "警告", "请先扫描HDR文件")
+            QtWidgets.QMessageBox.warning(self, t("common.warning"), t("qtool.hdr.please_scan_first"))
             return
 
         if not self._output_path.text():
@@ -883,22 +898,22 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
             ok, dep_msg = _check_thumb_deps()
             if not ok:
                 reply = QtWidgets.QMessageBox.question(
-                    self, "依赖缺失",
-                    dep_msg + "\n\n是否继续转换（跳过缩略图生成）？",
+                    self, t("qtool.hdr.deps_missing"),
+                    dep_msg + "\n\n" + t("qtool.hdr.continue_without_thumb"),
                     QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
                     QtWidgets.QMessageBox.No
                 )
                 if reply == QtWidgets.QMessageBox.No:
                     return
                 self._generate_thumb.setChecked(False)
-                self._status_label.setText("已跳过缩略图生成")
+                self._status_label.setText(t("qtool.hdr.thumb_skipped"))
 
         output_folder = self._output_path.text().strip()
         if not output_folder:
             if self._hdr_files and self._hdr_files[0].get('path'):
                 output_folder = os.path.dirname(self._hdr_files[0]['path'])
             else:
-                QtWidgets.QMessageBox.warning(self, "警告", "无法确定输出文件夹，请手动指定")
+                QtWidgets.QMessageBox.warning(self, t("common.warning"), t("qtool.hdr.no_output_folder"))
                 return
         generate_thumb = self._generate_thumb.isChecked()
         keep_hierarchy = self._keep_hierarchy.isChecked()
@@ -915,7 +930,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
 
         self._is_converting = True
         self._is_cancelled = False
-        self._cancel_btn.setText("中止")
+        self._cancel_btn.setText(t("qtool.hdr.abort"))
         self._cancel_btn.setEnabled(True)
         self._ok_btn.setEnabled(False)
         self._scan_btn.setEnabled(False)
@@ -946,7 +961,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
                     display_name = asset_name
 
                 self._progress.setValue(i + 1)
-                self._status_label.setText(f"正在处理: {display_name}")
+                self._status_label.setText(t("qtool.hdr.processing", name=display_name))
                 if IN_MAYA:
                     try:
                         import maya.cmds as _cmds
@@ -977,27 +992,27 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
                     fail_count += 1
         finally:
             self._is_converting = False
-            self._cancel_btn.setText("取消")
+            self._cancel_btn.setText(t("common.cancel"))
             self._cancel_btn.setEnabled(True)
             self._progress.setVisible(False)
             self._ok_btn.setEnabled(True)
             self._scan_btn.setEnabled(True)
 
             if self._is_cancelled:
-                self._status_label.setText(f"已中止: {success_count} 成功, {fail_count} 失败")
-                QtWidgets.QMessageBox.information(self, "已中止",
-                    f"用户中止转换\n\n成功: {success_count}, 失败: {fail_count}")
+                self._status_label.setText(t("qtool.hdr.aborted", success=success_count, failed=fail_count))
+                QtWidgets.QMessageBox.information(self, t("qtool.hdr.aborted_title"),
+                    t("qtool.hdr.aborted_body", success=success_count, failed=fail_count))
             elif errors:
                 error_msg = "\n".join(errors[:10])
                 if len(errors) > 10:
-                    error_msg += f"\n... 还有 {len(errors) - 10} 个错误"
-                QtWidgets.QMessageBox.warning(self, "转换完成",
-                    f"成功: {success_count}, 失败: {fail_count}\n\n错误详情:\n{error_msg}")
+                    error_msg += "\n" + t("qtool.hdr.and_more_errors", n=len(errors) - 10)
+                QtWidgets.QMessageBox.warning(self, t("qtool.hdr.done_title"),
+                    t("qtool.hdr.done_with_errors", success=success_count, failed=fail_count, detail=error_msg))
             else:
-                QtWidgets.QMessageBox.information(self, "转换完成",
-                    f"成功转换 {success_count} 个HDR环境贴图")
+                QtWidgets.QMessageBox.information(self, t("qtool.hdr.done_title"),
+                    t("qtool.hdr.done_body", count=success_count))
 
-            self._status_label.setText(f"完成: {success_count} 成功, {fail_count} 失败")
+            self._status_label.setText(t("qtool.hdr.done_status", success=success_count, failed=fail_count))
 
             if getattr(self, '_import_to_category', None) and self._import_to_category.isChecked():
                 print("[HDR Tool] 开始导入当前分类...")
@@ -1007,7 +1022,7 @@ class HDRToZAssetDialog(QtWidgets.QDialog):
                     imported = _copy_zassets_to_category(output_folder, category_path)
                     if imported:
                         self._status_label.setText(
-                            f"完成: {success_count} 成功, {fail_count} 失败 | 已导入 {imported} 个到当前分类")
+                            t("qtool.hdr.done_imported", success=success_count, failed=fail_count, imported=imported))
                         print(f"[HDR Tool] 已导入 {imported} 个zasset到: {category_path}")
                     else:
                         print("[HDR Tool] 未找到zasset文件或导入失败")

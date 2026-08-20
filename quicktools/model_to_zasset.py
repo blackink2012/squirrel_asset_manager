@@ -24,6 +24,22 @@ except ImportError:
 from core.zasset_io import ZassetIO
 from core.zasset_builder import ZassetBuilder
 
+_T = None
+_help_path = lambda p: p
+try:
+    from utils.i18n import t as _T, help_path as _hpath
+    _help_path = _hpath
+except ImportError:
+    try:
+        from squirrel_asset_manager.utils.i18n import t as _T, help_path as _hpath
+        _help_path = _hpath
+    except ImportError:
+        _T = None
+
+def t(key, **kwargs):
+    return _T(key, **kwargs) if _T is not None else (key.format(**kwargs) if kwargs else key)
+
+
 def get_qt_modules():
     try:
         from PySide6 import QtWidgets, QtCore, QtGui
@@ -141,7 +157,7 @@ def read_source_metadata(asset_folder, asset_name, config):
                     continue
                 
                 if processor == 'split_comma':
-                    processed = [t.strip() for t in raw_value.split(',') if t.strip()]
+                    processed = [part.strip() for part in raw_value.split(',') if part.strip()]
                 elif processor == 'first_line':
                     processed = raw_value.split('\n')[0].strip()
                 else:
@@ -517,7 +533,7 @@ def _copy_zassets_to_category(src_folder, category_path):
 class ModelToZassetDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super(ModelToZassetDialog, self).__init__(parent)
-        self.setWindowTitle("模型资产转zasset")
+        self.setWindowTitle(t("qtool.model.window_title"))
         self.setWindowFlags(self.windowFlags() |
                             QtCore.Qt.WindowMinimizeButtonHint |
                             QtCore.Qt.WindowMaximizeButtonHint)
@@ -583,58 +599,58 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         left_scroll.setWidget(left_widget)
         
         # 输入文件夹选择
-        input_group = QtWidgets.QGroupBox("模型文件夹")
+        input_group = QtWidgets.QGroupBox(t("qtool.model.input_group"))
         input_layout = QtWidgets.QHBoxLayout(input_group)
         input_layout.setContentsMargins(8, 8, 8, 8)
         
         self._input_path = QtWidgets.QLineEdit()
-        self._input_path.setPlaceholderText("选择包含模型文件的文件夹...")
+        self._input_path.setPlaceholderText(t("qtool.model.input_placeholder"))
         input_layout.addWidget(self._input_path, 1)
         
-        browse_btn = QtWidgets.QPushButton("浏览...")
+        browse_btn = QtWidgets.QPushButton(t("common.browse"))
         browse_btn.clicked.connect(self._browse_input_folder)
         input_layout.addWidget(browse_btn)
         
         left_layout.addWidget(input_group)
         
         # 输出文件夹选择
-        output_group = QtWidgets.QGroupBox("输出位置")
+        output_group = QtWidgets.QGroupBox(t("qtool.common.output_group"))
         output_layout = QtWidgets.QHBoxLayout(output_group)
         output_layout.setContentsMargins(8, 8, 8, 8)
         
         self._output_path = QtWidgets.QLineEdit()
-        self._output_path.setPlaceholderText("选择资产输出文件夹...")
+        self._output_path.setPlaceholderText(t("qtool.common.output_placeholder"))
         output_layout.addWidget(self._output_path, 1)
         
-        output_browse_btn = QtWidgets.QPushButton("浏览...")
+        output_browse_btn = QtWidgets.QPushButton(t("common.browse"))
         output_browse_btn.clicked.connect(self._browse_output_folder)
         output_layout.addWidget(output_browse_btn)
         
         left_layout.addWidget(output_group)
         
         # 转换选项
-        options_group = QtWidgets.QGroupBox("转换选项")
+        options_group = QtWidgets.QGroupBox(t("qtool.model.options_group"))
         options_layout = QtWidgets.QVBoxLayout(options_group)
         options_layout.setContentsMargins(8, 8, 8, 8)
         
-        self._target_format_label = QtWidgets.QLabel("目标格式 (逗号分隔，留空则打包全部):")
+        self._target_format_label = QtWidgets.QLabel(t("qtool.model.target_format_label"))
         self._target_format_label.setStyleSheet("color: #c0c0c0; font-size: 13px;")
         options_layout.addWidget(self._target_format_label)
         
         format_row = QtWidgets.QHBoxLayout()
         format_row.setSpacing(8)
         self._target_format_input = QtWidgets.QLineEdit()
-        self._target_format_input.setPlaceholderText("例如: ma,usd,abc")
+        self._target_format_input.setPlaceholderText(t("qtool.model.target_format_placeholder"))
         format_row.addWidget(self._target_format_input, 1)
         options_layout.addLayout(format_row)
         
-        self._include_subfolders = QtWidgets.QCheckBox("包含子文件夹")
+        self._include_subfolders = QtWidgets.QCheckBox(t("qtool.model.include_subfolders"))
         self._include_subfolders.setChecked(True)
         options_layout.addWidget(self._include_subfolders)
         
         subfolder_row = QtWidgets.QHBoxLayout()
         subfolder_row.setSpacing(8)
-        subfolder_label = QtWidgets.QLabel("子文件夹:")
+        subfolder_label = QtWidgets.QLabel(t("qtool.model.subfolder_label"))
         subfolder_label.setStyleSheet("color: #909090; font-size: 12px;")
         subfolder_label.setFixedWidth(70)
         subfolder_row.addWidget(subfolder_label)
@@ -644,27 +660,27 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         subfolder_row.addWidget(self._subfolder_patterns, 1)
         options_layout.addLayout(subfolder_row)
         
-        self._recursive_scan = QtWidgets.QCheckBox("递归搜索子文件夹（扫描深层目录中的模型文件）")
+        self._recursive_scan = QtWidgets.QCheckBox(t("qtool.model.recursive_scan"))
         self._recursive_scan.setChecked(False)
         options_layout.addWidget(self._recursive_scan)
         
-        self._include_dependencies = QtWidgets.QCheckBox("包含依赖文件（贴图、材质等）")
+        self._include_dependencies = QtWidgets.QCheckBox(t("qtool.model.include_dependencies"))
         self._include_dependencies.setChecked(True)
         options_layout.addWidget(self._include_dependencies)
         
-        self._use_existing_metadata = QtWidgets.QCheckBox("使用现有元数据和缩略图")
+        self._use_existing_metadata = QtWidgets.QCheckBox(t("qtool.model.use_existing_metadata"))
         self._use_existing_metadata.setChecked(True)
         options_layout.addWidget(self._use_existing_metadata)
         
-        self._import_to_category = QtWidgets.QCheckBox("转换后导入当前分类")
+        self._import_to_category = QtWidgets.QCheckBox(t("qtool.model.import_to_category"))
         self._import_to_category.setChecked(False)
-        self._import_to_category.setToolTip("转换完成后将zasset文件夹拷贝到当前资产库分类文件夹")
+        self._import_to_category.setToolTip(t("qtool.model.import_to_category_tooltip"))
         options_layout.addWidget(self._import_to_category)
         
         left_layout.addWidget(options_group)
         
         # ── 文件路由配置 ──
-        routing_group = QtWidgets.QGroupBox("文件路由配置")
+        routing_group = QtWidgets.QGroupBox(t("qtool.model.routing_group"))
         routing_layout = QtWidgets.QVBoxLayout(routing_group)
         routing_layout.setContentsMargins(8, 8, 8, 8)
         routing_layout.setSpacing(4)
@@ -676,11 +692,11 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         
         routing_btn_layout = QtWidgets.QHBoxLayout()
         routing_btn_layout.setSpacing(6)
-        add_route_btn = QtWidgets.QPushButton("+ 添加路由")
+        add_route_btn = QtWidgets.QPushButton(t("qtool.model.add_route"))
         add_route_btn.setStyleSheet("font-size: 13px; padding: 5px 12px;")
         add_route_btn.clicked.connect(self._add_routing_row)
         routing_btn_layout.addWidget(add_route_btn)
-        save_routing_btn = QtWidgets.QPushButton("保存路由")
+        save_routing_btn = QtWidgets.QPushButton(t("qtool.model.save_routing"))
         save_routing_btn.setObjectName("okBtn")
         save_routing_btn.clicked.connect(self._save_routing_config)
         routing_btn_layout.addWidget(save_routing_btn)
@@ -690,13 +706,13 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         left_layout.addWidget(routing_group)
         
         # 元数据源配置
-        meta_group = QtWidgets.QGroupBox("元数据源配置")
+        meta_group = QtWidgets.QGroupBox(t("qtool.model.meta_group"))
         meta_layout = QtWidgets.QVBoxLayout(meta_group)
         meta_layout.setContentsMargins(8, 8, 8, 8)
         meta_layout.setSpacing(6)
         
         # ── 缩略图搜索路径 ──
-        thumb_label = QtWidgets.QLabel("缩略图搜索路径:")
+        thumb_label = QtWidgets.QLabel(t("qtool.model.thumb_search_label"))
         thumb_label.setStyleSheet("color: #5294e2; font-weight: bold;")
         meta_layout.addWidget(thumb_label)
         
@@ -713,7 +729,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         thumb_scroll.setWidget(thumb_container)
         meta_layout.addWidget(thumb_scroll)
         
-        thumb_add_btn = QtWidgets.QPushButton("+ 添加路径")
+        thumb_add_btn = QtWidgets.QPushButton(t("qtool.model.add_thumb_path"))
         thumb_add_btn.setStyleSheet("font-size: 13px; padding: 5px 12px;")
         thumb_add_btn.clicked.connect(lambda: self._add_thumb_path_row())
         meta_layout.addWidget(thumb_add_btn)
@@ -725,7 +741,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         meta_layout.addWidget(sep)
         
         # ── 元数据源 ──
-        source_label = QtWidgets.QLabel("元数据源:")
+        source_label = QtWidgets.QLabel(t("qtool.model.meta_source_label"))
         source_label.setStyleSheet("color: #5294e2; font-weight: bold;")
         meta_layout.addWidget(source_label)
         
@@ -745,12 +761,12 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         
         meta_btn_layout = QtWidgets.QHBoxLayout()
         meta_btn_layout.setSpacing(6)
-        add_source_btn = QtWidgets.QPushButton("+ 添加源")
+        add_source_btn = QtWidgets.QPushButton(t("qtool.model.add_source"))
         add_source_btn.setStyleSheet("font-size: 14px; padding: 6px 14px;")
         add_source_btn.clicked.connect(self._add_meta_source)
         meta_btn_layout.addWidget(add_source_btn)
         meta_btn_layout.addStretch()
-        save_meta_btn = QtWidgets.QPushButton("保存配置")
+        save_meta_btn = QtWidgets.QPushButton(t("qtool.model.save_meta"))
         save_meta_btn.setObjectName("okBtn")
         save_meta_btn.clicked.connect(self._save_meta_config)
         meta_btn_layout.addWidget(save_meta_btn)
@@ -766,25 +782,25 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         right_layout.setSpacing(12)
         
         # 模型预览
-        preview_group = QtWidgets.QGroupBox("识别到的模型资产")
+        preview_group = QtWidgets.QGroupBox(t("qtool.model.preview_group"))
         preview_layout = QtWidgets.QVBoxLayout(preview_group)
         preview_layout.setContentsMargins(8, 8, 8, 8)
         
         preview_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
         
         self._model_tree = QtWidgets.QTreeWidget()
-        self._model_tree.setHeaderLabel("模型文件和格式")
+        self._model_tree.setHeaderLabel(t("qtool.model.model_header"))
         self._model_tree.setMinimumHeight(150)
         preview_splitter.addWidget(self._model_tree)
         
         self._preview_tree = QtWidgets.QTreeWidget()
-        self._preview_tree.setHeaderLabels([".zasset 结构预览", "大小"])
+        self._preview_tree.setHeaderLabels([t("qtool.model.zasset_preview"), t("qtool.model.size_header")])
         self._preview_tree.setMinimumHeight(120)
         preview_splitter.addWidget(self._preview_tree)
         
         preview_layout.addWidget(preview_splitter, 1)
         
-        self._scan_btn = QtWidgets.QPushButton("扫描模型")
+        self._scan_btn = QtWidgets.QPushButton(t("qtool.model.scan"))
         self._scan_btn.clicked.connect(self._scan_models)
         preview_layout.addWidget(self._scan_btn)
         
@@ -796,7 +812,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         right_layout.addWidget(self._progress)
         
         # 状态栏
-        self._status_label = QtWidgets.QLabel("就绪")
+        self._status_label = QtWidgets.QLabel(t("common.ready"))
         self._status_label.setStyleSheet("color: #808080; font-size: 12px;")
         right_layout.addWidget(self._status_label)
         main_splitter.addWidget(right_widget)
@@ -810,7 +826,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         
         help_btn = QtWidgets.QPushButton("?")
         help_btn.setFixedSize(34, 34)
-        help_btn.setToolTip("使用帮助")
+        help_btn.setToolTip(t("btn.help.tooltip"))
         help_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #ffa502; border: none;"
             "font-size: 18px; font-weight: bold; border-radius: 4px; }"
@@ -819,11 +835,11 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         help_btn.clicked.connect(self._on_help)
         btn_layout.addWidget(help_btn)
         
-        self._cancel_btn = QtWidgets.QPushButton("取消")
+        self._cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         self._cancel_btn.clicked.connect(self._on_cancel)
         btn_layout.addWidget(self._cancel_btn)
         
-        self._ok_btn = QtWidgets.QPushButton("转换")
+        self._ok_btn = QtWidgets.QPushButton(t("qtool.common.convert"))
         self._ok_btn.setObjectName("okBtn")
         self._ok_btn.setFixedWidth(180)
         self._ok_btn.clicked.connect(self._convert)
@@ -840,7 +856,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
     
     def _browse_input_folder(self):
         folder = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "选择模型文件夹", "",
+            self, t("qtool.model.dlg_input"), "",
             QtWidgets.QFileDialog.ShowDirsOnly | QtWidgets.QFileDialog.DontResolveSymlinks
         )
         if folder:
@@ -849,7 +865,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
     
     def _browse_output_folder(self):
         folder = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "选择输出文件夹", "",
+            self, t("qtool.common.dlg_output"), "",
             QtWidgets.QFileDialog.ShowDirsOnly | QtWidgets.QFileDialog.DontResolveSymlinks
         )
         if folder:
@@ -861,7 +877,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         if not self._input_folder:
             folder = self._input_path.text().strip()
             if not folder:
-                QtWidgets.QMessageBox.warning(self, "提示", "请先选择模型文件夹")
+                QtWidgets.QMessageBox.warning(self, t("common.tip"), t("qtool.model.please_select_input"))
                 return
             self._input_folder = folder
         
@@ -870,10 +886,10 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         self._models = scan_models(self._input_folder, self._recursive_scan.isChecked())
         
         if not self._models:
-            self._status_label.setText("未找到支持的模型文件")
+            self._status_label.setText(t("qtool.model.no_model_found"))
             return
         
-        root = QtWidgets.QTreeWidgetItem([f"模型资产 ({len(self._models)} 个)"])
+        root = QtWidgets.QTreeWidgetItem([t("qtool.model.asset_group", count=len(self._models))])
         self._model_tree.addTopLevelItem(root)
         
         for asset_key, formats in self._models.items():
@@ -898,7 +914,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         # 在 zasset 结构预览中显示子文件夹内容
         self._update_preview()
         
-        self._status_label.setText(f"发现 {len(self._models)} 个模型资产")
+        self._status_label.setText(t("qtool.model.found_assets", count=len(self._models)))
     
     def _update_preview(self):
         """更新 zasset 结构预览树，显示子文件夹内容"""
@@ -912,7 +928,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         subfolder_files = collect_subfolder_contents(self._input_folder, subfolder_patterns)
         
         if subfolder_files:
-            preview_root = QtWidgets.QTreeWidgetItem([f"子文件夹内容 ({len(subfolder_files)} 个文件)"])
+            preview_root = QtWidgets.QTreeWidgetItem([t("qtool.model.subfolder_contents", count=len(subfolder_files))])
             self._preview_tree.addTopLevelItem(preview_root)
             
             # 按目录分组
@@ -926,7 +942,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
             for dir_name in sorted(dirs.keys()):
                 if not dir_name:
                     continue
-                dir_item = QtWidgets.QTreeWidgetItem([f"{dir_name}/ ({len(dirs[dir_name])} 个文件)"])
+                dir_item = QtWidgets.QTreeWidgetItem([t("qtool.model.dir_files", dir=dir_name, count=len(dirs[dir_name]))])
                 preview_root.addChild(dir_item)
                 for rel_path in dirs[dir_name]:
                     disk_path = subfolder_files[rel_path]
@@ -974,14 +990,14 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         layout.setContentsMargins(6, 4, 6, 4)
         layout.setSpacing(6)
         
-        layout.addWidget(QtWidgets.QLabel("文件夹:"))
+        layout.addWidget(QtWidgets.QLabel(t("qtool.model.routing_folder")))
         folder_edit = QtWidgets.QLineEdit(folder_name)
         folder_edit.setObjectName("route_folder")
         folder_edit.setPlaceholderText("root / textures / ass")
         folder_edit.setFixedWidth(140)
         layout.addWidget(folder_edit)
         
-        layout.addWidget(QtWidgets.QLabel("扩展名:"))
+        layout.addWidget(QtWidgets.QLabel(t("qtool.model.routing_exts")))
         exts_edit = QtWidgets.QLineEdit(exts_text)
         exts_edit.setObjectName("route_exts")
         exts_edit.setPlaceholderText(".ma .mb .usd")
@@ -1016,9 +1032,9 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         try:
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(self._config, f, indent=2, ensure_ascii=False)
-            self._status_label.setText("路由配置已保存")
+            self._status_label.setText(t("qtool.model.routing_saved"))
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "保存失败", f"无法保存配置:\n{e}")
+            QtWidgets.QMessageBox.warning(self, t("qtool.model.save_failed"), t("qtool.model.cannot_save", e=e))
     
     def _add_thumb_path_row(self, text=""):
         """添加一行缩略图搜索路径"""
@@ -1053,18 +1069,18 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         
         header = QtWidgets.QHBoxLayout()
         idx = self._meta_container_layout.count() + 1
-        title = QtWidgets.QLabel(f"源 {idx}")
+        title = QtWidgets.QLabel(t("qtool.model.source_n", n=idx))
         title.setStyleSheet("color: #5294e2; font-weight: bold;")
         header.addWidget(title)
         header.addStretch()
-        del_btn = QtWidgets.QPushButton("删除")
+        del_btn = QtWidgets.QPushButton(t("common.delete"))
         del_btn.setStyleSheet("color: #e06060; font-size: 11px; padding: 2px 8px;")
         del_btn.clicked.connect(lambda: (frame.deleteLater(), None))
         header.addWidget(del_btn)
         layout.addLayout(header)
         
         pattern_layout = QtWidgets.QHBoxLayout()
-        pattern_layout.addWidget(QtWidgets.QLabel("文件路径模板:"))
+        pattern_layout.addWidget(QtWidgets.QLabel(t("qtool.model.file_path_template")))
         pattern_edit = QtWidgets.QLineEdit(data.get('file_pattern', ''))
         pattern_edit.setObjectName("meta_pattern")
         pattern_edit.setPlaceholderText("{assetName}_fileDependencies/{assetName}.zooInfo")
@@ -1072,7 +1088,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         layout.addLayout(pattern_layout)
         
         fmt_layout = QtWidgets.QHBoxLayout()
-        fmt_layout.addWidget(QtWidgets.QLabel("文件格式:"))
+        fmt_layout.addWidget(QtWidgets.QLabel(t("qtool.model.file_format")))
         fmt_combo = QtWidgets.QComboBox()
         fmt_combo.setObjectName("meta_format")
         fmt_combo.addItems(["json", "txt"])
@@ -1082,7 +1098,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         fmt_layout.addStretch()
         layout.addLayout(fmt_layout)
         
-        mapping_label = QtWidgets.QLabel("字段映射:")
+        mapping_label = QtWidgets.QLabel(t("qtool.model.field_mapping"))
         mapping_label.setStyleSheet("color: #909090; font-size: 11px;")
         layout.addWidget(mapping_label)
         
@@ -1091,7 +1107,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         mapping_layout.setSpacing(2)
         layout.addLayout(mapping_layout)
         
-        add_field_btn = QtWidgets.QPushButton("+ 添加字段映射")
+        add_field_btn = QtWidgets.QPushButton(t("qtool.model.add_field_mapping"))
         add_field_btn.setStyleSheet("font-size: 14px; padding: 6px 14px;")
         add_field_btn.clicked.connect(
             lambda: self._add_meta_field_row(mapping_layout)
@@ -1118,7 +1134,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         
         src_edit = QtWidgets.QLineEdit(source)
         src_edit.setObjectName("field_source")
-        src_edit.setPlaceholderText("源字段")
+        src_edit.setPlaceholderText(t("qtool.model.source_field_ph"))
         src_edit.setFixedWidth(130)
         row_layout.addWidget(src_edit)
         
@@ -1129,7 +1145,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         
         tgt_edit = QtWidgets.QLineEdit(target)
         tgt_edit.setObjectName("field_target")
-        tgt_edit.setPlaceholderText("目标字段")
+        tgt_edit.setPlaceholderText(t("qtool.model.target_field_ph"))
         tgt_edit.setFixedWidth(130)
         row_layout.addWidget(tgt_edit)
         
@@ -1137,11 +1153,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         proc_combo.setObjectName("field_processor")
         proc_combo.addItems(["none", "split_comma", "first_line"])
         proc_combo.setCurrentText(processor if processor else "none")
-        proc_combo.setToolTip(
-            "none — 不做处理，值是什么就用什么（推荐，适用大多数情况）\n"
-            "split_comma — 按逗号分割字符串为列表（如 \"a,b,c\" → [\"a\",\"b\",\"c\"]）\n"
-            "first_line — 只取文本第一行（用于多行文本只需标题）"
-        )
+        proc_combo.setToolTip(t("qtool.model.processor_tooltip"))
         row_layout.addWidget(proc_combo)
         
         del_btn = QtWidgets.QPushButton("×")
@@ -1218,9 +1230,9 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         try:
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(self._config, f, indent=2, ensure_ascii=False)
-            self._status_label.setText("元数据配置已保存")
+            self._status_label.setText(t("qtool.model.meta_saved"))
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "保存失败", f"无法保存配置:\n{e}")
+            QtWidgets.QMessageBox.warning(self, t("qtool.model.save_failed"), t("qtool.model.cannot_save", e=e))
     
     def _get_target_formats(self):
         """获取目标格式列表，为空则全部"""
@@ -1244,7 +1256,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         if not self._input_folder:
             folder = self._input_path.text().strip()
             if not folder:
-                QtWidgets.QMessageBox.warning(self, "警告", "请先选择模型文件夹")
+                QtWidgets.QMessageBox.warning(self, t("common.warning"), t("qtool.model.please_select_input"))
                 return
             self._input_folder = folder
         
@@ -1254,7 +1266,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
             output_folder = _get_import_category_path()
         if not output_folder:
             output_folder = QtWidgets.QFileDialog.getExistingDirectory(
-                self, "选择输出文件夹", os.path.expanduser("~"))
+                self, t("qtool.common.dlg_output"), os.path.expanduser("~"))
         if not output_folder:
             return
         
@@ -1270,7 +1282,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
                     asset_entries.append((asset_key, basename))
         
         if not asset_entries:
-            QtWidgets.QMessageBox.warning(self, "警告", "没有检测到模型资产，请先扫描")
+            QtWidgets.QMessageBox.warning(self, t("common.warning"), t("qtool.model.no_assets_scanned"))
             return
         
         self._is_converting = True
@@ -1291,7 +1303,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
             if asset_key not in self._models:
                 continue
             
-            self._status_label.setText(f"正在转换 [{i+1}/{len(asset_entries)}]: {asset_name}")
+            self._status_label.setText(t("qtool.model.converting", i=i+1, total=len(asset_entries), name=asset_name))
             self._progress.setValue(i + 1)
             
             try:
@@ -1314,16 +1326,16 @@ class ModelToZassetDialog(QtWidgets.QDialog):
                 success_count += 1
             else:
                 fail_count += 1
-                self._status_label.setText(f"转换失败 [{i+1}/{len(asset_entries)}]: {asset_name} - {error}")
+                self._status_label.setText(t("qtool.model.convert_failed", i=i+1, total=len(asset_entries), name=asset_name, error=error))
         
         self._is_converting = False
         self._ok_btn.setEnabled(True)
         self._progress.setVisible(False)
         
         if self._is_cancelled:
-            self._status_label.setText(f"操作已中止。成功: {success_count}, 失败: {fail_count}")
+            self._status_label.setText(t("qtool.model.aborted", success=success_count, failed=fail_count))
         else:
-            self._status_label.setText(f"转换完成！成功: {success_count}, 失败: {fail_count}")
+            self._status_label.setText(t("qtool.model.convert_done", success=success_count, failed=fail_count))
         
         if getattr(self, '_import_to_category', None) and self._import_to_category.isChecked():
             if output_folder:
@@ -1334,7 +1346,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
                     imported = _copy_zassets_to_category(output_folder, category_path)
                     if imported:
                         self._status_label.setText(
-                            f"完成: {success_count} 成功, {fail_count} 失败 | 已导入 {imported} 个到当前分类")
+                            t("qtool.model.done_imported", success=success_count, failed=fail_count, imported=imported))
                         print(f"[Model Tool] 已导入 {imported} 个zasset到: {category_path}")
                     else:
                         print("[Model Tool] 未找到zasset文件或导入失败")
@@ -1345,7 +1357,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
         if getattr(self, '_is_converting', False):
             self._is_cancelled = True
             self._cancel_btn.setEnabled(False)
-            self._status_label.setText("正在中止...")
+            self._status_label.setText(t("qtool.common.aborting"))
             try:
                 import maya.cmds as _cmds
                 _cmds.refresh()
@@ -1357,7 +1369,7 @@ class ModelToZassetDialog(QtWidgets.QDialog):
     def _on_help(self):
         import webbrowser
         plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        help_path = os.path.join(plugin_root, "Assets", "help", "model_to_zasset", "help.html")
+        help_path = _help_path(os.path.join(plugin_root, "Assets", "help", "model_to_zasset", "help.html"))
         if os.path.isfile(help_path):
             webbrowser.open("file:///" + help_path.replace(os.sep, "/"))
         else:

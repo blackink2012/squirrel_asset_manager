@@ -5,6 +5,12 @@ from ..utils.mock_data import DEFAULT_CATEGORIES
 from ..utils.settings import SettingsManager, apply_font_size_to_widget
 from .detail_panel import FlowLayout
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
@@ -74,7 +80,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         self._materials = materials or []
         self._captured_pixmap = None
         self._set_window_flags()
-        self.setWindowTitle("\u5bfc\u51fa\u6750\u8d28\u4e3a\u9884\u8bbe")
+        self.setWindowTitle(t("dialog.export_preset.title"))
         self.setMinimumSize(560, 620)
         self.resize(580, 680)
         self.setStyleSheet("background-color: #2a2a2a; color: #d0d0d0;")
@@ -141,30 +147,30 @@ class ExportPresetDialog(QtWidgets.QDialog):
         layout.addLayout(row)
 
     def _build_header(self):
-        header = QtWidgets.QLabel("\u5bfc\u51fa\u6750\u8d28\u4e3a\u9884\u8bbe")
+        header = QtWidgets.QLabel(t("dialog.export_preset.title"))
         header.setStyleSheet("font-size: 18px; font-weight: bold; color: #ffffff; padding-bottom: 4px;")
         self._main_layout.addWidget(header)
 
         info = QtWidgets.QLabel()
         if self._materials:
-            info.setText(f"\u5df2\u9009\u62e9 {len(self._materials)} \u4e2a\u6750\u8d28\uff0c\u5c06\u5bfc\u51fa\u4e3a\u9884\u8bbe\u6587\u4ef6")
+            info.setText(t("dialog.export_preset.selected_count", n=len(self._materials)))
         else:
-            info.setText("\u5c06\u5bfc\u51fa\u5f53\u524d\u6750\u8d28\u4e3a\u9884\u8bbe\u6587\u4ef6")
+            info.setText(t("dialog.export_preset.no_selection"))
         info.setStyleSheet("color: #808080; font-size: 12px;")
         self._main_layout.addWidget(info)
 
     def _build_format_section(self):
-        group, layout = self._section_group("\u5bfc\u51fa\u683c\u5f0f\u4e0e\u8def\u5f84")
+        group, layout = self._section_group(t("dialog.export_preset.format_section"))
 
         dir_row = QtWidgets.QHBoxLayout()
         dir_row.setSpacing(8)
-        dir_label = QtWidgets.QLabel("\u5bfc\u51fa\u76ee\u5f55:")
+        dir_label = QtWidgets.QLabel(t("dialog.export_preset.export_dir"))
         dir_label.setFixedWidth(80)
         dir_label.setStyleSheet("color: #a0a0a0; font-size: 13px;")
         self._dir_input = QtWidgets.QLineEdit()
-        self._dir_input.setPlaceholderText("\u9009\u62e9\u5bfc\u51fa\u76ee\u5f55...")
+        self._dir_input.setPlaceholderText(t("dialog.export_preset.select_export_dir"))
         self._dir_input.setStyleSheet("background-color: #333333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px 10px; color: #d0d0d0;")
-        browse_btn = QtWidgets.QPushButton("\u6d4f\u89c8")
+        browse_btn = QtWidgets.QPushButton(t("dialog.export_preset.browse"))
         browse_btn.setFixedWidth(60)
         browse_btn.setStyleSheet("QPushButton { background-color: #3a3a3a; color: #d0d0d0; border: none; border-radius: 4px; padding: 6px 12px; } QPushButton:hover { background-color: #4a4a4a; }")
         browse_btn.clicked.connect(self._on_browse_dir)
@@ -175,11 +181,11 @@ class ExportPresetDialog(QtWidgets.QDialog):
 
         name_row = QtWidgets.QHBoxLayout()
         name_row.setSpacing(8)
-        name_label = QtWidgets.QLabel("\u6587\u4ef6\u540d:")
+        name_label = QtWidgets.QLabel(t("dialog.export_preset.file_name"))
         name_label.setFixedWidth(80)
         name_label.setStyleSheet("color: #a0a0a0; font-size: 13px;")
         self._name_input = QtWidgets.QLineEdit()
-        self._name_input.setPlaceholderText("\u7559\u7a7a\u4f7f\u7528\u9ed8\u8ba4\u547d\u540d\uff08\u5f53\u524d\u65f6\u95f4\uff09")
+        self._name_input.setPlaceholderText(t("dialog.export_preset.default_name_hint"))
         self._name_input.setStyleSheet("background-color: #333333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px 10px; color: #d0d0d0;")
         name_row.addWidget(name_label)
         name_row.addWidget(self._name_input, 1)
@@ -190,21 +196,21 @@ class ExportPresetDialog(QtWidgets.QDialog):
         sep1.setStyleSheet("color: #3a3a3a;")
         layout.addWidget(sep1)
 
-        self._json_check = QtWidgets.QCheckBox("\u5bfc\u51fa\u4e3a JSON \u683c\u5f0f (\u9ed8\u8ba4)")
+        self._json_check = QtWidgets.QCheckBox(t("dialog.export_preset.export_json_default"))
         self._json_check.setChecked(True)
         self._json_check.setEnabled(False)
         self._json_check.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         layout.addWidget(self._json_check)
 
-        self._ma_check = QtWidgets.QCheckBox("\u540c\u65f6\u5bfc\u51fa .ma \u683c\u5f0f (\u53ef\u9009)")
+        self._ma_check = QtWidgets.QCheckBox(t("dialog.export_preset.export_ma_optional"))
         self._ma_check.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         layout.addWidget(self._ma_check)
 
-        self._separate_check = QtWidgets.QCheckBox("\u6bcf\u4e2a\u6750\u8d28\u5bfc\u51fa\u4e3a\u72ec\u7acb\u6587\u4ef6")
+        self._separate_check = QtWidgets.QCheckBox(t("dialog.export_preset.separate_files"))
         self._separate_check.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         layout.addWidget(self._separate_check)
 
-        self._objects_check = QtWidgets.QCheckBox("\u5bfc\u51fa\u6750\u8d28\u5bf9\u5e94\u6a21\u578b\u6570\u636e (.mcm)")
+        self._objects_check = QtWidgets.QCheckBox(t("dialog.export_preset.export_objects"))
         self._objects_check.setChecked(True)
         self._objects_check.setStyleSheet("color: #d0d0d0; font-size: 13px;")
         layout.addWidget(self._objects_check)
@@ -212,11 +218,11 @@ class ExportPresetDialog(QtWidgets.QDialog):
         self._main_layout.addWidget(group)
 
     def _build_metadata_section(self):
-        group, layout = self._section_group("\u5143\u6570\u636e\u8bbe\u7f6e")
+        group, layout = self._section_group(t("dialog.export_preset.metadata_section"))
 
         cs_row = QtWidgets.QHBoxLayout()
         cs_row.setSpacing(8)
-        cs_label = QtWidgets.QLabel("\u8272\u5f69\u7a7a\u95f4:")
+        cs_label = QtWidgets.QLabel(t("dialog.export_preset.color_space"))
         cs_label.setFixedWidth(80)
         cs_label.setStyleSheet("color: #a0a0a0; font-size: 13px;")
         self._color_space_combo = QtWidgets.QComboBox()
@@ -235,11 +241,11 @@ class ExportPresetDialog(QtWidgets.QDialog):
 
         cat_row = QtWidgets.QHBoxLayout()
         cat_row.setSpacing(8)
-        cat_label = QtWidgets.QLabel("\u6750\u8d28\u5206\u7c7b:")
+        cat_label = QtWidgets.QLabel(t("dialog.export_preset.material_category"))
         cat_label.setFixedWidth(80)
         cat_label.setStyleSheet("color: #a0a0a0; font-size: 13px;")
         self._category_combo = QtWidgets.QComboBox()
-        self._category_combo.addItem("\uff08\u4e0d\u6307\u5b9a\uff09", "")
+        self._category_combo.addItem(t("dialog.export_preset.unspecified"), "")
         for cat in DEFAULT_CATEGORIES:
             self._category_combo.addItem(f"{cat['name_cn']} ({cat['name']})", cat['id'])
             for child in cat.get('children', []):
@@ -257,11 +263,11 @@ class ExportPresetDialog(QtWidgets.QDialog):
 
         cn_row = QtWidgets.QHBoxLayout()
         cn_row.setSpacing(8)
-        cn_label = QtWidgets.QLabel("\u4e2d\u6587\u540d:")
+        cn_label = QtWidgets.QLabel(t("dialog.export_preset.chinese_name"))
         cn_label.setFixedWidth(80)
         cn_label.setStyleSheet("color: #a0a0a0; font-size: 13px;")
         self._name_cn_input = QtWidgets.QLineEdit()
-        self._name_cn_input.setPlaceholderText("\u7559\u7a7a\u4f7f\u7528\u82f1\u6587\u539f\u540d")
+        self._name_cn_input.setPlaceholderText(t("dialog.export_preset.chinese_name_hint"))
         self._name_cn_input.setStyleSheet("background-color: #333333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px 10px; color: #d0d0d0;")
         cn_row.addWidget(cn_label)
         cn_row.addWidget(self._name_cn_input, 1)
@@ -273,12 +279,12 @@ class ExportPresetDialog(QtWidgets.QDialog):
         layout.addWidget(sep)
 
         tag_header_row = QtWidgets.QHBoxLayout()
-        tag_header = QtWidgets.QLabel("\u6807\u7b7e")
+        tag_header = QtWidgets.QLabel(t("dialog.export_preset.tags"))
         tag_header.setStyleSheet("color: #a0a0a0; font-size: 13px; font-weight: bold;")
         tag_header_row.addWidget(tag_header)
         tag_header_row.addStretch()
 
-        edit_tags_btn = QtWidgets.QPushButton("\u270f \u7f16\u8f91\u6807\u7b7e")
+        edit_tags_btn = QtWidgets.QPushButton(t("dialog.export_preset.edit_tags"))
         edit_tags_btn.setStyleSheet(
             "QPushButton { background-color: transparent; color: #808080; border: none; font-size: 11px; }"
             "QPushButton:hover { color: #5294e2; }"
@@ -300,9 +306,9 @@ class ExportPresetDialog(QtWidgets.QDialog):
         tag_input_row = QtWidgets.QHBoxLayout()
         tag_input_row.setSpacing(8)
         self._tag_input = QtWidgets.QLineEdit()
-        self._tag_input.setPlaceholderText("\u8f93\u5165\u81ea\u5b9a\u4e49\u6807\u7b7e\uff0c\u591a\u4e2a\u7528\u9017\u53f7\u5206\u9694")
+        self._tag_input.setPlaceholderText(t("dialog.export_preset.tag_input_hint"))
         self._tag_input.setStyleSheet("background-color: #333333; border: 1px solid #4a4a4a; border-radius: 4px; padding: 6px 10px; color: #d0d0d0;")
-        add_tag_btn = QtWidgets.QPushButton("\u6dfb\u52a0\u6807\u7b7e")
+        add_tag_btn = QtWidgets.QPushButton(t("dialog.export_preset.add_tag"))
         add_tag_btn.setFixedWidth(80)
         add_tag_btn.setStyleSheet("QPushButton { background-color: #2d4a6f; color: #5294e2; border: none; border-radius: 4px; padding: 6px 12px; } QPushButton:hover { background-color: #3a5a8a; }")
         add_tag_btn.clicked.connect(self._on_add_custom_tag)
@@ -313,7 +319,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         self._main_layout.addWidget(group)
 
     def _build_screenshot_section(self):
-        group, layout = self._section_group("\u622a\u56fe\u9884\u89c8")
+        group, layout = self._section_group(t("dialog.export_preset.screenshot_section"))
         layout.setSpacing(10)
 
         preview_row = QtWidgets.QHBoxLayout()
@@ -336,7 +342,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         font = painter.font()
         font.setPointSize(12)
         painter.setFont(font)
-        painter.drawText(empty_pix.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, "\u70b9\u51fb\u622a\u56fe\u83b7\u53d6\u9884\u89c8\u56fe")
+        painter.drawText(empty_pix.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, t("dialog.export_preset.click_to_capture"))
         painter.end()
         self._screenshot_label.setPixmap(empty_pix)
 
@@ -348,7 +354,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         controls_layout.setContentsMargins(0, 0, 0, 0)
         controls_layout.setSpacing(8)
 
-        res_label = QtWidgets.QLabel("\u622a\u56fe\u5206\u8fa8\u7387:")
+        res_label = QtWidgets.QLabel(t("dialog.export_preset.screenshot_resolution"))
         res_label.setStyleSheet("color: #a0a0a0; font-size: 13px;")
         controls_layout.addWidget(res_label)
 
@@ -358,7 +364,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         res_group_layout.setSpacing(4)
         self._res_256 = QtWidgets.QRadioButton("256\u00d7256")
         self._res_512 = QtWidgets.QRadioButton("512\u00d7512")
-        self._res_custom = QtWidgets.QRadioButton("\u81ea\u5b9a\u4e49")
+        self._res_custom = QtWidgets.QRadioButton(t("dialog.export_preset.custom"))
         small_radio_style = "QRadioButton { color: #d0d0d0; font-size: 12px; } QRadioButton::indicator { width: 14px; height: 14px; }"
         self._res_256.setStyleSheet(small_radio_style)
         self._res_512.setStyleSheet(small_radio_style)
@@ -395,7 +401,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
 
         controls_layout.addSpacing(4)
 
-        capture_btn = QtWidgets.QPushButton("\u622a\u53d6\u5f53\u524d\u89c6\u56fe")
+        capture_btn = QtWidgets.QPushButton(t("dialog.export_preset.capture_view"))
         capture_btn.setStyleSheet(
             "QPushButton { background-color: #2d6a4f; color: #ffffff; border: none; "
             "border-radius: 4px; padding: 8px 16px; font-size: 13px; font-weight: bold; }"
@@ -405,7 +411,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         capture_btn.clicked.connect(self._on_capture_screenshot)
         controls_layout.addWidget(capture_btn)
 
-        import_thumb_btn = QtWidgets.QPushButton("\u4ece\u6587\u4ef6\u5bfc\u5165\u7f29\u7565\u56fe")
+        import_thumb_btn = QtWidgets.QPushButton(t("dialog.export_preset.import_thumbnail"))
         import_thumb_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #d0d0d0; border: none; "
             "border-radius: 4px; padding: 8px 16px; font-size: 13px; }"
@@ -422,16 +428,16 @@ class ExportPresetDialog(QtWidgets.QDialog):
         self._main_layout.addWidget(group)
 
     def _build_batch_options(self):
-        group, layout = self._section_group("\u6279\u91cf\u5bfc\u51fa\u9009\u9879")
+        group, layout = self._section_group(t("dialog.export_preset.batch_options"))
         layout.setSpacing(8)
 
         mode_row = QtWidgets.QHBoxLayout()
         mode_row.setSpacing(8)
-        mode_label = QtWidgets.QLabel("\u5bfc\u51fa\u6a21\u5f0f:")
+        mode_label = QtWidgets.QLabel(t("dialog.export_preset.export_mode"))
         mode_label.setFixedWidth(80)
         mode_label.setStyleSheet("color: #a0a0a0; font-size: 13px;")
-        self._mode_selection = QtWidgets.QRadioButton("\u5bfc\u51fa\u9009\u62e9")
-        self._mode_all = QtWidgets.QRadioButton("\u5bfc\u51fa\u5168\u90e8")
+        self._mode_selection = QtWidgets.QRadioButton(t("dialog.export_preset.export_selection"))
+        self._mode_all = QtWidgets.QRadioButton(t("dialog.export_preset.export_all"))
         self._mode_selection.setChecked(True)
         radio_style = "QRadioButton { color: #d0d0d0; font-size: 13px; } QRadioButton::indicator { width: 16px; height: 16px; }"
         self._mode_selection.setStyleSheet(radio_style)
@@ -442,10 +448,10 @@ class ExportPresetDialog(QtWidgets.QDialog):
         mode_row.addStretch()
         layout.addLayout(mode_row)
 
-        self._batch_screenshot_check = QtWidgets.QCheckBox("\u6279\u91cf\u5bfc\u51fa\u65f6\u81ea\u52a8\u622a\u56fe\uff08\u6bcf\u4e2a\u6750\u8d28\u81ea\u52a8\u83b7\u53d6\u9884\u89c8\u56fe\uff09")
+        self._batch_screenshot_check = QtWidgets.QCheckBox(t("dialog.export_preset.batch_screenshot"))
         self._batch_screenshot_check.setChecked(True)
         self._batch_screenshot_check.setStyleSheet("color: #d0d0d0; font-size: 13px;")
-        self._batch_screenshot_check.setToolTip("\u5bfc\u51fa\u65f6\u81ea\u52a8\u4e3a\u6bcf\u4e2a\u6750\u8d28\u751f\u6210\u9884\u89c8\u56fe\uff08\u65b9\u5f0f\u5f85\u5b9a\uff1aplayblast\u622a\u56fe\u6216Arnold\u6e32\u67d3\uff09")
+        self._batch_screenshot_check.setToolTip(t("dialog.export_preset.batch_screenshot_tip"))
         layout.addWidget(self._batch_screenshot_check)
 
         self._main_layout.addWidget(group)
@@ -461,7 +467,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         self._status_label.setStyleSheet("color: #808080; font-size: 12px;")
         footer_layout.addWidget(self._status_label, 1)
 
-        cancel_btn = QtWidgets.QPushButton("\u53d6\u6d88")
+        cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         cancel_btn.setFixedWidth(80)
         cancel_btn.setStyleSheet(
             "QPushButton { background-color: #3a3a3a; color: #d0d0d0; border: none; "
@@ -471,7 +477,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         cancel_btn.clicked.connect(self.reject)
         footer_layout.addWidget(cancel_btn)
 
-        export_btn = QtWidgets.QPushButton("\u5f00\u59cb\u5bfc\u51fa")
+        export_btn = QtWidgets.QPushButton(t("dialog.export_preset.start_export"))
         export_btn.setFixedWidth(120)
         export_btn.setStyleSheet(
             "QPushButton { background-color: #2d6a4f; color: #ffffff; border: none; "
@@ -509,7 +515,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         tags = list(mgr.get_common_tags()) if mgr else []
 
         dlg = QtWidgets.QDialog(self)
-        dlg.setWindowTitle("\u7f16\u8f91\u6807\u7b7e\u5e93")
+        dlg.setWindowTitle(t("dialog.export_preset.edit_tag_library"))
         dlg.setFixedSize(400, 340)
         dlg.setStyleSheet("background-color: #2a2a2a;")
         lyt = QtWidgets.QVBoxLayout(dlg); lyt.setSpacing(8)
@@ -549,10 +555,10 @@ class ExportPresetDialog(QtWidgets.QDialog):
 
         add_row = QtWidgets.QHBoxLayout()
         add_input = QtWidgets.QLineEdit()
-        add_input.setPlaceholderText("\u8f93\u5165\u65b0\u6807\u7b7e\u540d")
+        add_input.setPlaceholderText(t("dialog.export_preset.new_tag_name"))
         add_input.setStyleSheet("background-color: #333; border: 1px solid #4a4a4a; border-radius: 3px; padding: 5px 8px; color: #e0e0e0;")
         add_row.addWidget(add_input, 1)
-        add_btn = QtWidgets.QPushButton("\u6dfb\u52a0")
+        add_btn = QtWidgets.QPushButton(t("dialog.export_preset.add"))
         add_btn.setStyleSheet("QPushButton { background-color: #2d4a6f; color: #5294e2; border: none; padding: 6px 14px; border-radius: 3px; } QPushButton:hover { background-color: #3a5a8a; }")
         def do_add():
             t = add_input.text().strip()
@@ -566,7 +572,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         add_row.addWidget(add_btn)
         lyt.addLayout(add_row)
 
-        close_btn = QtWidgets.QPushButton("\u5173\u95ed")
+        close_btn = QtWidgets.QPushButton(t("common.close"))
         close_btn.setStyleSheet("QPushButton { background-color: #3a3a3a; color: #d0d0d0; border: none; padding: 6px; border-radius: 3px; } QPushButton:hover { background-color: #4a4a4a; }")
         close_btn.clicked.connect(dlg.accept)
         lyt.addWidget(close_btn)
@@ -586,7 +592,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
         self._tag_flow.set_tags(all_tags)
 
     def _on_browse_dir(self):
-        path = QtWidgets.QFileDialog.getExistingDirectory(self, "\u9009\u62e9\u5bfc\u51fa\u76ee\u5f55")
+        path = QtWidgets.QFileDialog.getExistingDirectory(self, t("dialog.export_preset.select_export_dir_title"))
         if path:
             self._dir_input.setText(path.replace("\\", "/"))
 
@@ -628,7 +634,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
             import maya.cmds as cmds
             sel = cmds.ls(selection=True)
             if not sel:
-                QtWidgets.QMessageBox.information(self, "\u63d0\u793a", "\u8bf7\u5148\u5728\u89c6\u56fe\u4e2d\u9009\u62e9\u7269\u4f53\u6216\u8c03\u6574\u89c6\u89d2")
+                QtWidgets.QMessageBox.information(self, t("dialog.export_preset.notice"), t("dialog.export_preset.select_object_first"))
                 return
             cmds.select(sel)
             panel = cmds.getPanel(withFocus=True)
@@ -663,16 +669,16 @@ class ExportPresetDialog(QtWidgets.QDialog):
                     QtCore.Qt.TransformationMode.SmoothTransformation
                 )
                 self._screenshot_label.setPixmap(scaled)
-                self._status_label.setText(f"\u622a\u56fe\u6210\u529f: {w}\u00d7{h}")
+                self._status_label.setText(t("dialog.export_preset.capture_success", w=w, h=h))
             else:
-                self._status_label.setText("\u622a\u56fe\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u89c6\u56fe")
+                self._status_label.setText(t("dialog.export_preset.capture_failed"))
         except ImportError:
-            self._status_label.setText("\u622a\u56fe\u9700\u8981\u5728 Maya \u73af\u5883\u4e2d\u8fd0\u884c")
+            self._status_label.setText(t("dialog.export_preset.capture_needs_maya"))
 
     def _on_import_thumbnail(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "\u9009\u62e9\u7f29\u7565\u56fe", "",
-            "\u56fe\u7247\u6587\u4ef6 (*.png *.jpg *.jpeg *.bmp *.tga *.tiff)"
+            self, t("dialog.export_preset.select_thumbnail"), "",
+            t("dialog.export_preset.image_files")
         )
         if path:
             pix = QtGui.QPixmap(path)
@@ -683,7 +689,7 @@ class ExportPresetDialog(QtWidgets.QDialog):
                     QtCore.Qt.TransformationMode.SmoothTransformation
                 )
                 self._screenshot_label.setPixmap(scaled)
-                self._status_label.setText(f"\u5df2\u5bfc\u5165\u7f29\u7565\u56fe: {os.path.basename(path)}")
+                self._status_label.setText(t("dialog.export_preset.thumbnail_imported", name=os.path.basename(path)))
 
     def _get_collected_tags(self):
         selected = set(self._tag_flow.get_selected_tags())
@@ -694,13 +700,13 @@ class ExportPresetDialog(QtWidgets.QDialog):
     def _on_export(self):
         target_dir = self._dir_input.text().strip()
         if not target_dir:
-            QtWidgets.QMessageBox.warning(self, "\u63d0\u793a", "\u8bf7\u9009\u62e9\u5bfc\u51fa\u76ee\u5f55")
+            QtWidgets.QMessageBox.warning(self, t("dialog.export_preset.notice"), t("dialog.export_preset.select_export_dir_first"))
             return
         if not os.path.isdir(target_dir):
             try:
                 os.makedirs(target_dir)
             except Exception as e:
-                QtWidgets.QMessageBox.critical(self, "\u9519\u8bef", f"\u65e0\u6cd5\u521b\u5efa\u76ee\u5f55: {e}")
+                QtWidgets.QMessageBox.critical(self, t("dialog.export_preset.error"), t("dialog.export_preset.create_dir_failed", e=e))
                 return
 
         custom_name = self._name_input.text().strip() or None

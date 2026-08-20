@@ -8,6 +8,12 @@ import os
 from ..utils.maya_utils import get_qt_modules
 from ..utils.settings import SettingsManager, apply_font_size_to_widget
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
@@ -23,7 +29,7 @@ class BatchRenameDialog(QtWidgets.QDialog):
         self._materials = list(materials) if materials else []
         self._rename_target = "name_cn"  # "name_cn" | "name"
 
-        self.setWindowTitle(f"批量重命名 ({len(self._materials)} 个资产)")
+        self.setWindowTitle(t("dialog.batch_rename.title", n=len(self._materials)))
         self.setFixedSize(520, 460)
         self.setStyleSheet("background-color: #2a2a2a;")
 
@@ -42,10 +48,10 @@ class BatchRenameDialog(QtWidgets.QDialog):
 
         # ── 重命名目标选择 ──
         target_layout = QtWidgets.QHBoxLayout()
-        target_layout.addWidget(self._make_label("重命名:"))
+        target_layout.addWidget(self._make_label(t("batch_rename.rename_label")))
         self._target_combo = QtWidgets.QComboBox()
-        self._target_combo.addItem("显示名 (name_cn)", "name_cn")
-        self._target_combo.addItem("文件名 (name)", "name")
+        self._target_combo.addItem(t("batch_rename.display_name") + " (name_cn)", "name_cn")
+        self._target_combo.addItem(t("batch_rename.file_name") + " (name)", "name")
         self._target_combo.setStyleSheet(self._COMBO_STYLE)
         self._target_combo.currentIndexChanged.connect(self._on_target_changed)
         target_layout.addWidget(self._target_combo)
@@ -56,14 +62,14 @@ class BatchRenameDialog(QtWidgets.QDialog):
         self._mode_group = QtWidgets.QButtonGroup(self)
         radio_style = "QRadioButton { color: #d0d0d0; font-size: 13px; spacing: 6px; }"
 
-        self._rb_prefix = QtWidgets.QRadioButton("前缀追加")
+        self._rb_prefix = QtWidgets.QRadioButton(t("batch_rename.prefix_append"))
         self._rb_prefix.setStyleSheet(radio_style)
         self._rb_prefix.toggled.connect(self._on_mode_changed)
 
-        self._rb_suffix = QtWidgets.QRadioButton("后缀追加")
+        self._rb_suffix = QtWidgets.QRadioButton(t("batch_rename.suffix_append"))
         self._rb_suffix.setStyleSheet(radio_style)
 
-        self._rb_replace = QtWidgets.QRadioButton("查找替换")
+        self._rb_replace = QtWidgets.QRadioButton(t("batch_rename.find_replace"))
         self._rb_replace.setStyleSheet(radio_style)
 
         self._mode_group.addButton(self._rb_prefix, 0)
@@ -86,7 +92,7 @@ class BatchRenameDialog(QtWidgets.QDialog):
 
         # 前缀/后缀模式 - 单输入框
         self._single_input = QtWidgets.QLineEdit()
-        self._single_input.setPlaceholderText("输入要追加的文本...")
+        self._single_input.setPlaceholderText(t("batch_rename.input_placeholder"))
         self._single_input.setStyleSheet(self._INPUT_STYLE)
         self._single_input.textChanged.connect(self._update_preview)
         input_layout.addWidget(self._single_input)
@@ -97,7 +103,7 @@ class BatchRenameDialog(QtWidgets.QDialog):
         rp_layout.setContentsMargins(0, 0, 0, 0)
 
         self._find_input = QtWidgets.QLineEdit()
-        self._find_input.setPlaceholderText("查找...")
+        self._find_input.setPlaceholderText(t("batch_rename.find_placeholder"))
         self._find_input.setStyleSheet(self._INPUT_STYLE)
         self._find_input.textChanged.connect(self._update_preview)
         rp_layout.addWidget(self._find_input)
@@ -106,7 +112,7 @@ class BatchRenameDialog(QtWidgets.QDialog):
         rp_layout.itemAt(1).widget().setStyleSheet("color: #909090; font-size: 14px;")
 
         self._replace_input = QtWidgets.QLineEdit()
-        self._replace_input.setPlaceholderText("替换为...")
+        self._replace_input.setPlaceholderText(t("batch_rename.replace_placeholder"))
         self._replace_input.setStyleSheet(self._INPUT_STYLE)
         self._replace_input.textChanged.connect(self._update_preview)
         rp_layout.addWidget(self._replace_input)
@@ -117,7 +123,7 @@ class BatchRenameDialog(QtWidgets.QDialog):
         layout.addWidget(self._input_widget)
 
         # ── 预览列表 ──
-        layout.addWidget(self._make_label("预览:"))
+        layout.addWidget(self._make_label(t("batch_rename.preview_label")))
         self._preview_list = QtWidgets.QListWidget()
         self._preview_list.setStyleSheet("""
             QListWidget {
@@ -135,11 +141,11 @@ class BatchRenameDialog(QtWidgets.QDialog):
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
 
-        cancel_btn = QtWidgets.QPushButton("取消")
+        cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         cancel_btn.setStyleSheet(self._BTN_STYLE)
         cancel_btn.clicked.connect(self.reject)
 
-        self._ok_btn = QtWidgets.QPushButton("执行重命名")
+        self._ok_btn = QtWidgets.QPushButton(t("batch_rename.action"))
         self._ok_btn.setStyleSheet(self._OK_BTN_STYLE)
         self._ok_btn.clicked.connect(self.accept)
 
@@ -235,7 +241,7 @@ class BatchRenameDialog(QtWidgets.QDialog):
             if is_changed:
                 changed_count += 1
             if old_name == new_name:
-                item_text = f"  {old_name}  (不变)"
+                item_text = f"  {old_name}  ({t('batch_rename.unchanged')})"
             else:
                 item_text = f"  {old_name}  →  {new_name}"
             item = QtWidgets.QListWidgetItem(item_text)
@@ -245,7 +251,7 @@ class BatchRenameDialog(QtWidgets.QDialog):
                 item.setForeground(QtGui.QColor("#888888"))
             self._preview_list.addItem(item)
 
-        self._ok_btn.setText(f"执行重命名 ({changed_count}/{len(self._materials)})")
+        self._ok_btn.setText(t("batch_rename.action_with_count", changed=changed_count, total=len(self._materials)))
         self._ok_btn.setEnabled(changed_count > 0)
 
     def get_rename_results(self):

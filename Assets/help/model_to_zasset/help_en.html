@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Model Asset to zasset Tool - User Help</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #ffffff; color: #222; line-height: 1.8;
+  display: flex; justify-content: center;
+}
+.wrapper { display: flex; max-width: 1080px; width: 100%; }
+.sidebar {
+  width: 220px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #f5f5f5; padding: 24px 16px; flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+.sidebar h2 { font-size: 13px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; border: none; padding: 0; }
+.sidebar a { display: block; padding: 4px 8px; color: #555; font-size: 13px; border-radius: 4px; text-decoration: none; }
+.sidebar a:hover { background: #e0e0e0; color: #000; }
+.sidebar a.sub { padding-left: 28px; font-size: 12px; color: #888; }
+.content { flex: 1; padding: 24px 40px; max-width: 800px; min-width: 0; }
+h1 { font-size: 28px; color: #c0392b; border-bottom: 2px solid #c0392b33; padding-bottom: 12px; margin-bottom: 24px; }
+h2 { font-size: 20px; color: #e67e22; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #e67e22; }
+h3 { font-size: 17px; color: #2980b9; margin: 20px 0 8px; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0 8px 24px; }
+li { margin: 4px 0; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c0392b; border: 1px solid #e0e0e0; }
+pre { background: #f8f8f8; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0; border: 1px solid #e0e0e0; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #f0f0f0; color: #e67e22; font-size: 13px; }
+td { background: #fff; font-size: 13px; }
+img { max-width: 100%; border-radius: 8px; margin: 12px 0; border: 1px solid #ddd; }
+.note { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e74c3c; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.step { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; }
+.badge-red { background: #fdecea; color: #e74c3c; }
+.badge-orange { background: #fef5e7; color: #e67e22; }
+.badge-blue { background: #eaf2f8; color: #2980b9; }
+.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<div class="sidebar">
+  <h2>Contents</h2>
+  <a href="#overview">1. Tool Overview</a>
+  <a href="#formats">2. Supported Model Formats</a>
+  <a href="#ui">3. Interface</a>
+  <a class="sub" href="#ui-input">3.1 Input Settings</a>
+  <a class="sub" href="#ui-output">3.2 Output Settings</a>
+  <a class="sub" href="#ui-options">3.3 Conversion Options</a>
+  <a class="sub" href="#ui-routing">3.4 File Routing</a>
+  <a class="sub" href="#ui-meta">3.5 Metadata Source Configuration</a>
+  <a class="sub" href="#ui-preview">3.6 Model Preview</a>
+  <a href="#usage">4. Workflow</a>
+  <a href="#naming">5. Asset Naming Rules</a>
+  <a href="#subfolders">6. Subfolder Content Inclusion</a>
+  <a href="#deps">7. Dependency File Collection</a>
+  <a href="#metadata">8. Using Existing Metadata</a>
+  <a href="#output">9. Output Format Structure</a>
+  <a href="#config">10. Configuration File</a>
+  <a href="#faq">11. FAQ</a>
+  <a href="#install">12. Dependency Installation</a>
+</div>
+
+<div class="content">
+
+<h1>Model Asset to zasset Tool - User Help</h1>
+
+<h2 id="overview">1. Tool Overview</h2>
+<p>This tool converts various 3D model formats (ma, mb, obj, usd, abc, fbx, etc.) into the unified .zasset asset format, making asset management and quick access easy.</p>
+<ul>
+  <li>Merges <strong>multiple files of the same name in different formats</strong> into a single asset</li>
+  <li>Automatically collects dependency files (textures, materials, etc.)</li>
+  <li>Reads metadata from existing asset management tools (e.g. Zoo Tools json files)</li>
+  <li>Preserves source filenames without modification</li>
+  <li>Allows custom target formats</li>
+  <li>Recursively searches deep directories for model files</li>
+  <li>Supports including the contents of subfolders such as ass/ and textures/</li>
+</ul>
+
+<h2 id="formats">2. Supported Model Formats</h2>
+<table>
+  <tr><th>Format</th><th>Extension</th><th>Description</th></tr>
+  <tr><td>Maya ASCII</td><td>.ma</td><td>Maya text-format scene file</td></tr>
+  <tr><td>Maya Binary</td><td>.mb</td><td>Maya binary-format scene file</td></tr>
+  <tr><td>USD</td><td>.usd, .usda, .usdc</td><td>Universal Scene Description format</td></tr>
+  <tr><td>Alembic</td><td>.abc</td><td>Animation cache format</td></tr>
+  <tr><td>FBX</td><td>.fbx</td><td>Autodesk interchange format</td></tr>
+  <tr><td>OBJ</td><td>.obj</td><td>Wavefront geometry format</td></tr>
+  <tr><td>Arnold Proxy</td><td>.ass</td><td>Arnold renderer proxy file</td></tr>
+</table>
+<div class="note"><strong>Default priority</strong>: ma &gt; mb &gt; usd &gt; usda &gt; usdc &gt; abc &gt; fbx &gt; obj &gt; ass</div>
+
+<h2 id="ui">3. Interface</h2>
+
+<h3 id="ui-input">3.1 Input Settings</h3>
+<p><strong>Model folder</strong>: Select the folder containing the model files. The tool automatically scans them for model files.</p>
+
+<h3 id="ui-output">3.2 Output Settings</h3>
+<p><strong>Output location</strong>: Choose where the converted zasset files are stored. If not set, they are output to the category folder currently selected in the asset library.</p>
+
+<h3 id="ui-options">3.3 Conversion Options</h3>
+<ul>
+  <li><strong>Target formats</strong>: A comma-separated list of formats, e.g. <code>ma,usd,abc</code>. Leave blank to package all discovered formats.</li>
+  <li><strong>Include subfolders</strong>: When checked, scans and packages files from subdirectories such as ass/, textures/, and sourceimages/ into the zasset.</li>
+  <li><strong>Recursively search subfolders</strong>: When checked, scans deep directories for model files (useful when multiple assets are organized in subfolders).</li>
+  <li><strong>Include dependency files</strong>: When checked, automatically collects the textures and material files referenced by .ma files.</li>
+  <li><strong>Use existing metadata and thumbnails</strong>: When checked, reads metadata files such as json and existing thumbnails.</li>
+</ul>
+
+<h3 id="ui-routing">3.4 File Routing Configuration</h3>
+<p>Defines the internal directory structure of model and dependency files inside the zasset. You can add custom routing rules to specify the target folder for each extension.</p>
+<ul>
+  <li><strong>root</strong>: model files (ma, mb, obj, usd, abc, fbx, mcm, zmetal, mtl)</li>
+  <li><strong>textures</strong>: texture files (jpg, png, exr, tga, hdr, dds, etc.)</li>
+  <li><strong>ass</strong>: Arnold proxy files</li>
+</ul>
+
+<h3 id="ui-meta">3.5 Metadata Source Configuration</h3>
+<p>Configures thumbnail search paths and metadata sources for extracting information from the asset format of existing asset management tools (e.g. Zoo Tools).</p>
+<ul>
+  <li><strong>Thumbnail search path</strong>: supports dynamic path patterns with <code>{assetName}</code> variable substitution</li>
+  <li><strong>Metadata source</strong>: defines file path templates, formats, and field mapping rules</li>
+</ul>
+
+<h3 id="ui-preview">3.6 Model Preview</h3>
+<p>The right panel shows the list of scanned model assets and a preview of the subfolder contents. Select an asset to view its included file formats and sizes.</p>
+
+<h2 id="usage">4. Workflow</h2>
+
+<div class="step"><strong>Step 1: Prepare source files</strong>
+<p>Place the model files in the same folder. Files with the same name but different formats are treated as a single asset.</p>
+</div>
+
+<div class="step"><strong>Step 2: Select the input folder</strong>
+<p>Click "Browse... " to select the folder; the tool automatically scans the model files.</p>
+</div>
+
+<div class="step"><strong>Step 3: Configure options</strong>
+<p>Set options such as target formats, subfolder inclusion, and recursive search.</p>
+</div>
+
+<div class="step"><strong>Step 4: Click "Scan Models"</strong>
+<p>View the scan results and the preview of subfolder contents.</p>
+</div>
+
+<div class="step"><strong>Step 5: Click "Convert"</strong>
+<p>The tool automatically collects files, reads metadata, generates thumbnails, and builds the zasset.</p>
+</div>
+
+<h2 id="naming">5. Asset Naming Rules</h2>
+<p>The tool uses the <strong>filename (without extension)</strong> as the asset name and preserves the original filename unchanged.</p>
+<table>
+  <tr><th>Source file</th><th>Asset name</th></tr>
+  <tr><td>SciFi_Fighter_BLNN.ma</td><td>SciFi_Fighter_BLNN</td></tr>
+  <tr><td>subdir/character_v1.ma</td><td>character_v1 (displayed as subdir/character_v1 in recursive mode)</td></tr>
+</table>
+
+<div class="note"><strong>Multiple formats with the same name</strong>: aaa.ma, aaa.mb, aaa.obj, and aaa.usd are treated as the same asset, and all formats are packaged into the same zasset.</div>
+
+<h2 id="subfolders">6. Subfolder Content Inclusion</h2>
+<p>3D assets often store Arnold proxy caches, sequence textures, file dependencies, etc. in subfolders. The tool supports automatically scanning and including these files.</p>
+
+<h3>6.1 Default Subfolders</h3>
+<table>
+  <tr><th>Subfolder</th><th>Content</th></tr>
+  <tr><td><code>ass/</code></td><td>Arnold proxy files (.ass cache sequences)</td></tr>
+  <tr><td><code>textures/</code></td><td>Texture files</td></tr>
+  <tr><td><code>sourceimages/</code></td><td>Maya standard texture directory</td></tr>
+</table>
+<p>Subfolder contents are packaged into the zasset while preserving their original relative path structure:</p>
+<pre>pSphere1.zasset/
+├── meta.json
+├── pSphere1.ma
+├── ass/pSphere1_1001.ass    ← keeps the ass/ directory structure
+└── textures/dd_diffuse.png  ← keeps the textures/ directory structure</pre>
+
+<h2 id="deps">7. Dependency File Collection</h2>
+<p>The tool collects dependency files through the following methods:</p>
+<ol>
+  <li><strong>Parse .ma files</strong>: read the texture reference paths in Maya ASCII files</li>
+  <li><strong>Same-directory scan</strong>: search for .mtl, .mcm, and .zmetal files with the same name as the asset</li>
+  <li><strong>Standard path search</strong>: search for textures in the textures/ and sourceimages/ directories</li>
+</ol>
+<p>Supported texture formats: .jpg, .jpeg, .png, .tga, .tif, .tiff, .exr, .hdr, .bmp, .tx, .dds</p>
+<p>The tool automatically creates a <code>texture_map</code> field recording the mapping from the original path to the internal zasset path:</p>
+<pre>"texture_map": {
+    "C:/Projects/textures/my_diffuse.jpg": "textures/my_diffuse.jpg"
+}</pre>
+
+<h2 id="metadata">8. Using Existing Metadata</h2>
+<h3>8.1 Zoo Tools Asset Format</h3>
+<p>Automatically reads metadata from the following paths:</p>
+<ul>
+  <li><code>{assetName}_Dependencies/{assetName}.json</code></li>
+  <li><code>{assetName}_ma_Dependencies/{assetName}.json</code></li>
+</ul>
+<h3>8.2 Field Mapping</h3>
+<table>
+  <tr><th>Source field</th><th>Target field</th><th>Description</th></tr>
+  <tr><td>description</td><td>description</td><td>Asset description</td></tr>
+  <tr><td>tags</td><td>tags</td><td>Tag list (comma-separated)</td></tr>
+  <tr><td>creators</td><td>author</td><td>Author information</td></tr>
+  <tr><td>version</td><td>version</td><td>Version number</td></tr>
+  <tr><td>websites</td><td>source_url</td><td>Source URL</td></tr>
+</table>
+
+<h2 id="output">9. Output Format Structure</h2>
+<pre>my_model.zasset/
+├── meta.json              # metadata file
+├── my_model.ma            # Maya ASCII format
+├── my_model.mb            # Maya Binary format
+├── thumb.sicon            # thumbnail
+├── ass/                   # Arnold proxy files (if any)
+│   └── my_model_*.ass
+└── textures/              # texture folder (if any)
+    └── my_diffuse.jpg</pre>
+
+<h2 id="config">10. Configuration File</h2>
+<p>The tool uses the <code>model_mapping.json</code> configuration file, located in the same directory as the tool:</p>
+<ul>
+  <li><strong>category_mapping</strong>: automatically infers the category based on keywords in the asset name</li>
+  <li><strong>file_routing</strong>: defines the target directory for different file types</li>
+  <li><strong>thumbnail_search_paths</strong>: thumbnail search path pattern</li>
+  <li><strong>metadata_sources</strong>: metadata source file path templates and field mappings</li>
+  <li><strong>format_priority</strong>: format priority order</li>
+</ul>
+
+<h2 id="faq">11. FAQ</h2>
+
+<h3>Q: Why is my model not recognized?</h3>
+<p>A: Make sure the file extension is in the supported list (.ma, .mb, .obj, .usd, .usda, .usdc, .abc, .fbx, .ass).</p>
+
+<h3>Q: Textures are not being collected correctly?</h3>
+<p>A: Confirm that the .ma file contains texture reference paths, that the texture files are in the same directory or in textures/, and that "Include dependency files" is checked.</p>
+
+<h3>Q: Subfolder contents are not being included?</h3>
+<p>A: Make sure "Include subfolders" is checked, and that the subfolder names are in the list (default: ass, textures, sourceimages).</p>
+
+<h3>Q: How do I convert only specific formats?</h3>
+<p>A: Enter a comma-separated list of formats in the "Target formats" input box, e.g. <code>ma,usd,abc</code>.</p>
+
+<h3>Q: Metadata is not being read?</h3>
+<p>A: Confirm that the json file exists in the <code>*_Dependencies/</code> or <code>*_ma_Dependencies/</code> directory.</p>
+
+<h2 id="install">12. Dependency Installation</h2>
+<p>The following Python libraries are required:</p>
+<ul>
+  <li>PIL/Pillow (thumbnail generation)</li>
+  <li>PySide2/PySide6 (UI)</li>
+</ul>
+<p>Installation:</p>
+<pre># System terminal
+pip install Pillow
+
+# Maya environment
+"C:\Program Files\Autodesk\Maya2025\bin\mayapy.exe" -m pip install Pillow</pre>
+
+<div class="footer">
+  <p>Model Asset to zasset Tool v1.0 | Squirrel Asset Manager</p>
+</div>
+
+</div>
+</div>
+</body>
+</html>

@@ -10,6 +10,12 @@
 from ..utils.maya_utils import get_qt_modules
 from ..utils.settings import SettingsManager, apply_font_size_to_widget
 
+try:
+    from ..utils.i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
 
 
@@ -149,7 +155,7 @@ class BatchTagDialog(QtWidgets.QDialog):
         # 删除模式：红色标记待删的标签
         self._pending_remove_tags = set()
 
-        self.setWindowTitle(f"批量标签管理 ({len(self._materials)} 个资产)")
+        self.setWindowTitle(t("dialog.batch_tag.title", n=len(self._materials)))
         self.setMinimumWidth(420)
         self.setStyleSheet("background-color: #2a2a2a;")
         self._setup_ui()
@@ -169,9 +175,9 @@ class BatchTagDialog(QtWidgets.QDialog):
 
         self._mode_group = QtWidgets.QButtonGroup(self)
 
-        self._rb_add = QtWidgets.QRadioButton("添加标签")
+        self._rb_add = QtWidgets.QRadioButton(t("batch_tag.add_tags"))
         self._rb_add.setChecked(True); self._rb_add.setStyleSheet(radio_style)
-        self._rb_remove = QtWidgets.QRadioButton("删除标签")
+        self._rb_remove = QtWidgets.QRadioButton(t("batch_tag.remove_tags"))
         self._rb_remove.setStyleSheet(radio_style)
 
         self._mode_group.addButton(self._rb_add, self.MODE_ADD)
@@ -196,25 +202,25 @@ class BatchTagDialog(QtWidgets.QDialog):
 
         # 手动输入
         self._tag_input = QtWidgets.QLineEdit()
-        self._tag_input.setPlaceholderText("手动输入标签，逗号分隔...")
+        self._tag_input.setPlaceholderText(t("batch_tag.input_placeholder"))
         self._tag_input.setStyleSheet("QLineEdit { background:#1a1a1a; color:#e0e0e0; border:1px solid #4a4a4a; border-radius:4px; padding:5px 8px; font-size:12px; } QLineEdit:focus { border-color:#5294e2; }")
         self._tag_input.textChanged.connect(self._update_preview)
         add_layout.addWidget(self._tag_input)
 
         # 常用标签
-        add_layout.addWidget(self._make_label("常用标签（点击选中/取消）:"))
+        add_layout.addWidget(self._make_label(t("batch_tag.common_tags_label")))
         self._common_flow = FlowWidget()
         self._common_flow.setMaximumHeight(120)
         if self._common_tags:
             for tag in self._common_tags:
                 self._common_flow.flow.addWidget(_make_select_pill(tag))
         else:
-            add_layout.addWidget(self._make_label("（该分类暂无常用标签）"))
+            add_layout.addWidget(self._make_label(t("batch_tag.no_common_tags")))
         add_layout.addWidget(self._common_flow)
 
         # 常用标签全选/取消
         sel_row = QtWidgets.QHBoxLayout()
-        for txt, chk in [("全选", True), ("取消", False)]:
+        for txt, chk in [(t("common.select_all"), True), (t("btn.deselect_all"), False)]:
             b = QtWidgets.QPushButton(txt)
             b.setStyleSheet("QPushButton { background:#333; color:#b0b0b0; border:none; padding:3px 12px; font-size:11px; border-radius:3px; } QPushButton:hover { background:#4a4a4a; }")
             b.clicked.connect(lambda _, c=chk: self._set_common_all(c))
@@ -232,7 +238,7 @@ class BatchTagDialog(QtWidgets.QDialog):
         remove_layout.setContentsMargins(0, 0, 0, 0)
         remove_layout.setSpacing(6)
 
-        remove_layout.addWidget(self._make_label("点击标签切换红色待删（执行生效）:"))
+        remove_layout.addWidget(self._make_label(t("batch_tag.remove_hint")))
 
         self._existing_flow = FlowWidget()
         self._existing_flow.setMaximumHeight(150)
@@ -241,7 +247,7 @@ class BatchTagDialog(QtWidgets.QDialog):
                 self._existing_flow.flow.addWidget(
                     _make_remove_pill(tag, self._on_toggle_pending))
         else:
-            remove_layout.addWidget(self._make_label("（资产暂无可删除的标签）"))
+            remove_layout.addWidget(self._make_label(t("batch_tag.no_removable_tags")))
         remove_layout.addWidget(self._existing_flow)
 
         self._remove_widget.setVisible(False)
@@ -250,7 +256,7 @@ class BatchTagDialog(QtWidgets.QDialog):
         # ══════════════════════════════════════════
         # 预览
         # ══════════════════════════════════════════
-        layout.addWidget(self._make_label("操作预览:"))
+        layout.addWidget(self._make_label(t("batch_tag.preview_label")))
         self._preview_label = QtWidgets.QLabel()
         self._preview_label.setStyleSheet("background:#1a1a1a; color:#b0b0b0; border:1px solid #3a3a3a; border-radius:4px; padding:8px; font-size:12px;")
         self._preview_label.setWordWrap(True)
@@ -263,10 +269,10 @@ class BatchTagDialog(QtWidgets.QDialog):
         # ══════════════════════════════════════════
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.addStretch()
-        cancel_btn = QtWidgets.QPushButton("取消")
+        cancel_btn = QtWidgets.QPushButton(t("common.cancel"))
         cancel_btn.setStyleSheet("QPushButton { background:#3a3a3a; color:#d0d0d0; border:none; padding:7px 18px; font-size:13px; border-radius:4px; } QPushButton:hover { background:#4a4a4a; }")
         cancel_btn.clicked.connect(self.reject)
-        self._ok_btn = QtWidgets.QPushButton("执行")
+        self._ok_btn = QtWidgets.QPushButton(t("common.apply"))
         self._ok_btn.setStyleSheet("QPushButton { background:#5294e2; color:#fff; border:none; padding:7px 18px; font-size:13px; border-radius:4px; } QPushButton:hover { background:#6aa8f0; } QPushButton:disabled { background:#3a3a3a; color:#666; }")
         self._ok_btn.clicked.connect(self.accept)
         btn_row.addWidget(cancel_btn); btn_row.addWidget(self._ok_btn)
@@ -289,7 +295,7 @@ class BatchTagDialog(QtWidgets.QDialog):
             self._existing_flow.flow.addWidget(
                 _make_remove_pill(tag, self._on_toggle_pending, is_pending))
         else:
-            lbl = QtWidgets.QLabel("（所有标签已处理）")
+            lbl = QtWidgets.QLabel(t("batch_tag.all_tags_processed"))
             lbl.setStyleSheet("color:#a0a0a0; font-size:11px; padding:4px 0;")
             self._existing_flow.flow.addWidget(lbl)
         self._update_preview()
@@ -337,17 +343,17 @@ class BatchTagDialog(QtWidgets.QDialog):
         if mode == self.MODE_ADD:
             tags = self._get_typed_tags() + self._get_common_checked()
             self._preview_label.setText(
-                f"将影响 {count} 个资产：追加 {len(tags)} 个标签" if tags
-                else f"将影响 {count} 个资产：勾选或输入要添加的标签"
+                t("batch_tag.preview_add_count", count=count, n=len(tags)) if tags
+                else t("batch_tag.preview_add_hint", count=count)
             )
         else:
             pending = len(self._pending_remove_tags)
             if pending:
                 self._preview_label.setText(
-                    f"将影响 {count} 个资产：删除 {pending} 个标签（红色标记）")
+                    t("batch_tag.preview_remove_count", count=count, n=pending))
             else:
                 self._preview_label.setText(
-                    f"将影响 {count} 个资产：点击标签切换红色标记待删，执行生效")
+                    t("batch_tag.preview_remove_hint", count=count))
 
     # ── 获取结果 ──
 
