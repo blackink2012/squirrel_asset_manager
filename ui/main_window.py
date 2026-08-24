@@ -2098,7 +2098,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 root_material_names = data.get("root_materials", [])
 
                 from ..integration.import_executor import apply_zmetal_as_material
-                if apply_zmetal_as_material(json_path):
+                ok, _ = apply_zmetal_as_material(json_path)
+                if ok:
                     if not saved_sel:
                         print(f"[MaterialLibrary] 材质已创建（无选中物体，未赋予）")
                         return
@@ -3042,6 +3043,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
     def _on_drag_dropped(self, material_ids, global_x, global_y):
         """拖拽结束后触发 — 有选中物体则赋予材质，否则仅创建"""
         import maya.cmds as cmds
+        print(f"[DragDrop] 收到拖拽: {material_ids} @ ({global_x}, {global_y})")
 
         try:
             mgr = self._active_mgr
@@ -3073,7 +3075,17 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             if sub_lib in ("materials", "textures") and json_path.endswith(".zasset"):
                 saved_sel = cmds.ls(sl=True, long=True) or []
                 from ..integration.import_executor import apply_zmetal_as_material
-                apply_zmetal_as_material(json_path)
+                ok, name_map = apply_zmetal_as_material(json_path)
+                if not saved_sel and ok and name_map:
+                    # 无选中物体：选中新建的材质节点（过滤出 shader 类型）
+                    mat_set = set(cmds.ls(materials=True) or [])
+                    new_mats = sorted(v for v in name_map.values()
+                                      if v and cmds.objExists(v) and v in mat_set)
+                    if new_mats:
+                        try:
+                            cmds.select(new_mats, replace=True)
+                        except Exception:
+                            pass
                 if saved_sel:
                     self._assign_created_material(json_path, saved_sel)
                     cmds.select(saved_sel, replace=True)
@@ -3130,8 +3142,31 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         fmt = preset_format or self._choose_format_dialog(formats)
         if not fmt:
             return ""
-        import_asset(json_path, fmt)
+        self._import_asset_select_materials(json_path, fmt)
         return fmt
+
+    def _import_asset_select_materials(self, zasset_path, fmt):
+        """导入资产到 Maya，导入成功后选中新建的材质（ZMETAL/MA 通用）。
+
+        判断新建材质的方法：导入前后对 cmds.ls(materials=True) 做差集，
+        无需各导入器返回节点名，对重命名/命名空间合并都适用。
+        """
+        import maya.cmds as cmds
+        from ..integration.import_executor import import_asset
+        before_mats = set(cmds.ls(materials=True) or [])
+        try:
+            result = import_asset(zasset_path, fmt)
+        except Exception as e:
+            print(f"[Import] 导入失败 {zasset_path} / {fmt}: {e}")
+            return False
+        new_mats = sorted(set(cmds.ls(materials=True) or []) - before_mats)
+        if new_mats:
+            try:
+                cmds.select(new_mats, replace=True)
+                print(f"[Import] 已选中新建材质: {new_mats}")
+            except Exception:
+                pass
+        return result
 
     def _update_preview_thumbnail(self, mat, pixmap):
         """直接更新预览面板的缩略图，绕过 _draw_preview 的全量重建。"""
@@ -3195,10 +3230,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             return []
 
     def _on_asset_import_into_maya(self, zasset_path, format_name):
-        """右键 → 导入 → 将资产导入到 Maya 场景"""
-        from ..integration.import_executor import import_asset
+        """右键 → 导入 → 将资产导入到 Maya 场景（成功后选中新建材质）"""
         print(f"[Import] 导入到场景: {os.path.basename(zasset_path)} / {format_name}")
-        import_asset(zasset_path, format_name)
+        self._import_asset_select_materials(zasset_path, format_name)
 
     def _on_add_reference(self, zasset_path, format_name):
         """右键 → 添加引用 → 将资产以 Reference 方式引用到 Maya 场景"""

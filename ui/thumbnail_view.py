@@ -220,17 +220,18 @@ class MaterialDragLabel(QtWidgets.QLabel):
         if pix:
             drag.setPixmap(pix.scaled(80, 80, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation))
             drag.setHotSpot(QtCore.QPoint(40, 40))
-        result = qt_exec(drag, QtCore.Qt.DropAction.CopyAction)
-        # 仅当拖拽未被插件内部目标接受、且鼠标落在插件窗口之外时，才视为拖到 Maya 视口
-        if grid and selected and result == QtCore.Qt.DropAction.IgnoreAction:
-            cursor_global = QtGui.QCursor.pos()
-            top_window = grid.window()
-            outside = (top_window is None
-                       or not top_window.frameGeometry().contains(cursor_global))
-            if outside:
-                grid.dragDroppedOnViewport.emit(
-                    [m.get("id", "") for m in selected],
-                    cursor_global.x(), cursor_global.y())
+        qt_exec(drag, QtCore.Qt.DropAction.CopyAction)
+        # 自定义 mime（material ids）只有资产库自己能处理：只要鼠标落在插件窗口之外，
+        # 无论 Maya 视口/面板返回什么 DropAction（可能吞掉 drop 返回非 IgnoreAction），
+        # 都视为「拖到 Maya」交给资产库导入。插件窗口内部的拖拽不在此列。
+        cursor_global = QtGui.QCursor.pos()
+        top_window = grid.window() if grid else None
+        outside = (top_window is None
+                   or not top_window.frameGeometry().contains(cursor_global))
+        if grid and selected and outside:
+            grid.dragDroppedOnViewport.emit(
+                [m.get("id", "") for m in selected],
+                cursor_global.x(), cursor_global.y())
 
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.MouseButton.LeftButton:

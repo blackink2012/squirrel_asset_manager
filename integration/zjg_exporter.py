@@ -2658,6 +2658,9 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
         cmds.warning(t("zjg.json_file_not_found", path=json_path))
         return False
 
+    # 记录导入前的材质集合，用于导入后差集判断新建材质并选中
+    _before_mats = set(cmds.ls(materials=True) or [])
+
     # 读取JSON文件
     try:
         with open(json_path, 'r', encoding='utf-8') as f:
@@ -2952,7 +2955,16 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
                 face_count = _assign_face_materials(converted_face_assignments, user_ns, user_prefix, user_suffix, old_path_prefix, new_path_prefix, old_path_suffix, new_path_suffix, fuzzy_match)
                 face_success_count += face_count
 
-    cmds.select(clear=True)
+    # 选中新建的材质（差集判断；存在指定失败的模型时优先选中失败模型）
+    _new_mats = sorted(set(cmds.ls(materials=True) or []) - _before_mats)
+    if _new_mats and not failed_objects:
+        try:
+            cmds.select(_new_mats, replace=True)
+            print(f"[MA+JSON导入] 已选中新建材质: {_new_mats}")
+        except Exception:
+            cmds.select(clear=True)
+    else:
+        cmds.select(clear=True)
     print(f"导入完成: {success_count} 个物体指定成功, {skip_count} 个物体未找到匹配, {face_success_count} 个面级材质指定成功")
     if failed_objects:
         print(f"[警告] {len(failed_objects)} 个模型材质指定失败")
