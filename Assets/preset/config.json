@@ -7,8 +7,7 @@
         "textures": "贴图",
         "scenes": "场景",
         "hdr": "HDR",
-        "ani": "动态",
-        "fgdfgdfh": "测试啊"
+        "ani": "动态"
     },
     "default_sub_categories": {
         "materials": [
@@ -236,8 +235,7 @@
                 "moting",
                 "包装动画"
             ]
-        ],
-        "fgdfgdfh": []
+        ]
     },
     "asset_file_extensions": [
         ".zasset",

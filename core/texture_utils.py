@@ -520,6 +520,26 @@ def collect_all_texture_files(
         except Exception:
             pass
 
+        # ── 3b. 材质 → 下游 shadingEngine → displacementShader（置换贴图）──
+        # 置换链在材质的下游：material → shadingEngine.displacementShader →
+        # displacement 节点 → file。纯上游遍历到不了 shadingEngine，
+        # 需从材质节点显式向下游查找（对照第 4 步的 shadingEngine 分支）。
+        try:
+            ses = cmds.listConnections(
+                node, source=False, destination=True, type='shadingEngine'
+            ) or []
+            for se_node in ses:
+                if se_node in visited:
+                    continue
+                disp_conns = cmds.listConnections(
+                    f"{se_node}.displacementShader",
+                    source=True, destination=False,
+                ) or []
+                for disp_node in disp_conns:
+                    _traverse(disp_node, depth + 1)
+        except Exception:
+            pass
+
         # ── 4. 特殊：shadingEngine → displacementShader ──
         if ntype == 'shadingEngine':
             try:

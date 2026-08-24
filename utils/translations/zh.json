@@ -509,7 +509,7 @@
   "msg.import_zasset_skipped": "\n跳过 {n} 个（复制失败）。",
   "msg.invalid_path": "路径无效",
   "msg.keep_one_library": "至少保留一个资产库。",
-  "msg.language_restart": "界面语言已切换。请重启插件以完全生效。",
+  "msg.language_restart": "设置已保存。请重启插件以完全生效。",
   "msg.library_path_missing": "资产库路径不存在: {path}",
   "msg.load_library_first": "请先加载资产库",
   "msg.mock_mode": "当前为 Mock 模式。\n请在设置中配置材质库路径后再导入。",

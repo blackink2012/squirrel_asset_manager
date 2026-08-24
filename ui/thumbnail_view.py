@@ -25,6 +25,40 @@ class _ThumbnailSignal(QtCore.QObject):
     loaded = QtCore.Signal(str, object)  # (material_id, bytes or None)
 
 
+# 渲染器 → 环境光模板关键字映射（模板文件名需包含对应关键字）
+_DOME_TEMPLATE_KEYWORDS = {
+    "arnold": "aiskydomelight",
+    "redshift": "rsdomelight",
+    "vray": "vraylightdome",
+}
+
+
+def _pick_dome_template(ma_files, preset_option=""):
+    """按当前 Maya 渲染器选择环境光模板：
+    1) 渲染器匹配的模板（如 arnold → aiSkyDomeLight.ma）
+    2) 预设 option 指定的模板
+    3) 目录中第一个模板
+    """
+    renderer = ""
+    try:
+        import maya.cmds as cmds
+        if cmds.objExists('defaultRenderGlobals'):
+            renderer = (cmds.getAttr('defaultRenderGlobals.currentRenderer') or "").lower()
+    except Exception:
+        renderer = ""
+    # 当前渲染器 → 匹配模板
+    for key, keyword in _DOME_TEMPLATE_KEYWORDS.items():
+        if key in renderer:
+            for f in ma_files:
+                if keyword in f.lower():
+                    return f
+            break
+    # 回退：预设 option → 第一个模板
+    if preset_option in ma_files:
+        return preset_option
+    return ma_files[0]
+
+
 def _get_sub_style(font_size=13):
     return f"""
     QMenu {{ background-color:#2a2a2a; color:#d0d0d0;
@@ -1714,8 +1748,9 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                 ma_files = sorted(
                     [f for f in os.listdir(preset_dir) if f.lower().endswith('.ma')])
                 if ma_files:
-                    # 使用保存的选项文件名，找不到则用第一个
-                    target = option if option in ma_files else ma_files[0]
+                    # 按当前渲染器自动选模板（arnold/redshift/vray），
+                    # 无法识别时回退到预设 option，再回退到第一个模板
+                    target = _pick_dome_template(ma_files, option)
                     preset_path = os.path.join(preset_dir, target)
                     self.createDomeLightRequested.emit(preset_path, mat)
 

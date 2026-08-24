@@ -43,6 +43,40 @@ def _safe_asset_name(name: str) -> str:
     except Exception:
         return (name or "").replace(':', '_').replace('/', '_')
 
+
+def _assign_shader_to_objects(shader_name, objects):
+    """将材质指定给物体 — 直接 sets(forceElement) 指定到其渲染组。
+
+    替代 cmds.hyperShade(assign=)：导入重建的材质/渲染组（zmetal 序列化的 SG）
+    会让 hyperShade 随机失效（物体停留在 initialShadingGroup → 视口显示绿色）。
+    直接按 {材质名}SG 找到/创建 renderable 渲染组并 sets 指定，稳定可靠。
+    """
+    import maya.cmds as cmds
+    if not shader_name or not cmds.objExists(shader_name):
+        return False
+    mat_base = shader_name.split(":")[-1]
+    sg_name = f"{mat_base}SG"
+    if cmds.objExists(sg_name) and cmds.nodeType(sg_name) == 'shadingEngine':
+        target_se = sg_name
+    else:
+        if cmds.objExists(sg_name):
+            cmds.delete(sg_name)
+        target_se = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=sg_name)
+    try:
+        cmds.connectAttr(f"{shader_name}.outColor", f"{target_se}.surfaceShader", force=True)
+    except Exception:
+        pass
+    assigned = False
+    for obj in objects:
+        try:
+            shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
+            for shp in shapes:
+                cmds.sets(shp, forceElement=target_se)
+                assigned = True
+        except Exception:
+            pass
+    return assigned
+
 try:
     from ..utils.settings import SettingsManager
 except ImportError:
@@ -1553,6 +1587,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             "name_cn": cat_dict["name_cn"],
             "type": asset_type,
         })
+        # 目录结构已变更：失效索引缓存，避免新空分类下次 reload/重启后被旧缓存吞掉
+        mgr.invalidate_index_cache()
         self._refresh_category_tree()
         # 创建后自动选中新文件夹
         self._category_tree._select_by_id(cat_id)
@@ -1579,6 +1615,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             "name_cn": name_cn,
             "type": cat_type,
         })
+        # 目录结构已变更：失效索引缓存，避免新空分类下次 reload/重启后被旧缓存吞掉
+        mgr.invalidate_index_cache()
         self._refresh_category_tree()
         self._category_tree._select_by_id(cat_id)
         composite = join_cat_id(root_lib, cat_id)
@@ -1656,6 +1694,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 if mat.category == cat_id:
                     mat.category = "custom"
 
+        # 目录结构已变更：失效索引缓存，避免空分类被删后从缓存 category_tree 复活
+        mgr.invalidate_index_cache()
         mgr.reload()
         self._refresh_category_tree()
 
@@ -1846,6 +1886,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         if src != dst and not os.path.exists(dst):
             import shutil
             shutil.move(src, dst)
+        # 目录结构已变更：失效索引缓存，避免空分类移动后从缓存 category_tree 复活
+        self._material_manager.invalidate_index_cache()
         self._material_manager.reload()
         self._refresh_category_tree()
         self._update_status_bar()
@@ -2065,20 +2107,18 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                         if cmds.objExists(mat_name):
                             ntype = cmds.nodeType(mat_name)
                             if ntype not in ("place2dTexture", "file", "bump2d", "layeredTexture"):
-                                cmds.select(saved_sel, replace=True)
-                                cmds.hyperShade(assign=mat_name)
-                                print(f"[MaterialLibrary] 赋予材质 {mat_name} ({ntype}) → {len(saved_sel)} 个物体")
-                                assigned = True
-                                break
+                                if _assign_shader_to_objects(mat_name, saved_sel):
+                                    print(f"[MaterialLibrary] 赋予材质 {mat_name} ({ntype}) → {len(saved_sel)} 个物体")
+                                    assigned = True
+                                    break
                     if not assigned:
                         after = cmds.ls(type="shadingDependNode")
                         for n in reversed(after):
                             ntype = cmds.nodeType(n)
                             if ntype not in ("place2dTexture", "file", "bump2d", "layeredTexture"):
-                                cmds.select(saved_sel, replace=True)
-                                cmds.hyperShade(assign=n)
-                                print(f"[MaterialLibrary] 赋予材质(回退) {n} ({ntype}) → {len(saved_sel)} 个物体")
-                                break
+                                if _assign_shader_to_objects(n, saved_sel):
+                                    print(f"[MaterialLibrary] 赋予材质(回退) {n} ({ntype}) → {len(saved_sel)} 个物体")
+                                    break
                 else:
                     print(f"[MaterialLibrary] 材质创建失败")
             else:
@@ -3132,8 +3172,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         for rn in root_names:
             if cmds.objExists(rn):
-                cmds.select(target_objects, replace=True)
-                cmds.hyperShade(assign=rn)
+                _assign_shader_to_objects(rn, target_objects)
                 print(f"[DragDrop] 赋予材质 {rn} → {target_objects[0]}")
                 return
 
@@ -3141,8 +3180,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         for n in reversed(after):
             ntype = cmds.nodeType(n)
             if ntype not in ("place2dTexture", "file", "bump2d", "layeredTexture"):
-                cmds.select(target_objects, replace=True)
-                cmds.hyperShade(assign=n)
+                _assign_shader_to_objects(n, target_objects)
                 print(f"[DragDrop] 赋予材质(回退) {n} ({ntype}) → {target_objects[0]}")
                 return
 

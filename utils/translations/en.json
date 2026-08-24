@@ -509,7 +509,7 @@
   "msg.import_zasset_skipped": "\nSkipped {n} (copy failed).",
   "msg.invalid_path": "Invalid Path",
   "msg.keep_one_library": "At least one asset library must be kept.",
-  "msg.language_restart": "Interface language changed. Restart the plugin for full effect.",
+  "msg.language_restart": "Settings saved. Please restart the plugin for full effect.",
   "msg.library_path_missing": "Library path does not exist: {path}",
   "msg.load_library_first": "Please load an asset library first",
   "msg.mock_mode": "Currently in Mock mode.\nConfigure the material library path in Settings before importing.",

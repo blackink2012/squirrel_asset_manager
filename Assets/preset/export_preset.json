@@ -23,7 +23,7 @@
         "thumb_source": "screenshot"
     },
     "materials": {
-        "zmetal": false,
+        "zmetal": true,
         "zmetal_merge": false,
         "mcm": false,
         "mcm_min_count": 2,

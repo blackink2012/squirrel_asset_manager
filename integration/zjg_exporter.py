@@ -17,6 +17,12 @@ SKIP_ATTRS = {
     'message', 'caching', 'isHistoricallyInteresting',
     'nodeState', 'binaryPluginAttribute', 'separator',
 }
+# VP2 / GPU 硬件渲染内部属性：逐帧计算的缓存状态（硬件着色器指针、相机空间量等）。
+# 序列化回写会破坏材质硬件/Arnold 求值（Hypershade 预览纯绿、hyperShade 指定失效）。
+VP2_INTERNAL_ATTRS = {
+    'hardwareShader', 'pointCamera', 'triangleNormalCamera',
+    'primitiveId', 'instanceId', 'base', 'raySampler', 'frozen',
+}
 COMPOUND_CHILD_ENDS = ('R', 'G', 'B', 'A', 'X', 'Y', 'Z')
 DEFAULT_COLOR_SPACE = "ACEScg"
 
@@ -1263,12 +1269,13 @@ def _get_processable_attrs(node):
 
     filtered = set()
     for attr in all_attrs:
-        if attr in SKIP_ATTRS or attr.startswith('out') or '[' in attr or '.' in attr:
+        if attr in SKIP_ATTRS or attr in VP2_INTERNAL_ATTRS or attr.startswith('out') or '[' in attr or '.' in attr:
             continue
         is_child = False
         if len(attr) >= 2 and attr[-1] in COMPOUND_CHILD_ENDS:
             parent = attr[:-1]
-            if parent not in SKIP_ATTRS and not parent.startswith('out') and '.' not in parent:
+            if parent not in SKIP_ATTRS and parent not in VP2_INTERNAL_ATTRS \
+                    and not parent.startswith('out') and '.' not in parent:
                 filtered.add(parent)
                 is_child = True
         if not is_child:
@@ -1315,8 +1322,49 @@ def _get_attr_value(node, attr):
     return None
 
 
+# 场景全局/默认节点类型：导出时跳过，避免导入重建出重复的全局节点
+# （如 defaultColorMgtGlobals → colorManagementGlobals 被重建为 defaultColorMgtGlobals1）
+_SCENE_GLOBAL_TYPES = {
+    'colorManagementGlobals', 'renderGlobals', 'renderGlobalsList',
+    'renderLayerManager', 'renderLayer', 'renderSetupLayer',
+    'displayLayerManager', 'displayLayer', 'displayLayer',
+    'time', 'dynController', 'lightLinker', 'multilister',
+    'renderGlobalsSource', 'defaultLightList',
+}
+# 已知默认实例名（Maya 新建场景即存在，非 default 前缀）
+_SCENE_DEFAULT_NAMES = {
+    'time1', 'lambert1', 'standardSurface1', 'particleCloud1',
+    'initialShadingGroup', 'initialParticleSE',
+    'persp', 'top', 'front', 'side', 'lightLinker1',
+    'layerManager', 'defaultLayer', 'defaultRenderLayer',
+    'defaultObjectSet', 'defaultLightSet', 'defaultResolution',
+    'defaultRenderQuality', 'defaultFontList', 'defaultRenderGlobals',
+    'defaultColorMgtGlobals', 'defaultHardwareRenderGlobals',
+    'defaultHardwareRenderingGlobals', 'defaultBakeLayer',
+    'defaultBakeLayerManager', 'defaultBakeLayer1',
+}
+
+
+def _is_scene_global_node(node: str) -> bool:
+    """判断节点是否为 Maya 场景全局/默认节点（导出时跳过，导入时不应重建）。"""
+    try:
+        ntype = cmds.nodeType(node)
+    except Exception:
+        ntype = ""
+    if ntype in _SCENE_GLOBAL_TYPES:
+        return True
+    short = node.split(":")[-1].split("|")[-1]
+    if short.startswith("default"):
+        return True
+    return short in _SCENE_DEFAULT_NAMES
+
+
 def _serialize_node(node, nodes_dict):
     if node in nodes_dict:
+        return
+    # 场景全局节点不导出（避免导入时重建出重复的全局节点）
+    if _is_scene_global_node(node):
+        print(f"[zjg_exporter] 跳过场景全局节点: {node}")
         return
     try:
         node_type = cmds.nodeType(node)
@@ -1327,18 +1375,23 @@ def _serialize_node(node, nodes_dict):
     attrs_data = {}
 
     # ── 一次性获取所有上游连接（替代逐属性 listConnections）──
-    # listConnections(connections=True, plugs=True) 返回 (src_plug, dst_plug) 对
-    # 一次 API 调用替代 N 次（N = 属性数，通常 30~100）
+    # 注意：Maya 中 listConnections(connections=True, plugs=True) 返回的是
+    # 扁平列表 [node_plug, other_plug, node_plug, other_plug, ...]，不是 (src, dst) 元组对；
+    # 配合 source=True, destination=False 时，node 恒为 destination（连入连接），
+    # 每对为 (node_dst_plug, src_plug)。一次 API 调用替代 N 次（N = 属性数，通常 30~100）
     conn_map = {}  # {dest_parent_attr: (source_node, source_attr)}
     try:
         all_conns = cmds.listConnections(
-            node, source=True, destination=True,
+            node, source=True, destination=False,
             connections=True, plugs=True,
         ) or []
-        for src_plug, dst_plug in all_conns:
+        for i in range(0, len(all_conns) - 1, 2):
+            dst_plug, src_plug = all_conns[i], all_conns[i + 1]
+            if not dst_plug.startswith(node + '.'):
+                continue  # 防御：dst 侧必须是当前节点
             try:
+                dst_attr = dst_plug.rsplit('.', 1)[1]
                 src_node, src_attr = src_plug.rsplit('.', 1)
-                _, dst_attr = dst_plug.rsplit('.', 1)
             except Exception:
                 continue
             # 复合属性子通道（R/G/B/A/X/Y/Z）→ 映射到父属性
@@ -1362,6 +1415,11 @@ def _serialize_node(node, nodes_dict):
 
         if attr in conn_map:
             src_node, src_attr = conn_map[attr]
+            if _is_scene_global_node(src_node):
+                # 源是场景全局节点 → 不导出连接，退化为静态值（若有）
+                if val is not None:
+                    attrs_data[attr] = {'type': 'value', 'value': val}
+                continue
             _serialize_node(src_node, nodes_dict)
             attrs_data[attr] = {
                 'type': 'connection',
@@ -1374,6 +1432,25 @@ def _serialize_node(node, nodes_dict):
             attrs_data[attr] = {'type': 'value', 'value': val}
 
     nodes_dict[node] = {'node_type': node_type, 'attrs': attrs_data}
+
+    # ── 置换关联（不序列化 SE，避免导入的 SE 破坏 Maya 对材质的识别）──
+    # 置换链在材质下游：material → shadingEngine.displacementShader → displacement节点 → file。
+    # 只序列化置换节点及其上游网络，并把「材质 ↔ 置换节点」关联记入材质节点字段
+    # displacement_node；导入时由插件用原生 cmds.sets 创建 SE 并链接（hyperShade 可识别）。
+    try:
+        if cmds.getClassification(node_type, satisfies="shader"):
+            for se_node in (cmds.listConnections(
+                    node, source=False, destination=True, type='shadingEngine') or []):
+                disp_conns = cmds.listConnections(
+                    f"{se_node}.displacementShader", source=True, destination=False) or []
+                for disp_node in disp_conns:
+                    if disp_node == node:
+                        continue
+                    if disp_node not in nodes_dict:
+                        _serialize_node(disp_node, nodes_dict)
+                    nodes_dict[node]['displacement_node'] = disp_node
+    except Exception:
+        pass
 
 
 def _set_attr_safe(node, attr, value):
@@ -1975,11 +2052,32 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
                     except Exception:
                         pass
                     print(f"[Import] 灯光节点(回退): {new_node} (type={ntype})")
+            elif ntype == 'shadingEngine':
+                # 导入重建的 shadingEngine 会被 Maya 标记为异常节点：
+                # hyperShade 无法指定（物体留在 initialShadingGroup → 视口纯绿）、
+                # 材质预览失效。SE 由 hyperShade / 插件在指定材质时原生创建，
+                # 这里跳过不导入（兼容旧格式 zmetal 中可能残留的 SE 节点）。
+                name_map[old_name] = None
+                continue
             else:
-                new_node = cmds.createNode(ntype, name=new_name, skipSelect=True)
-                # 非灯光节点：原有注册逻辑
+                # 材质类节点用 shadingNode(asShader=True) 创建：
+                # createNode 生成的材质不被 hyperShade 识别，会导致「应用材质」后
+                # 物体仍留在 initialShadingGroup（视口显示绿色）。
                 try:
                     if cmds.getClassification(ntype, satisfies="shader"):
+                        new_node = cmds.shadingNode(ntype, asShader=True,
+                                                    name=new_name, skipSelect=True)
+                    else:
+                        new_node = cmds.createNode(ntype, name=new_name, skipSelect=True)
+                except Exception:
+                    new_node = cmds.createNode(ntype, name=new_name, skipSelect=True)
+                # 非灯光节点：原有注册逻辑
+                # shadingEngine 由 cmds.sets 注册，跳过；shader 需手动注册到
+                # defaultShaderList1（hyperShade 依赖它识别材质）
+                try:
+                    if ntype == 'shadingEngine':
+                        pass
+                    elif cmds.getClassification(ntype, satisfies="shader"):
                         cmds.connectAttr(f"{new_node}.message", "defaultShaderList1.s", nextAvailable=True)
                     elif cmds.getClassification(ntype, satisfies="texture"):
                         cmds.connectAttr(f"{new_node}.message", "defaultTextureList1.tx", nextAvailable=True)
@@ -2019,6 +2117,49 @@ def _radar_import_single_file(filepath, prefix=None, suffix=None, materials_to_i
                     _set_attr_safe(new_node, attr, attr_data['value'])
             elif attr_data.get('type') == 'value':
                 _set_attr_safe(new_node, attr, attr_data['value'])
+
+    # ── 置换重建：为带 displacement_node 标记的材质用原生方式创建 SE 并链接 ──
+    # 导入流程内创建的 shadingEngine 会被 Maya 标记为异常（hyperShade 无法使用），
+    # 因此这里用 cmds.sets(renderable=True) 原生创建（等价 hyperShade 自身创建），
+    # 链接 surfaceShader + displacementShader，hyperShade 可正常识别。
+    # 关联来源：① 新格式 zmetal 的材质 displacement_node 字段；
+    #          ② 旧格式 zmetal 的 shadingEngine 节点数据（surfaceShader/displacementShader 连接）推断。
+    displacement_map = {}  # 材质old_name → 置换节点old_name
+    for old_name, info in nodes_data.items():
+        if isinstance(info, dict) and info.get('displacement_node'):
+            displacement_map[old_name] = info['displacement_node']
+    for old_name, info in nodes_data.items():
+        if not isinstance(info, dict):
+            continue
+        if info.get('node_type') != 'shadingEngine':
+            continue
+        attrs = info.get('attrs', {}) or {}
+        surf = attrs.get('surfaceShader') or {}
+        disp = attrs.get('displacementShader') or {}
+        mat_old = surf.get('source_node') if isinstance(surf, dict) else None
+        disp_old = disp.get('source_node') if isinstance(disp, dict) else None
+        if mat_old and disp_old and mat_old not in displacement_map:
+            displacement_map[mat_old] = disp_old
+
+    for mat_old, disp_old in displacement_map.items():
+        new_mat = name_map.get(mat_old)
+        new_disp = name_map.get(disp_old)
+        if not new_mat or not new_disp:
+            continue
+        mat_base = new_mat.split(":")[-1]
+        sg_name = f"{mat_base}SG"
+        try:
+            if cmds.objExists(sg_name) and cmds.nodeType(sg_name) == 'shadingEngine':
+                sg = sg_name
+            else:
+                if cmds.objExists(sg_name):
+                    cmds.delete(sg_name)
+                sg = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=sg_name)
+            cmds.connectAttr(f"{new_mat}.outColor", f"{sg}.surfaceShader", force=True)
+            cmds.connectAttr(f"{new_disp}.displacement", f"{sg}.displacementShader", force=True)
+            print(f"[Import] 置换 SE 已重建: {sg} ({new_mat} + {new_disp})")
+        except Exception as e:
+            print(f"[Import] 置换 SE 重建失败 ({new_mat}): {e}")
 
     success_count = len(nodes_data) - len(failed_nodes)
     print(f"[材质导入] 完成: {filepath} - {success_count} 个节点已还原。")
@@ -2665,18 +2806,42 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
 
         sg_name = f"{mat_namespace}:{sg_mat_base}SG"
 
+        # 1) 目标命名 SE 已存在（多为 .ma 自带，含 surface/displacement/volume 完整网络）
         if cmds.objExists(sg_name) and cmds.nodeType(sg_name) == 'shadingEngine':
             target_se = sg_name
         else:
-            if cmds.objExists(sg_name):
-                cmds.delete(sg_name)
-            target_se = cmds.sets(renderable=True, empty=True, name=sg_name)
+            # 2) 优先复用 .ma 中真实导入的 SE（名称不匹配时仍保留其完整网络连接）
+            imported_ses = cmds.listConnections(
+                matched_imported_mat, source=False, destination=True,
+                type='shadingEngine') or []
+            target_se = imported_ses[0] if imported_ses else None
+            # 3) 都没有则新建 SE（只连 surfaceShader，置换由下方兜底补连）
+            if target_se is None:
+                if cmds.objExists(sg_name):
+                    cmds.delete(sg_name)
+                target_se = cmds.sets(renderable=True, empty=True, name=sg_name)
 
         try:
             cmds.connectAttr(f"{matched_imported_mat}.outColor", f"{target_se}.surfaceShader", force=True)
         except Exception as e:
             _log_debug(f"连接材质到shadingEngine失败: {e}")
             continue
+
+        # 兜底补连置换：SE 未连接 displacementShader 时，从同命名空间查找置换节点
+        try:
+            if not (cmds.listConnections(f"{target_se}.displacementShader", source=True, destination=False) or []):
+                ns_prefix = f"{mat_namespace}:"
+                for dn in (cmds.ls(type='displacementShader') or []):
+                    if not dn.startswith(ns_prefix):
+                        continue
+                    try:
+                        cmds.connectAttr(f"{dn}.displacement", f"{target_se}.displacementShader", force=True)
+                        print(f"[MA+JSON导入] 置换 SE 已链接: {target_se}.displacementShader <- {dn}")
+                        break
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         for original_shape_name in info["objects"]:
             # 根据选择过滤

@@ -2117,6 +2117,9 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
             raw_nodes.add(mat)
             for node in cmds.listHistory(mat, allConnections=True) or []:
                 raw_nodes.add(node)
+            # 加入下游 shadingEngine（含置换/体积网络），使导出 .ma 完整
+            for se_node in (cmds.listConnections(mat, source=False, destination=True, type='shadingEngine') or []):
+                raw_nodes.add(se_node)
             
             clean_nodes = []
             for node in raw_nodes:
@@ -2209,6 +2212,9 @@ def ma_export_materials(target_dir=None, custom_name=None, separate_files=False,
             raw_nodes.add(mat)
             for node in cmds.listHistory(mat, allConnections=True) or []:
                 raw_nodes.add(node)
+            # 加入下游 shadingEngine（含置换/体积网络），使导出 .ma 完整
+            for se_node in (cmds.listConnections(mat, source=False, destination=True, type='shadingEngine') or []):
+                raw_nodes.add(se_node)
 
         clean_nodes = []
         for node in raw_nodes:
@@ -2393,18 +2399,42 @@ def ma_import_materials(json_path, user_ns=None, user_prefix=None, user_suffix=N
 
         sg_name = f"{mat_namespace}:{sg_mat_base}SG"
 
+        # 1) 目标命名 SE 已存在（多为 .ma 自带，含 surface/displacement/volume 完整网络）
         if cmds.objExists(sg_name) and cmds.nodeType(sg_name) == 'shadingEngine':
             target_se = sg_name
         else:
-            if cmds.objExists(sg_name):
-                cmds.delete(sg_name)
-            target_se = cmds.sets(renderable=True, empty=True, name=sg_name)
+            # 2) 优先复用 .ma 中真实导入的 SE（名称不匹配时仍保留其完整网络连接）
+            imported_ses = cmds.listConnections(
+                matched_imported_mat, source=False, destination=True,
+                type='shadingEngine') or []
+            target_se = imported_ses[0] if imported_ses else None
+            # 3) 都没有则新建 SE（只连 surfaceShader，置换由下方兜底补连）
+            if target_se is None:
+                if cmds.objExists(sg_name):
+                    cmds.delete(sg_name)
+                target_se = cmds.sets(renderable=True, empty=True, name=sg_name)
 
         try:
             cmds.connectAttr(f"{matched_imported_mat}.outColor", f"{target_se}.surfaceShader", force=True)
         except Exception as e:
             _log_debug(f"连接材质到shadingEngine失败: {e}")
             continue
+
+        # 兜底补连置换：SE 未连接 displacementShader 时，从同命名空间查找置换节点
+        try:
+            if not (cmds.listConnections(f"{target_se}.displacementShader", source=True, destination=False) or []):
+                ns_prefix = f"{mat_namespace}:"
+                for dn in (cmds.ls(type='displacementShader') or []):
+                    if not dn.startswith(ns_prefix):
+                        continue
+                    try:
+                        cmds.connectAttr(f"{dn}.displacement", f"{target_se}.displacementShader", force=True)
+                        print(f"[MA+JSON导入] 置换 SE 已链接: {target_se}.displacementShader <- {dn}")
+                        break
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         for original_shape_name in info["objects"]:
             # 根据选择过滤
