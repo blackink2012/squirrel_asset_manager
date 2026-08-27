@@ -181,8 +181,6 @@ class AssetCreateDialog(QtWidgets.QDialog):
                             | QtCore.Qt.WindowMinimizeButtonHint
                             | QtCore.Qt.WindowMaximizeButtonHint
                             | QtCore.Qt.WindowCloseButtonHint)
-        # 显式绑定 X 按钮
-        self.reject = lambda: self.close()
 
         self._setup_ui()
         self.resize(780, 760)
