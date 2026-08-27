@@ -28,6 +28,12 @@ class SettingsManager:
         "hdr_path": "",
         "last_export_path": "",
         "window_state": {"width": 1400, "height": 900},
+        # AI 服务配置（provider: ollama / deepseek / qwen）
+        "ai_provider": "ollama",
+        "ai_ollama_host": "http://localhost:11434",
+        "ai_api_key": "",
+        "ai_base_url": "",
+        "ai_model": "",
     }
 
     def __init__(self):

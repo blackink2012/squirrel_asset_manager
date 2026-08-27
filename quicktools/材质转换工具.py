@@ -53,17 +53,65 @@ except ImportError:
 _T = None
 _help_path = lambda p: p
 try:
-    from utils.i18n import t as _T, help_path as _hpath
+    # 优先包内相对导入，避免误命中 sys.path 中其他副本（如独立库 release 目录）的顶层 utils 包
+    from ..utils.i18n import t as _T, help_path as _hpath
     _help_path = _hpath
 except ImportError:
     try:
         from squirrel_asset_manager.utils.i18n import t as _T, help_path as _hpath
         _help_path = _hpath
     except ImportError:
-        _T = None
+        try:
+            from utils.i18n import t as _T, help_path as _hpath
+            _help_path = _hpath
+        except ImportError:
+            _T = None
 
 def t(key, **kwargs):
     return _T(key, **kwargs) if _T is not None else (key.format(**kwargs) if kwargs else key)
+
+
+# ---- 字体 DPI 适配：以 4K 27 英寸屏（约 163 DPI）为视觉基准 ----
+# 不同 DPI 屏幕按比例缩放字号，保证视觉大小一致（4K 正常、2K 偏大的问题）。
+# 如基准屏尺寸不是 27 英寸，可调整 REFERENCE_DPI 值。
+REFERENCE_DPI = 163.0
+
+
+def _font_scale():
+    """返回当前屏幕相对基准 DPI 的字体缩放系数"""
+    try:
+        app = QtWidgets.QApplication.instance()
+        screen = app.primaryScreen() if app is not None else None
+        dpi = float(screen.physicalDotsPerInch()) if screen is not None else REFERENCE_DPI
+        if dpi <= 0:
+            dpi = REFERENCE_DPI
+        return max(0.6, min(dpi / REFERENCE_DPI, 1.5))
+    except Exception:
+        return 1.0
+
+
+FONT_SCALE = _font_scale()
+
+
+def _fs(px):
+    """按 DPI 缩放字号，最小 8px 保证可读"""
+    return max(8, int(px * FONT_SCALE))
+
+
+def _sc(px):
+    """按 DPI 缩放尺寸（按钮 padding / min-height / min-width 等），最小 1px"""
+    return max(1, int(px * FONT_SCALE))
+
+
+def _font_style(text):
+    """将样式文本中的 @FONT_nn@（字号）与 @SIZE_nn@（尺寸）占位符按 DPI 缩放"""
+    import re
+
+    def _repl(m):
+        tag, val = m.group(1), int(m.group(2))
+        return str(_fs(val)) if tag == "FONT" else str(_sc(val))
+
+    return re.sub(r'@(FONT|SIZE)_(\d+)@', _repl, text)
 
 
 def rgb_to_channel(rgb_color, channel='r'):
@@ -311,24 +359,30 @@ def translucence_to_subsurface(translucence):
     return max(0.0, min(1.0, float(translucence)))
 
 
-def color_mul_scalar(color, scalar):
+def color_mul_scalar(color, scalar=1.0):
     """颜色乘以标量
 
     Args:
-        color: RGB颜色列表 [r, g, b]
-        scalar: 标量值
+        color: RGB颜色列表 [r, g, b]（若是标量则原样返回）
+        scalar: 标量值，默认 1.0
 
     Returns:
-        list: 变换后的颜色 [r, g, b]
+        list: 变换后的颜色 [r, g, b]；输入非颜色时原样返回
     """
     if not color:
         return [0.0, 0.0, 0.0]
-    scalar = float(scalar) if scalar is not None else 1.0
-    return [
-        max(0.0, min(1.0, color[0] * scalar)),
-        max(0.0, min(1.0, color[1] * scalar)),
-        max(0.0, min(1.0, color[2] * scalar))
-    ]
+    # 输入不是颜色（标量/数值），无法执行颜色乘法，原样返回
+    if isinstance(color, (int, float)):
+        return color
+    try:
+        scalar = float(scalar) if scalar is not None else 1.0
+        return [
+            max(0.0, min(1.0, color[0] * scalar)),
+            max(0.0, min(1.0, color[1] * scalar)),
+            max(0.0, min(1.0, color[2] * scalar))
+        ]
+    except Exception:
+        return color
 
 
 def color_add(color1, color2):
@@ -400,7 +454,7 @@ def f0_to_specular_color(f0, diffuse_color=None):
     对于非金属材质，F0是单色灰度
 
     Args:
-        f0: F0基础反射率 (0-1)
+        f0: F0基础反射率 (0-1)，或已经是 RGB 颜色
         diffuse_color: 漫反射颜色，用于金属度估算
 
     Returns:
@@ -408,7 +462,16 @@ def f0_to_specular_color(f0, diffuse_color=None):
     """
     if f0 is None:
         f0 = 0.04
-    f0 = max(0.0, min(1.0, float(f0)))
+    # 输入已是颜色（RGB 元组/列表），直接作为镜面颜色返回
+    if isinstance(f0, (list, tuple)):
+        return [
+            max(0.0, min(1.0, float(c))) if isinstance(c, (int, float)) else 0.0
+            for c in (list(f0) + [0.0, 0.0, 0.0])[:3]
+        ]
+    try:
+        f0 = max(0.0, min(1.0, float(f0)))
+    except (TypeError, ValueError):
+        return 0.04
     return [f0, f0, f0]
 
 
@@ -459,6 +522,126 @@ def clamp(value, min_val=0.0, max_val=1.0):
     if value is None:
         return min_val
     return max(min_val, min(max_val, float(value)))
+
+
+# ==================== 反向转换函数 ====================
+# 用于反向映射（源/目标互换）时自动切换转换函数，保证 A→B 与 B→A 可逆。
+# TRANSFORM_REVERSE 维护正向函数与反向函数的对应关系。
+
+def roughness_to_diffuse_roughness(roughness):
+    """PBR粗糙度转漫反射粗糙度（diffuse_roughness_to_roughness 的反向，当前为恒等）"""
+    if roughness is None:
+        return 0.5
+    return max(0.0, min(1.0, float(roughness)))
+
+
+def roughness_to_shininess(roughness):
+    """粗糙度转光泽度/高光锐度（shininess_to_roughness 的反向，非 glossiness 模式）"""
+    if roughness is None:
+        return 0.0
+    return 1.0 - max(0.0, min(1.0, float(roughness)))
+
+
+def roughness_to_blinn_cosPower(roughness):
+    """粗糙度转Blinn cosPower（blinn_cosPower_to_roughness 的反向）
+
+    原公式: roughness = sqrt(2 / (cosPower + 2))
+    反向:   cosPower = 2 / roughness² - 2
+    """
+    if roughness is None:
+        return 0.0
+    r = max(0.001, min(1.0, float(roughness)))
+    return max(0.0, 2.0 / (r * r) - 2.0)
+
+
+def roughness_to_phong_shi(roughness):
+    """粗糙度转Phong shininess（phong_shi_to_roughness 的反向）
+
+    原公式: roughness = sqrt(2 / shi)
+    反向:   shi = 2 / roughness²
+    """
+    if roughness is None:
+        return 0.0
+    r = max(0.001, min(1.0, float(roughness)))
+    return 2.0 / (r * r)
+
+
+def f0_to_ior(f0):
+    """F0基础反射率转折射率（ior_to_f0 的反向）
+
+    原公式: f0 = ((ior - 1) / (ior + 1))²
+    反向:   ior = (1 + sqrt(f0)) / (1 - sqrt(f0))
+    """
+    if f0 is None:
+        return 1.5
+    f = max(0.0, min(0.999, float(f0)))
+    sqrt_f = f ** 0.5
+    if sqrt_f >= 1.0:
+        return 100.0
+    return (1.0 + sqrt_f) / (1.0 - sqrt_f)
+
+
+def specular_color_to_f0(specular_color):
+    """镜面反射颜色转F0基础反射率（f0_to_specular_color 的反向）
+
+    对非金属镜面颜色取灰度作为 F0；输入已是标量时直接返回。
+    """
+    if specular_color is None:
+        return 0.04
+    if isinstance(specular_color, (int, float)):
+        return max(0.0, min(1.0, float(specular_color)))
+    try:
+        return rgb_to_grayscale(specular_color)
+    except Exception:
+        return 0.04
+
+
+def color_div_scalar(color, scalar=1.0):
+    """颜色除以标量（color_mul_scalar 的反向）
+
+    Args:
+        color: RGB颜色列表 [r, g, b]（若是标量则原样返回）
+        scalar: 标量值，默认 1.0
+
+    Returns:
+        list: 变换后的颜色 [r, g, b]；输入非颜色时原样返回
+    """
+    if not color:
+        return [0.0, 0.0, 0.0]
+    if isinstance(color, (int, float)):
+        return color
+    try:
+        scalar = float(scalar) if scalar else 1.0
+        if scalar == 0:
+            return color
+        return [
+            max(0.0, min(1.0, color[0] / scalar)),
+            max(0.0, min(1.0, color[1] / scalar)),
+            max(0.0, min(1.0, color[2] / scalar))
+        ]
+    except Exception:
+        return color
+
+
+def transmission_to_transparency(transmission):
+    """透射权重转透明度（transparency_to_transmission 的反向，当前为恒等）"""
+    if transmission is None:
+        return 0.0
+    if isinstance(transmission, (list, tuple)):
+        return max(transmission) if transmission else 0.0
+    return float(transmission)
+
+
+def weight_to_thin_film_thickness(weight):
+    """涂层权重转薄膜厚度（thin_film_thickness_to_weight 的反向）
+
+    原公式: weight = thickness / 10000
+    反向:   thickness = weight * 10000
+    """
+    if weight is None:
+        return 0.0
+    return max(0.0, float(weight)) * 10000.0
+
 
 
 MATERIAL_CONVERSION_FUNCTIONS = {
@@ -517,17 +700,39 @@ MATERIAL_CONVERSION_FUNCTIONS = {
     "color_add": color_add,
     "颜色相加": color_add,
     "color_lerp": color_lerp,
-    "颜色插值": color_lerp
+    "颜色插值": color_lerp,
+    
+    # 反向转换函数（反向映射时自动切换，见 TRANSFORM_REVERSE）
+    "roughness_to_diffuse_roughness": roughness_to_diffuse_roughness,
+    "PBR粗糙度转漫反射粗糙度": roughness_to_diffuse_roughness,
+    "roughness_to_shininess": roughness_to_shininess,
+    "粗糙度转光泽度": roughness_to_shininess,
+    "roughness_to_blinn_cosPower": roughness_to_blinn_cosPower,
+    "粗糙度转Blinn高光锐度": roughness_to_blinn_cosPower,
+    "roughness_to_phong_shi": roughness_to_phong_shi,
+    "粗糙度转Phong光泽度": roughness_to_phong_shi,
+    "f0_to_ior": f0_to_ior,
+    "F0转折射率": f0_to_ior,
+    "specular_color_to_f0": specular_color_to_f0,
+    "镜面反射颜色转F0": specular_color_to_f0,
+    "color_div_scalar": color_div_scalar,
+    "颜色除标量": color_div_scalar,
+    "transmission_to_transparency": transmission_to_transparency,
+    "透射转透明度": transmission_to_transparency,
+    "weight_to_thin_film_thickness": weight_to_thin_film_thickness,
+    "涂层权重转薄膜厚度": weight_to_thin_film_thickness
 }
 
 
-def apply_conversion(value, transform_name, source_attrs=None):
+def apply_conversion(value, transform_name, source_attrs=None, parameters=None):
     """应用转换函数
 
     Args:
         value: 要转换的值
         transform_name: 转换函数名称
         source_attrs: 可选的源属性字典，用于需要多个参数的转换
+        parameters: 可选的转换函数参数字典（来自映射文件 mapping 的 "parameters" 字段），
+                    如 {"scalar": 2.0} 传给 color_mul_scalar(scalar=2.0)
 
     Returns:
         转换后的值
@@ -536,8 +741,15 @@ def apply_conversion(value, transform_name, source_attrs=None):
         return value
     func = MATERIAL_CONVERSION_FUNCTIONS[transform_name]
     try:
+        kwargs = {}
+        if parameters:
+            kwargs.update(parameters)
         if source_attrs:
-            return func(value, **source_attrs)
+            # 源属性字典作为兜底，映射文件显式配置的 parameters 优先
+            for k, v in source_attrs.items():
+                kwargs.setdefault(k, v)
+        if kwargs:
+            return func(value, **kwargs)
         return func(value)
     except Exception as e:
         print(f"转换函数 {transform_name} 执行失败: {e}")
@@ -568,10 +780,73 @@ TRANSFORM_INPUT_RANGES = {
     'transparency_to_transmission': (0.0, 1.0),
     '透明度转透射': (0.0, 1.0),
     '透明度转透射权重': (0.0, 1.0),
+    
+    # 反向转换函数（输入均为 0-1 区间）
+    'roughness_to_diffuse_roughness': (0.0, 1.0),
+    'PBR粗糙度转漫反射粗糙度': (0.0, 1.0),
+    'roughness_to_shininess': (0.0, 1.0),
+    '粗糙度转光泽度': (0.0, 1.0),
+    'roughness_to_blinn_cosPower': (0.0, 1.0),
+    '粗糙度转Blinn高光锐度': (0.0, 1.0),
+    'roughness_to_phong_shi': (0.0, 1.0),
+    '粗糙度转Phong光泽度': (0.0, 1.0),
+    'f0_to_ior': (0.0, 1.0),
+    'F0转折射率': (0.0, 1.0),
+    'specular_color_to_f0': (0.0, 1.0),
+    '镜面反射颜色转F0': (0.0, 1.0),
+    'transmission_to_transparency': (0.0, 1.0),
+    '透射转透明度': (0.0, 1.0),
+    'weight_to_thin_film_thickness': (0.0, 1.0),
+    '涂层权重转薄膜厚度': (0.0, 1.0),
+}
+
+# 转换函数 ↔ 反向转换函数（双向映射，反向映射时自动切换；反复反向可来回切换）
+TRANSFORM_REVERSE = {
+    # 正向 → 反向
+    'diffuse_roughness_to_roughness': 'roughness_to_diffuse_roughness',
+    '漫反射粗糙度转PBR粗糙度': 'roughness_to_diffuse_roughness',
+    'shininess_to_roughness': 'roughness_to_shininess',
+    '光泽度转粗糙度': 'roughness_to_shininess',
+    'blinn_cosPower_to_roughness': 'roughness_to_blinn_cosPower',
+    'Blinn高光锐度转粗糙度': 'roughness_to_blinn_cosPower',
+    'phong_shi_to_roughness': 'roughness_to_phong_shi',
+    'Phong光泽度转粗糙度': 'roughness_to_phong_shi',
+    'ior_to_f0': 'f0_to_ior',
+    '折射率转F0': 'f0_to_ior',
+    'f0_to_specular_color': 'specular_color_to_f0',
+    'F0转镜面反射颜色': 'specular_color_to_f0',
+    'color_mul_scalar': 'color_div_scalar',
+    '颜色乘标量': 'color_div_scalar',
+    'color_div_scalar': 'color_mul_scalar',
+    '颜色除标量': 'color_mul_scalar',
+    'transparency_to_transmission': 'transmission_to_transparency',
+    '透明度转透射': 'transmission_to_transparency',
+    '透明度转透射权重': 'transmission_to_transparency',
+    'thin_film_thickness_to_weight': 'weight_to_thin_film_thickness',
+    '薄膜厚度转涂层权重': 'weight_to_thin_film_thickness',
+    'invert_value': 'invert_value',
+    '反转值': 'invert_value',
+    # 反向 → 正向
+    'roughness_to_diffuse_roughness': 'diffuse_roughness_to_roughness',
+    'PBR粗糙度转漫反射粗糙度': 'diffuse_roughness_to_roughness',
+    'roughness_to_shininess': 'shininess_to_roughness',
+    '粗糙度转光泽度': 'shininess_to_roughness',
+    'roughness_to_blinn_cosPower': 'blinn_cosPower_to_roughness',
+    '粗糙度转Blinn高光锐度': 'blinn_cosPower_to_roughness',
+    'roughness_to_phong_shi': 'phong_shi_to_roughness',
+    '粗糙度转Phong光泽度': 'phong_shi_to_roughness',
+    'f0_to_ior': 'ior_to_f0',
+    'F0转折射率': 'ior_to_f0',
+    'specular_color_to_f0': 'f0_to_specular_color',
+    '镜面反射颜色转F0': 'f0_to_specular_color',
+    'transmission_to_transparency': 'transparency_to_transmission',
+    '透射转透明度': 'transparency_to_transmission',
+    'weight_to_thin_film_thickness': 'thin_film_thickness_to_weight',
+    '涂层权重转薄膜厚度': 'thin_film_thickness_to_weight',
 }
 
 
-def precompute_remap_samples(transform_name, num_samples=32):
+def precompute_remap_samples(transform_name, num_samples=32, parameters=None):
     """为remapValue节点预计算采样点
 
     对转换函数在典型输入范围内均匀采样，生成(input, output)对，
@@ -580,6 +855,7 @@ def precompute_remap_samples(transform_name, num_samples=32):
     Args:
         transform_name: 转换函数名称
         num_samples: 采样点数量
+        parameters: 可选的转换函数参数字典（来自映射文件 mapping 的 "parameters" 字段）
 
     Returns:
         (input_min, input_max, samples) 或 (None, None, None)
@@ -600,7 +876,10 @@ def precompute_remap_samples(transform_name, num_samples=32):
         fraction = i / (num_samples - 1) if num_samples > 1 else 0.0
         input_val = input_min + fraction * (input_max - input_min)
         try:
-            output_val = float(func(input_val))
+            if parameters:
+                output_val = float(func(input_val, **parameters))
+            else:
+                output_val = float(func(input_val))
         except Exception:
             return None, None, None
         samples.append((input_val, output_val))
@@ -624,6 +903,90 @@ def get_maya_main_window():
     return None
 
 
+def _renderer_suffix(target_type):
+    """根据目标材质类型返回渲染器短后缀（vray→vr, redshift→rs, arnold→ai, openPBR→opb）；无法识别返回空字符串"""
+    t = (target_type or "").lower()
+    if "vray" in t:
+        return "vr"
+    if "redshift" in t or t.startswith("rs") or t == "rsmaterial":
+        return "rs"
+    if "openpbr" in t:
+        return "opb"
+    if "ai" in t or "arnold" in t:
+        return "ai"
+    return ""
+
+
+def _converted_material_name(source_name, target_type):
+    """生成转换后材质名：先剥掉旧渲染器后缀（_ai/_rs/_vr/_opb/_cvt）再追加新后缀。
+
+    多跳转换（如 ai→rs→vr）避免后缀无限累积：Gold_ai → Gold_rs → Gold_vr。
+    """
+    base = source_name
+    low = base.lower()
+    for old in ("_ai", "_rs", "_vr", "_opb", "_cvt"):
+        if low.endswith(old):
+            base = base[: -len(old)]
+            break
+    suffix = _renderer_suffix(target_type)
+    return f"{base}_{suffix}" if suffix else f"{base}_cvt"
+
+
+# 材质节点识别白名单：插件材质的 getClassification 可能不可靠时的兜底
+# （新增渲染器材质时在此补充，如 RedshiftStandardMaterial / RSStandardMaterial）
+KNOWN_MATERIAL_TYPES = (
+    'lambert', 'phong', 'blinn', 'standardSurface', 'openPBRSurface',
+    'aiStandardSurface', 'aiStandard', 'VRayMtl', 'RedshiftMaterial',
+    'RedshiftStandardMaterial', 'RSStandardMaterial',
+    'aiStandardHair', 'aiVolume',
+)
+
+
+def _is_material_node(node):
+    """判断节点是否为材质：优先按分类（shader）判断，白名单兜底。
+
+    避免硬编码类型列表漏掉新材质（如 RedshiftStandardMaterial）导致
+    "选择中未找到可转换的材质"。
+    """
+    try:
+        ntype = cmds.nodeType(node)
+    except Exception:
+        return False
+    try:
+        if cmds.getClassification(ntype, satisfies="shader"):
+            return True
+    except Exception:
+        pass
+    return ntype in KNOWN_MATERIAL_TYPES
+
+
+def list_convertible_targets(source_type, base_dir=None):
+    """列出某源材质类型可转换的目标类型（依据映射表，含直连/中转路径）。
+
+    供 UI 菜单构建「转换导入 ▶」子菜单使用；不实例化完整 QDialog，
+    仅挂载映射目录相关属性调用映射扫描/寻路方法。
+    """
+    if not source_type:
+        return []
+    conv = MaterialConverter.__new__(MaterialConverter)
+    conv.mapping_base_dir = base_dir or PRESET_DIR
+    conv._fallback_mapping_dirs = []
+    try:
+        src_types, tgt_types = conv._collect_mapping_types()
+    except Exception:
+        return []
+    cands = []
+    for t in sorted(set(src_types) | set(tgt_types)):
+        if not t or t == source_type:
+            continue
+        try:
+            if conv.find_conversion_path(source_type, t):
+                cands.append(t)
+        except Exception:
+            continue
+    return cands
+
+
 class MaterialConverter(QtWidgets.QDialog):
     """材质转换工具主窗口"""
 
@@ -636,57 +999,57 @@ class MaterialConverter(QtWidgets.QDialog):
         super(MaterialConverter, self).__init__(parent)
 
         self.setWindowTitle(t("qtool.matconv.window_title"))
-        self.setMinimumSize(900, 600)
-        self.resize(900, 650)
+        self.setMinimumSize(675, 600)
+        self.resize(675, 650)
 
         # 设置窗口标志，启用最小化和最大化按钮
         self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowMinimizeButtonHint | QtCore.Qt.WindowMaximizeButtonHint)
 
         # 样式设置
-        self.setStyleSheet("""
+        self.setStyleSheet(_font_style("""
             QWidget {
-                font-size: 18px;
+                font-size: @FONT_18@px;
             }
             QGroupBox {
                 font-weight: bold;
                 border: 1px solid #ccc;
-                border-radius: 5px;
-                margin-top: 8px;
-                padding-top: 8px;
+                border-radius: @SIZE_5@px;
+                margin-top: @SIZE_8@px;
+                padding-top: @SIZE_8@px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
+                left: @SIZE_10@px;
+                padding: 0 @SIZE_5@px;
             }
             QComboBox {
-                min-height: 30px;
-                padding: 5px 30px 6px 10px;
-                font-size: 18px;
+                min-height: @SIZE_30@px;
+                padding: @SIZE_5@px @SIZE_30@px @SIZE_6@px @SIZE_10@px;
+                font-size: @FONT_18@px;
             }
             QPushButton {
-                min-height: 30px;
-                padding: 6px 15px;
-                font-size: 18px;
+                min-height: @SIZE_30@px;
+                padding: @SIZE_6@px @SIZE_15@px;
+                font-size: @FONT_18@px;
             }
             QLineEdit {
-                min-height: 30px;
-                padding: 5px 10px;
-                font-size: 18px;
+                min-height: @SIZE_30@px;
+                padding: @SIZE_5@px @SIZE_10@px;
+                font-size: @FONT_18@px;
             }
             QTableWidget {
                 gridline-color: #ddd;
                 background-color: white;
-                font-size: 18px;
+                font-size: @FONT_18@px;
             }
             QHeaderView::section {
                 background-color: #f0f0f0;
-                padding: 5px;
-                font-size: 18px;
+                padding: @SIZE_5@px;
+                font-size: @FONT_18@px;
                 border: 1px solid #ddd;
                 font-weight: bold;
             }
-        """)
+        """))
 
         self.preset_dir = PRESET_DIR
         if not os.path.exists(self.preset_dir):
@@ -698,8 +1061,8 @@ class MaterialConverter(QtWidgets.QDialog):
         self.target_material_type = ""
         self.loaded_mappings = {}  # 存储加载的多个映射数据
 
-        # 映射文件夹路径
-        self.mapping_base_dir = os.path.join(cmds.internalVar(userPrefDir=True), "material_mapper_presets")
+        # 映射文件夹路径（插件内置 Assets/material_mapper_presets，基于脚本位置相对解析，移动插件后依然有效）
+        self.mapping_base_dir = PRESET_DIR
         if not os.path.exists(self.mapping_base_dir):
             os.makedirs(self.mapping_base_dir)
         try:
@@ -722,7 +1085,7 @@ class MaterialConverter(QtWidgets.QDialog):
         
         # 使用帮助按钮
         help_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.help"))
-        help_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 8px 15px;")
+        help_btn.setStyleSheet(_font_style("background-color: #4CAF50; color: white; font-weight: bold; padding: @SIZE_8@px @SIZE_15@px;"))
         help_btn.setStatusTip(t("qtool.matconv.status.open_help"))
         help_btn.clicked.connect(self.show_help)
         toolbar_layout.addWidget(help_btn)
@@ -739,7 +1102,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
         # 说明标签
         info_label = QtWidgets.QLabel(t("qtool.matconv.label.mapping_config_hint"))
-        info_label.setStyleSheet("color: #666; font-size: 14px; padding: 5px 0;")
+        info_label.setStyleSheet(f"color: #666; font-size: {_fs(14)}px; padding: {_sc(5)}px 0;")
         mapping_type_layout.addWidget(info_label)
 
         # 映射类型表格
@@ -762,6 +1125,8 @@ class MaterialConverter(QtWidgets.QDialog):
             header.setResizeMode(3, QHeaderView.Fixed)
 
         self.mapping_type_table.setColumnWidth(0, 30)
+        self.mapping_type_table.setColumnWidth(1, 160)
+        self.mapping_type_table.setColumnWidth(2, 160)
         self.mapping_type_table.setColumnWidth(3, 30)
         self.mapping_type_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.mapping_type_table.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
@@ -769,7 +1134,7 @@ class MaterialConverter(QtWidgets.QDialog):
         self.mapping_type_table.verticalHeader().setVisible(False)
 
         # 表格样式 - 暗色主题与预览表格一致
-        self.mapping_type_table.setStyleSheet("""
+        self.mapping_type_table.setStyleSheet(_font_style("""
             QTableWidget {
                 background-color: #404040;
                 alternate-background-color: #505050;
@@ -777,8 +1142,8 @@ class MaterialConverter(QtWidgets.QDialog):
                 gridline-color: #505050;
             }
             QTableWidget::item {
-                padding: 5px;
-                font-size: 14px;
+                padding: @SIZE_5@px;
+                font-size: @FONT_16@px;
             }
             QTableWidget::item:selected {
                 background-color: #2080d0;
@@ -788,18 +1153,18 @@ class MaterialConverter(QtWidgets.QDialog):
                 background-color: #353535;
                 color: #d0d0d0;
                 border: 1px solid #303030;
-                padding: 5px;
+                padding: @SIZE_5@px;
                 font-weight: bold;
-                font-size: 14px;
+                font-size: @FONT_16@px;
             }
-        """)
+        """))
 
         # 默认添加一行源为空目标为openPBRSurface的映射
         row = self.mapping_type_table.rowCount()
         self.mapping_type_table.insertRow(row)
+        self._set_mapping_combo(row, 1, "")
         # 设置目标材质类型为openPBRSurface
-        dst_item = QtWidgets.QTableWidgetItem("openPBRSurface")
-        self.mapping_type_table.setItem(row, 2, dst_item)
+        self._set_mapping_combo(row, 2, "openPBRSurface")
 
         mapping_type_layout.addWidget(self.mapping_type_table)
 
@@ -807,13 +1172,13 @@ class MaterialConverter(QtWidgets.QDialog):
         btn_layout = QtWidgets.QHBoxLayout()
 
         load_source_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.load_source"))
-        load_source_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 8px 15px;")
+        load_source_btn.setStyleSheet(_font_style("background-color: #4CAF50; color: white; font-weight: bold; padding: @SIZE_8@px @SIZE_15@px;"))
         load_source_btn.setStatusTip(t("qtool.matconv.status.load_source"))
         load_source_btn.clicked.connect(self.load_source_type_from_selection)
         btn_layout.addWidget(load_source_btn)
 
         load_target_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.load_target"))
-        load_target_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 8px 15px;")
+        load_target_btn.setStyleSheet(_font_style("background-color: #2196F3; color: white; font-weight: bold; padding: @SIZE_8@px @SIZE_15@px;"))
         load_target_btn.setStatusTip(t("qtool.matconv.status.load_target"))
         load_target_btn.clicked.connect(self.load_target_type_from_selection)
         btn_layout.addWidget(load_target_btn)
@@ -838,13 +1203,13 @@ class MaterialConverter(QtWidgets.QDialog):
         btn_layout.addStretch()
 
         save_config_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.save_preset"))
-        save_config_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold; padding: 8px 15px;")
+        save_config_btn.setStyleSheet(_font_style("background-color: #FF9800; color: white; font-weight: bold; padding: @SIZE_8@px @SIZE_15@px;"))
         save_config_btn.setStatusTip(t("qtool.matconv.status.save_preset"))
         save_config_btn.clicked.connect(self.save_mapping_type_preset)
         btn_layout.addWidget(save_config_btn)
 
         load_config_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.load_preset"))
-        load_config_btn.setStyleSheet("background-color: #9C27B0; color: white; font-weight: bold; padding: 8px 15px;")
+        load_config_btn.setStyleSheet(_font_style("background-color: #9C27B0; color: white; font-weight: bold; padding: @SIZE_8@px @SIZE_15@px;"))
         load_config_btn.setStatusTip(t("qtool.matconv.status.load_preset"))
         load_config_btn.clicked.connect(self.load_mapping_type_preset)
         btn_layout.addWidget(load_config_btn)
@@ -878,22 +1243,17 @@ class MaterialConverter(QtWidgets.QDialog):
         self.target_type_label = QtWidgets.QLabel("")
         material_info_layout.addWidget(self.target_type_label, 1, 2)
 
-        top_layout.addWidget(material_info_group)
-        
-        top_layout.addWidget(mapping_type_group)
-        top_layout.setStretch(1, 1)  # 让材质类型映射配置优先缩放
+        # 材质信息区域已从 UI 移除（代码保留，后续如需恢复取消下行注释即可）
+        # top_layout.addWidget(material_info_group)
 
-        # 下半部分：映射文件、映射预览、选项和按钮
-        bottom_widget = QtWidgets.QWidget()
-        bottom_layout = QtWidgets.QVBoxLayout()
-        bottom_widget.setLayout(bottom_layout)
-
-        # 映射文件区域
+        # 映射文件区域（置于 UI 顶部）
         mapping_group = QtWidgets.QGroupBox(t("qtool.matconv.group.mapping_file"))
         mapping_group.setStatusTip(t("qtool.matconv.status.mapping_file"))
-        mapping_layout = QtWidgets.QHBoxLayout()
+        mapping_layout = QtWidgets.QVBoxLayout()
         mapping_group.setLayout(mapping_layout)
 
+        # 第一行：文件路径 + 浏览 + 状态
+        mapping_row1 = QtWidgets.QHBoxLayout()
         self.mapping_file_edit = QtWidgets.QLineEdit()
         self.mapping_file_edit.setReadOnly(True)
         self.mapping_file_edit.setPlaceholderText(t("qtool.matconv.placeholder.mapping_file"))
@@ -904,22 +1264,34 @@ class MaterialConverter(QtWidgets.QDialog):
         self.mapping_status_label = QtWidgets.QLabel("")
         self.mapping_status_label.setStyleSheet("color: #888;")
 
-        mapping_layout.addWidget(self.mapping_file_edit, 1)
-        mapping_layout.addWidget(browse_btn)
-        mapping_layout.addWidget(self.mapping_status_label)
+        mapping_row1.addWidget(self.mapping_file_edit, 1)
+        mapping_row1.addWidget(browse_btn)
+        mapping_row1.addWidget(self.mapping_status_label)
 
-        # 映射文件夹说明
+        # 第二行：映射文件夹说明 + 打开文件夹按钮
+        mapping_row2 = QtWidgets.QHBoxLayout()
         mapping_info_label = QtWidgets.QLabel(f'{t("qtool.matconv.label.mapping_dir")}: {self.mapping_base_dir}')
-        mapping_info_label.setStyleSheet("color: #888; font-size: 11px;")
-        mapping_layout.addWidget(mapping_info_label)
-
+        mapping_info_label.setStyleSheet(f"color: #888; font-size: {_fs(11)}px;")
         open_folder_btn = QtWidgets.QPushButton(t("common.open_folder"))
-        open_folder_btn.setStyleSheet("font-size: 12px; padding: 3px 8px;")
         open_folder_btn.setStatusTip(t("qtool.matconv.status.open_mapping_folder"))
         open_folder_btn.clicked.connect(self.open_mapping_folder)
-        mapping_layout.addWidget(open_folder_btn)
+        mapping_row2.addWidget(mapping_info_label, 1)
+        mapping_row2.addWidget(open_folder_btn)
 
-        bottom_layout.addWidget(mapping_group)
+        mapping_layout.addLayout(mapping_row1)
+        mapping_layout.addLayout(mapping_row2)
+
+        top_layout.addWidget(mapping_group)
+
+        top_layout.addWidget(mapping_type_group)
+        top_layout.setStretch(1, 1)  # 让材质类型映射配置优先缩放
+
+        # 下半部分：选项和按钮
+        bottom_widget = QtWidgets.QWidget()
+        bottom_layout = QtWidgets.QVBoxLayout()
+        bottom_widget.setLayout(bottom_layout)
+
+        # 映射文件区域已移至顶部（见 _init_ui 顶部）
 
         # 映射预览区域 - 使用选项卡显示多个映射文件（不优先缩放）
         preview_group = QtWidgets.QGroupBox(t("qtool.matconv.group.preview"))
@@ -929,7 +1301,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
         self.preview_tabs = QtWidgets.QTabWidget()
         self.preview_tabs.setStatusTip(t("qtool.matconv.status.preview_tabs"))
-        self.preview_tabs.setStyleSheet("""
+        self.preview_tabs.setStyleSheet(_font_style("""
             QTabWidget::pane {
                 border: 1px solid #ccc;
                 background-color: #404040;
@@ -937,8 +1309,8 @@ class MaterialConverter(QtWidgets.QDialog):
             QTabBar::tab {
                 background-color: #353535;
                 color: #d0d0d0;
-                font-size: 14px;
-                padding: 6px 12px;
+                font-size: @FONT_14@px;
+                padding: @SIZE_6@px @SIZE_12@px;
                 border: 1px solid #303030;
             }
             QTabBar::tab:selected {
@@ -948,17 +1320,21 @@ class MaterialConverter(QtWidgets.QDialog):
             QTabBar::tab:hover {
                 background-color: #454545;
             }
-        """)
+        """))
 
         preview_layout.addWidget(self.preview_tabs)
 
-        bottom_layout.addWidget(preview_group)
+        # 属性映射预览已从 UI 移除（代码保留，后续如需恢复取消下行注释即可）
+        # bottom_layout.addWidget(preview_group)
 
         # 选项区域
         options_group = QtWidgets.QGroupBox(t("qtool.matconv.group.options"))
         options_group.setStatusTip(t("qtool.matconv.status.options"))
         options_layout = QtWidgets.QHBoxLayout()
+        options_layout.setContentsMargins(_sc(8), _sc(2), _sc(8), _sc(2))
+        options_layout.setSpacing(_sc(8))
         options_group.setLayout(options_layout)
+        options_group.setMaximumHeight(_sc(64))  # 压缩转换选项高度
 
         self.copy_textures_check = QtWidgets.QCheckBox(t("qtool.matconv.check.copy_textures"))
         self.copy_textures_check.setStatusTip(t("qtool.matconv.status.copy_textures"))
@@ -967,7 +1343,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
         self.keep_original_check = QtWidgets.QCheckBox(t("qtool.matconv.check.keep_original"))
         self.keep_original_check.setStatusTip(t("qtool.matconv.status.keep_original"))
-        self.keep_original_check.setChecked(True)
+        self.keep_original_check.setChecked(False)
         options_layout.addWidget(self.keep_original_check)
 
         self.auto_assign_check = QtWidgets.QCheckBox(t("qtool.matconv.check.auto_assign"))
@@ -975,40 +1351,57 @@ class MaterialConverter(QtWidgets.QDialog):
         self.auto_assign_check.setChecked(True)
         options_layout.addWidget(self.auto_assign_check)
 
+        self.fallback_default_check = QtWidgets.QCheckBox(t("qtool.matconv.check.fallback_default"))
+        self.fallback_default_check.setStatusTip(t("qtool.matconv.status.fallback_default"))
+        self.fallback_default_check.setChecked(False)
+        options_layout.addWidget(self.fallback_default_check)
+
         options_layout.addStretch()
+
+        bottom_layout.addWidget(options_group)
 
         # 按钮区域
         button_layout = QtWidgets.QHBoxLayout()
 
         self.convert_selection_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.convert_selection"))
         self.convert_selection_btn.setStatusTip(t("qtool.matconv.status.convert_selection"))
-        self.convert_selection_btn.setStyleSheet("""
+        self.convert_selection_btn.setStyleSheet(_font_style("""
             QPushButton {
                 background-color: #2196F3;
                 color: white;
                 font-weight: bold;
-                min-width: 100px;
+                min-width: @SIZE_200@px;
+                border: none;
+                border-radius: @SIZE_4@px;
             }
             QPushButton:hover {
-                background-color: #0b7dda;
+                background-color: #5EB0F7;
             }
-        """)
+            QPushButton:pressed {
+                background-color: #1976D2;
+            }
+        """))
         self.convert_selection_btn.clicked.connect(self.convert_selection)
         button_layout.addWidget(self.convert_selection_btn)
 
         self.convert_all_btn = QtWidgets.QPushButton(t("qtool.matconv.btn.convert_all"))
         self.convert_all_btn.setStatusTip(t("qtool.matconv.status.convert_all"))
-        self.convert_all_btn.setStyleSheet("""
+        self.convert_all_btn.setStyleSheet(_font_style("""
             QPushButton {
                 background-color: #FF9800;
                 color: white;
                 font-weight: bold;
-                min-width: 120px;
+                min-width: @SIZE_240@px;
+                border: none;
+                border-radius: @SIZE_4@px;
             }
             QPushButton:hover {
-                background-color: #e68a00;
+                background-color: #FFB74D;
             }
-        """)
+            QPushButton:pressed {
+                background-color: #F57C00;
+            }
+        """))
         self.convert_all_btn.clicked.connect(self.execute_conversion)
         button_layout.addWidget(self.convert_all_btn)
 
@@ -1026,7 +1419,7 @@ class MaterialConverter(QtWidgets.QDialog):
         # 状态栏
         status_layout = QtWidgets.QHBoxLayout()
         self.status_label = QtWidgets.QLabel(t("qtool.matconv.label.status_ready"))
-        self.status_label.setStyleSheet("color: #666; padding: 5px;")
+        self.status_label.setStyleSheet(f"color: #666; padding: {_sc(5)}px;")
         status_layout.addWidget(self.status_label)
         bottom_layout.addLayout(status_layout)
 
@@ -1034,8 +1427,8 @@ class MaterialConverter(QtWidgets.QDialog):
         splitter.addWidget(top_widget)
         splitter.addWidget(bottom_widget)
         
-        # 设置分割器的初始大小比例（材质类型映射配置占较大空间）
-        splitter.setSizes([400, 300])
+        # 设置分割器的初始大小比例（材质类型映射配置占较大空间，列表占比加倍）
+        splitter.setSizes([750, 200])
         splitter.setStretchFactor(0, 1)  # top_widget优先占用空间
         splitter.setStretchFactor(1, 0)  # bottom_widget不优先占用空间
         
@@ -1309,17 +1702,17 @@ class MaterialConverter(QtWidgets.QDialog):
         table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
         # 表格样式
-        table.setStyleSheet("""
+        table.setStyleSheet(_font_style("""
             QTableView {
                 background-color: #404040;
                 alternate-background-color: #505050;
                 color: #e0e0e0;
-                font-size: 16px;
+                font-size: @FONT_16@px;
             }
             QTableView::item {
                 border: 1px solid #303030;
-                padding: 2px;
-                font-size: 16px;
+                padding: @SIZE_2@px;
+                font-size: @FONT_16@px;
             }
             QTableView::item:selected {
                 background-color: #2080d0;
@@ -1329,10 +1722,10 @@ class MaterialConverter(QtWidgets.QDialog):
                 background-color: #353535;
                 color: #d0d0d0;
                 border: 1px solid #303030;
-                padding: 4px;
-                font-size: 16px;
+                padding: @SIZE_4@px;
+                font-size: @FONT_16@px;
             }
-        """)
+        """))
 
         header = table.horizontalHeader()
         if hasattr(header, 'setSectionResizeMode'):
@@ -1403,15 +1796,17 @@ class MaterialConverter(QtWidgets.QDialog):
             # 更新映射预览
             self.update_mapping_preview()
 
-            # 更新状态
-            self.mapping_status_label.setText(t("qtool.matconv.status.mapping_entries", count=len(data.get('mappings', []))))
+            # 更新状态（明确区分映射文件与映射条数，避免误解）
+            mapping_count = len(data.get('mappings', []))
+            self.mapping_status_label.setText(
+                f"{os.path.basename(filepath)}（{mapping_count} 条映射）")
             self.update_status()
 
             QMessageBox.information(self, t("msg.success"),
                                   t("qtool.matconv.msg.mapping_loaded",
                                     source_type=data.get('source_type', t("qtool.matconv.common.unknown")),
                                     target_type=target_type,
-                                    count=len(data.get('mappings', []))))
+                                    count=mapping_count))
 
         except Exception as e:
             QMessageBox.critical(self, t("msg.error"), t("qtool.matconv.msg.load_mapping_failed", e=str(e)))
@@ -1438,10 +1833,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
         material = None
         for item in selected:
-            node_type = cmds.nodeType(item)
-            if node_type in ['lambert', 'phong', 'blinn', 'standardSurface', 'openPBRSurface',
-                           'aiStandardSurface', 'aiStandard', 'VRayMtl', 'RedshiftMaterial',
-                           'aiStandardHair', 'aiVolume']:
+            if _is_material_node(item):
                 material = item
                 break
 
@@ -1453,9 +1845,9 @@ class MaterialConverter(QtWidgets.QDialog):
 
         # 检查是否有选中的行
         selected_rows = set()
-        for item in self.mapping_type_table.selectedItems():
-            selected_rows.add(item.row())
-        
+        for idx in self.mapping_type_table.selectionModel().selectedRows():
+            selected_rows.add(idx.row())
+
         # 如果有选中的行，使用第一行
         if selected_rows:
             row_found = sorted(selected_rows)[0]
@@ -1463,17 +1855,16 @@ class MaterialConverter(QtWidgets.QDialog):
             # 查找空行（没有源类型的行）
             row_found = -1
             for row in range(self.mapping_type_table.rowCount()):
-                src_item = self.mapping_type_table.item(row, 1)
-                if not src_item or not src_item.text():
+                if not self._get_cell_text(row, 1):
                     row_found = row
                     break
-            
+
             # 如果没有空行，查找有源类型但没有目标类型的行
             if row_found == -1:
                 for row in range(self.mapping_type_table.rowCount()):
-                    src_item = self.mapping_type_table.item(row, 1)
-                    dst_item = self.mapping_type_table.item(row, 2)
-                    if src_item and src_item.text() == material_type and (not dst_item or not dst_item.text()):
+                    src_text = self._get_cell_text(row, 1)
+                    dst_text = self._get_cell_text(row, 2)
+                    if src_text == material_type and not dst_text:
                         row_found = row
                         break
 
@@ -1483,12 +1874,7 @@ class MaterialConverter(QtWidgets.QDialog):
                 self.mapping_type_table.insertRow(row_found)
 
         # 设置源材质类型
-        src_item = self.mapping_type_table.item(row_found, 1)
-        if not src_item:
-            src_item = QtWidgets.QTableWidgetItem(material_type)
-            self.mapping_type_table.setItem(row_found, 1, src_item)
-        else:
-            src_item.setText(material_type)
+        self._set_cell_text(row_found, 1, material_type)
 
         # 高亮该行
         self.mapping_type_table.selectRow(row_found)
@@ -1502,10 +1888,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
         material = None
         for item in selected:
-            node_type = cmds.nodeType(item)
-            if node_type in ['lambert', 'phong', 'blinn', 'standardSurface', 'openPBRSurface',
-                           'aiStandardSurface', 'aiStandard', 'VRayMtl', 'RedshiftMaterial',
-                           'aiStandardHair', 'aiVolume']:
+            if _is_material_node(item):
                 material = item
                 break
 
@@ -1517,9 +1900,9 @@ class MaterialConverter(QtWidgets.QDialog):
 
         # 检查是否有选中的行
         selected_rows = set()
-        for item in self.mapping_type_table.selectedItems():
-            selected_rows.add(item.row())
-        
+        for idx in self.mapping_type_table.selectionModel().selectedRows():
+            selected_rows.add(idx.row())
+
         # 如果有选中的行，使用第一行
         if selected_rows:
             row_found = sorted(selected_rows)[0]
@@ -1527,9 +1910,9 @@ class MaterialConverter(QtWidgets.QDialog):
             # 查找有源但没有目标的行
             row_found = -1
             for row in range(self.mapping_type_table.rowCount()):
-                src_item = self.mapping_type_table.item(row, 1)
-                dst_item = self.mapping_type_table.item(row, 2)
-                if src_item and src_item.text() and (not dst_item or not dst_item.text()):
+                src_text = self._get_cell_text(row, 1)
+                dst_text = self._get_cell_text(row, 2)
+                if src_text and not dst_text:
                     row_found = row
                     break
 
@@ -1539,12 +1922,7 @@ class MaterialConverter(QtWidgets.QDialog):
                 self.mapping_type_table.insertRow(row_found)
 
         # 设置目标材质类型
-        dst_item = self.mapping_type_table.item(row_found, 2)
-        if not dst_item:
-            dst_item = QtWidgets.QTableWidgetItem(material_type)
-            self.mapping_type_table.setItem(row_found, 2, dst_item)
-        else:
-            dst_item.setText(material_type)
+        self._set_cell_text(row_found, 2, material_type)
 
         # 高亮该行
         self.mapping_type_table.selectRow(row_found)
@@ -1553,14 +1931,16 @@ class MaterialConverter(QtWidgets.QDialog):
         """添加一行空映射"""
         row = self.mapping_type_table.rowCount()
         self.mapping_type_table.insertRow(row)
+        self._set_mapping_combo(row, 1, "")
+        self._set_mapping_combo(row, 2, "")
 
     def delete_mapping_type_row(self):
         """删除选中的行"""
         selected_rows = set()
         # 获取所有选中的行
-        for item in self.mapping_type_table.selectedItems():
-            selected_rows.add(item.row())
-        
+        for idx in self.mapping_type_table.selectionModel().selectedRows():
+            selected_rows.add(idx.row())
+
         # 如果没有选中项，检查是否有当前行
         if not selected_rows and self.mapping_type_table.currentRow() >= 0:
             selected_rows.add(self.mapping_type_table.currentRow())
@@ -1576,10 +1956,8 @@ class MaterialConverter(QtWidgets.QDialog):
         """保存材质类型映射配置为.mlist预设"""
         mappings = []
         for row in range(self.mapping_type_table.rowCount()):
-            src_item = self.mapping_type_table.item(row, 1)
-            dst_item = self.mapping_type_table.item(row, 2)
-            source_type = src_item.text() if src_item else ""
-            target_type = dst_item.text() if dst_item else ""
+            source_type = self._get_cell_text(row, 1)
+            target_type = self._get_cell_text(row, 2)
             if source_type or target_type:
                 mappings.append({
                     "source_type": source_type,
@@ -1642,14 +2020,142 @@ class MaterialConverter(QtWidgets.QDialog):
             for mapping in mappings:
                 row = self.mapping_type_table.rowCount()
                 self.mapping_type_table.insertRow(row)
-                src_item = QtWidgets.QTableWidgetItem(mapping.get("source_type", ""))
-                dst_item = QtWidgets.QTableWidgetItem(mapping.get("target_type", ""))
-                self.mapping_type_table.setItem(row, 1, src_item)
-                self.mapping_type_table.setItem(row, 2, dst_item)
+                self._set_mapping_combo(row, 1, mapping.get("source_type", ""))
+                self._set_mapping_combo(row, 2, mapping.get("target_type", ""))
 
             QMessageBox.information(self, t("msg.success"), t("qtool.matconv.msg.mapping_config_loaded", count=len(mappings)))
         except Exception as e:
             QMessageBox.critical(self, t("msg.error"), t("qtool.matconv.msg.load_mapping_config_failed", e=str(e)))
+
+    def _list_available_mappings(self):
+        """列出所有搜索目录下可用的映射文件名（用于未找到时的提示）"""
+        files = []
+        dirs = [self.mapping_base_dir]
+        for fb in getattr(self, '_fallback_mapping_dirs', []):
+            if os.path.exists(fb):
+                dirs.append(fb)
+        for d in dirs:
+            if not os.path.exists(d):
+                continue
+            for f in os.listdir(d):
+                if f.endswith('.mmap') and f not in files:
+                    files.append(f)
+        return sorted(files)
+
+    def _collect_mapping_types(self):
+        """扫描映射文件，收集所有可用的源/目标材质类型
+
+        Returns:
+            tuple: (source_types, target_types) 两个 sorted list
+        """
+        source_types = set()
+        target_types = set()
+        dirs = [self.mapping_base_dir]
+        for fb in getattr(self, '_fallback_mapping_dirs', []):
+            if os.path.exists(fb):
+                dirs.append(fb)
+        for d in dirs:
+            if not os.path.exists(d):
+                continue
+            for f in os.listdir(d):
+                if not f.endswith('.mmap') or f.startswith('_'):
+                    continue
+                filepath = os.path.join(d, f)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as fp:
+                        data = json.load(fp)
+                    st = data.get('source_type', '')
+                    tt = data.get('target_type', '')
+                    if st:
+                        source_types.add(st)
+                    if tt:
+                        target_types.add(tt)
+                except Exception:
+                    # JSON 解析失败时回退到文件名解析
+                    base = f[:-5]  # 去掉 .mmap
+                    parts = base.rsplit('_', 1)
+                    if len(parts) == 2:
+                        source_types.add(parts[0])
+                        target_types.add(parts[1])
+        return sorted(source_types), sorted(target_types)
+
+    def _create_type_combo(self, current_text="", is_source=True):
+        """创建材质类型下拉框
+
+        Args:
+            current_text: 当前选中的文本
+            is_source: True=源类型下拉框，False=目标类型下拉框
+
+        Returns:
+            QComboBox
+        """
+        combo = QtWidgets.QComboBox()
+        combo.setEditable(True)
+        source_types, target_types = self._collect_mapping_types()
+        types = source_types if is_source else target_types
+        combo.addItem("")  # 空选项
+        for tp in types:
+            combo.addItem(tp)
+        if current_text:
+            idx = combo.findText(current_text)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+            else:
+                combo.setEditText(current_text)
+        # 样式与表格一致（含编辑框与弹出列表字体）
+        combo.setStyleSheet(_font_style("""
+            QComboBox {
+                padding: @SIZE_3@px @SIZE_8@px;
+                font-size: @FONT_16@px;
+            }
+            QComboBox QLineEdit {
+                font-size: @FONT_16@px;
+                padding: @SIZE_2@px @SIZE_4@px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: @FONT_16@px;
+                background-color: #353535;
+                color: #e0e0e0;
+                selection-background-color: #2080d0;
+                selection-color: white;
+                padding: @SIZE_2@px;
+            }
+        """))
+        return combo
+
+    def _set_mapping_combo(self, row, col, text=""):
+        """在映射类型表格的指定单元格设置下拉框"""
+        is_source = (col == 1)
+        combo = self._create_type_combo(text, is_source)
+        self.mapping_type_table.setCellWidget(row, col, combo)
+        return combo
+
+    def _get_cell_text(self, row, col):
+        """读取单元格文本（兼容下拉框和普通项）"""
+        widget = self.mapping_type_table.cellWidget(row, col)
+        if widget:
+            return widget.currentText()
+        item = self.mapping_type_table.item(row, col)
+        return item.text() if item else ""
+
+    def _set_cell_text(self, row, col, text):
+        """设置单元格文本（有下拉框则更新下拉框，否则创建下拉框或设置项）"""
+        widget = self.mapping_type_table.cellWidget(row, col)
+        if widget:
+            idx = widget.findText(text)
+            if idx >= 0:
+                widget.setCurrentIndex(idx)
+            else:
+                widget.setEditText(text)
+        else:
+            if col in (1, 2):
+                self._set_mapping_combo(row, col, text)
+            else:
+                item = self.mapping_type_table.item(row, col)
+                if item:
+                    item.setText(text)
+                else:
+                    self.mapping_type_table.setItem(row, col, QtWidgets.QTableWidgetItem(text))
 
     def find_mapping_file(self, source_type, target_type):
         """根据源材质类型和目标材质类型查找映射文件
@@ -1666,6 +2172,11 @@ class MaterialConverter(QtWidgets.QDialog):
         def _search_in_dir(base_dir):
             if not os.path.exists(base_dir):
                 return None
+            # 平铺结构：映射文件直接放在目录下（材质节点属性映射工具的保存格式）
+            flat_filepath = os.path.join(base_dir, expected_filename)
+            if os.path.exists(flat_filepath):
+                return flat_filepath
+            # 子目录结构：{target_type}/{source_type}_{target_type}.mmap
             target_folder = os.path.join(base_dir, target_type)
             if os.path.exists(target_folder):
                 filepath = os.path.join(target_folder, expected_filename)
@@ -1691,6 +2202,138 @@ class MaterialConverter(QtWidgets.QDialog):
 
         return None
 
+    def find_conversion_path(self, source_type, target_type):
+        """查找转换路径（支持直连和中转）
+
+        优先直接映射 A→B；若不存在，则尝试中转 A→中间格式→B。
+        中间格式从所有映射文件中自动扫描，优先 openPBRSurface。
+
+        Returns:
+            list of (mapping_file, step_source, step_target) tuples，或 None
+        """
+        if not source_type or not target_type:
+            return None
+
+        # 1. 尝试直接映射
+        direct = self.find_mapping_file(source_type, target_type)
+        if direct:
+            return [(direct, source_type, target_type)]
+
+        # 2. 收集所有可用类型（作为中间桥梁候选）
+        all_types = set()
+        dirs = [self.mapping_base_dir]
+        for fb in getattr(self, '_fallback_mapping_dirs', []):
+            if os.path.exists(fb):
+                dirs.append(fb)
+        for d in dirs:
+            if not os.path.exists(d):
+                continue
+            for f in os.listdir(d):
+                if not f.endswith('.mmap') or f.startswith('_'):
+                    continue
+                # 从文件名解析 source_target
+                base = f[:-5]
+                parts = base.rsplit('_', 1)
+                if len(parts) == 2:
+                    all_types.add(parts[0])
+                    all_types.add(parts[1])
+
+        # 优先 openPBRSurface 作为中转格式，然后尝试其他类型
+        preferred_hub = "openPBRSurface"
+        ordered = sorted(all_types, key=lambda t: (0 if t == preferred_hub else 1, t))
+
+        for intermediate in ordered:
+            if intermediate == source_type or intermediate == target_type:
+                continue
+            step1 = self.find_mapping_file(source_type, intermediate)
+            step2 = self.find_mapping_file(intermediate, target_type)
+            if step1 and step2:
+                print(f"中转路径: {source_type} -> {intermediate} -> {target_type}")
+                return [(step1, source_type, intermediate),
+                        (step2, intermediate, target_type)]
+
+        return None
+
+    def _convert_material_via_path(self, material, source_type, target_type, copy_textures, fallback_default=False):
+        """通过转换路径（支持多步中转）转换单个材质
+
+        Args:
+            material: 源材质节点
+            source_type: 源材质类型
+            target_type: 目标材质类型
+            copy_textures: 是否复制纹理连接
+            fallback_default: 无映射路径时是否创建默认目标材质（仅类型正确，不复制属性）
+
+        Returns:
+            (target_material, success_count, failed_count, default_count, texture_count) 或 None
+        """
+        path = self.find_conversion_path(source_type, target_type)
+        if not path:
+            print(f"未找到 {source_type} -> {target_type} 的转换路径（直接或中转）")
+            available = self._list_available_mappings()
+            if available:
+                print("可用映射文件: " + ", ".join(available))
+            if fallback_default:
+                try:
+                    target_name = _converted_material_name(material, target_type)
+                    target_material = cmds.shadingNode(target_type, name=target_name, asShader=True)
+                    print(f"[默认材质] 未找到映射文件，创建默认 {target_type} 材质: {target_material}")
+                    return (target_material, 0, 0, 0, 0)
+                except Exception as e:
+                    print(f"[默认材质] 创建默认材质失败: {e}")
+                    return None
+            return None
+
+        current_source = material
+        intermediate_materials = []
+        old_mapping_data = self.mapping_data
+        old_target_type = getattr(self, 'target_material_type', target_type)
+
+        try:
+            for i, (mapping_file, step_src, step_dst) in enumerate(path):
+                # 加载映射数据
+                try:
+                    with open(mapping_file, 'r', encoding='utf-8') as f:
+                        self.mapping_data = json.load(f)
+                except Exception as e:
+                    print(f"加载映射文件失败 {mapping_file}: {e}")
+                    return None
+
+                if len(path) > 1:
+                    print(f"  步骤 {i+1}/{len(path)}: {step_src} -> {step_dst}")
+
+                self.target_material_type = step_dst
+                result = self.convert_material(current_source, step_dst, copy_textures)
+
+                if not result:
+                    print(f"转换失败: {step_src} -> {step_dst}")
+                    return None
+
+                target_material = result[0]
+
+                if i < len(path) - 1:
+                    # 非最后一步：结果作为下一步输入，记录待清理的中间材质
+                    intermediate_materials.append(target_material)
+                    current_source = target_material
+                else:
+                    # 最后一步：result 即为最终结果
+                    pass
+
+        finally:
+            self.mapping_data = old_mapping_data
+            self.target_material_type = old_target_type
+
+        # 清理中间材质
+        for im in intermediate_materials:
+            try:
+                if cmds.objExists(im):
+                    cmds.delete(im)
+                    print(f"  清理中间材质: {im}")
+            except Exception:
+                pass
+
+        return result
+
     def auto_load_mapping_for_source_material(self, source_material):
         """根据源材质自动查找并加载对应的映射文件
 
@@ -1715,6 +2358,14 @@ class MaterialConverter(QtWidgets.QDialog):
         for search_dir in all_search_dirs:
             if not os.path.exists(search_dir):
                 continue
+            # 平铺结构：直接扫描 {source_type}_*.mmap 文件
+            for fname in os.listdir(search_dir):
+                if fname.startswith(f"{source_type}_") and fname.endswith(".mmap"):
+                    mapping_file = os.path.join(search_dir, fname)
+                    print(f"自动找到映射文件: {mapping_file}")
+                    self.load_mapping_file(mapping_file)
+                    return True
+            # 子目录结构：遍历目标材质类型目录
             for target_type in os.listdir(search_dir):
                 target_path = os.path.join(search_dir, target_type)
                 if not os.path.isdir(target_path):
@@ -1776,18 +2427,11 @@ class MaterialConverter(QtWidgets.QDialog):
             if attr_type in ['double', 'float', 'int', 'long', 'short', 'byte', 'char']:
                 return cmds.getAttr(full_attr)
 
-            elif attr_type in ['double3', 'float3', 'double2', 'float2', 'vector']:
+            elif attr_type in ['double3', 'float3', 'double2', 'float2', 'vector',
+                               'Tdouble3', 'Tfloat3', 'Tdouble2', 'Tfloat2',
+                               'double4', 'float4', 'Tdouble4', 'Tfloat4']:
                 value = cmds.getAttr(full_attr)
-                if value is None:
-                    return None
-                # 处理嵌套列表，如 [(1.0, 0.5, 0.25)]
-                if isinstance(value, (list, tuple)) and len(value) == 1:
-                    if isinstance(value[0], (list, tuple)):
-                        value = value[0]
-                # 确保返回的是普通列表或元组，而不是嵌套结构
-                if isinstance(value, (list, tuple)):
-                    return value
-                return value
+                return self._flatten_value(value)
 
             elif attr_type == 'string':
                 return cmds.getAttr(full_attr)
@@ -1804,15 +2448,164 @@ class MaterialConverter(QtWidgets.QDialog):
             elif attr_type == 'enum':
                 return cmds.getAttr(full_attr)
 
-            else:
+            elif attr_type == 'compound':
+                # 可能是颜色/向量 compound，getAttr 返回元组，可能是嵌套的
                 try:
-                    return cmds.getAttr(full_attr)
+                    value = cmds.getAttr(full_attr)
+                    return self._flatten_value(value)
+                except:
+                    return None
+
+            else:
+                # 未知类型：返回原始值并统一拍平（兼容 Maya 各种颜色 compound）
+                try:
+                    value = cmds.getAttr(full_attr)
+                    return self._flatten_value(value)
                 except:
                     return None
 
         except Exception as e:
             print(f"获取属性值失败 {node}.{attribute}: {e}")
             return None
+
+    @staticmethod
+    def _flatten_value(value):
+        """将 Maya getAttr 返回的任意嵌套结构拍平为普通 (r,g,b)/(r,g) 或原值。
+
+        Maya 对颜色/向量 compound 的返回形式不一，常见有：
+            [(1.0, 0.2, 0.3)] / ((1.0, 0.2, 0.3),) / [[1.0, 0.2, 0.3]]
+            (1.0, 0.2, 0.3) / (1.0, 0.2, 0.3, 1.0)
+        统一解包成最外层非单元素的可迭代。
+        """
+        if value is None:
+            return None
+        while isinstance(value, (list, tuple)) and len(value) == 1:
+            inner = value[0]
+            if isinstance(inner, (list, tuple)):
+                value = inner
+            else:
+                break
+        if isinstance(value, (list, tuple)):
+            return value
+        return value
+
+    # ------------------------------------------------------------------
+    # 颜色属性赋值：优先使用 R/G/B 子通道逐通道 setAttr
+    # （VRayMtl.color / openPBR.baseColor / Lambert.color 等 Maya 颜色
+    #  编辑器 UI 默认以 HSV 展示，但其底层 compound 子属性一律是
+    #  .R / .G / .B 命名，逐通道 setAttr 比 type=double3 更稳定。）
+    # ------------------------------------------------------------------
+    def _try_set_color_by_children(self, node, attribute, value):
+        """若 value 是长度 >=3 的元组/列表，且 {attribute}R/.G/.B 子通道存在，
+        则逐通道 setAttr。成功返回 True，否则 False。"""
+        if not isinstance(value, (list, tuple)):
+            return False
+        if len(value) < 3:
+            return False
+        suffixes = ('R', 'G', 'B')
+        children = [f"{attribute}{s}" for s in suffixes]
+        full_attr = f"{node}.{attribute}"
+        # 必须保证属性存在，否则子通道也不存在
+        if not cmds.objExists(full_attr):
+            return False
+        for c in children:
+            if not cmds.objExists(f"{node}.{c}"):
+                return False
+        try:
+            for c, v in zip(children, value[:3]):
+                cmds.setAttr(f"{node}.{c}", float(v))
+            return True
+        except Exception as e:
+            print(f"[颜色逐通道写入] 失败 {full_attr} ({value}): {e}")
+            return False
+
+    def _debug_read_color(self, full_attr):
+        """调试用：回读颜色属性当前值（含类型信息）"""
+        try:
+            attr_type = cmds.getAttr(full_attr, type=True)
+            got = cmds.getAttr(full_attr)
+            return f"type={attr_type} value={self._flatten_value(got)}"
+        except Exception as e:
+            return f"读取失败: {e}"
+
+    def _set_color_attribute_robust(self, node, attribute, value):
+        """颜色/向量（list/tuple）多方案写入。
+
+        依次尝试：
+          1. 逐子通道 setAttr(node.{attr}R/.G/.B)——最可靠，逐通道独立写入，
+             不会出现整体 setAttr 对部分渲染器（如 V-Ray）属性红色通道丢失的问题。
+          2. setAttr(node.{attr}, r, g, b, type='float3')——V-Ray Tfloat3 /
+             Maya float3 的标准写法，优先于无 type。
+          3. setAttr(node.{attr}, r, g, b, type='double3')
+          4. setAttr(node.{attr}, r, g, b)（三个位置参数，无 type，最后兜底）
+        任一方案 setAttr 无异常即认为写入成功。
+        """
+        if not isinstance(value, (list, tuple)) or len(value) < 3:
+            return False
+        vals = [float(v) for v in value[:3]]
+        full_attr = f"{node}.{attribute}"
+
+        # 方案1：逐子通道 R/G/B——写入成功即成功
+        if self._try_set_color_by_children(node, attribute, vals):
+            print(f"[颜色写入] 逐通道成功 {full_attr} <- {vals} 回读 {self._debug_read_color(full_attr)}")
+            return True
+
+        # 方案2 / 方案3：带 type（float3 优先，兼容 V-Ray Tfloat3）
+        for typ in ('float3', 'double3'):
+            try:
+                cmds.setAttr(full_attr, vals[0], vals[1], vals[2], type=typ)
+                print(f"[颜色写入] {typ} 成功 {full_attr} <- {vals} 回读 {self._debug_read_color(full_attr)}")
+                return True
+            except Exception as e:
+                print(f"[颜色写入] {typ} 失败 {full_attr}: {e}")
+
+        # 方案4：无 type 兜底
+        try:
+            cmds.setAttr(full_attr, vals[0], vals[1], vals[2])
+            print(f"[颜色写入] 无type 成功 {full_attr} <- {vals} 回读 {self._debug_read_color(full_attr)}")
+            return True
+        except Exception as e:
+            print(f"[颜色写入] 无type 失败 {full_attr}: {e}")
+
+        return False
+
+    def _is_color_child_attr(self, node, attr):
+        """判断属性是否为颜色子通道（如 diffuseColorR / colorB / baseColorG）
+
+        渲染器材质的颜色子通道常与父颜色属性（如 color ↔ diffuseColor）别名共享，
+        单独写入子通道可能覆盖已整体设置的颜色（导致通道丢失）。
+        当 attr 以 R/G/B 结尾且其父属性存在时视为颜色子通道。
+
+        Args:
+            node: 目标材质节点
+            attr: 目标属性名
+
+        Returns:
+            bool: 是否为颜色子通道
+        """
+        if not attr or len(attr) <= 1 or attr[-1] not in 'RGB':
+            return False
+        parent = attr[:-1]
+        return cmds.objExists(f"{node}.{parent}")
+
+    def _disconnect_incoming(self, full_attr):
+        """断开目标属性上来自其他节点的输入连接
+
+        VRayMtl 等渲染器材质的复合颜色属性（如 diffuseColor）可能与别名属性
+        （如 color）或内部默认连接共享，setAttr 时会报"已锁定或已连接"。
+        设置前先断开这些输入连接，保证值能正确写入。
+        """
+        try:
+            incoming = cmds.listConnections(full_attr, source=True, destination=False, plugs=True)
+            if not incoming:
+                return
+            for plug in incoming:
+                try:
+                    cmds.disconnectAttr(plug, full_attr)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def _set_attribute_value(self, node, attribute, value):
         """设置节点属性的值"""
@@ -1822,10 +2615,24 @@ class MaterialConverter(QtWidgets.QDialog):
                 print(f"属性不存在: {full_attr}")
                 return False
 
+            # 断开目标属性上的现有输入连接，避免"已锁定或已连接"导致写入失败
+            self._disconnect_incoming(full_attr)
+
             attr_type = cmds.getAttr(full_attr, type=True)
 
             if value is None or value == "":
                 return True
+
+            # ==============================================================
+            # 颜色/向量值（list/tuple，长度2-4）：多方案写入 + 回读验证。
+            # 不依赖 attr_type 识别，覆盖 Maya 各种颜色属性
+            # （compound / float3 / Tfloat3 / V-Ray 自定义类型等），
+            # 彻底解决“颜色写入后部分通道丢失（如红色=0）”的问题。
+            # 若全部方案都失败，则继续走下方 attr_type 分支兜底。
+            # ==============================================================
+            if isinstance(value, (list, tuple)) and 2 <= len(value) <= 4:
+                if self._set_color_attribute_robust(node, attribute, value):
+                    return True
 
             if attr_type in ['double', 'float', 'int', 'long', 'short', 'byte', 'char']:
                 # 如果值是列表或元组，取第一个元素
@@ -1851,33 +2658,48 @@ class MaterialConverter(QtWidgets.QDialog):
                 cmds.setAttr(full_attr, str(value), type='string')
                 return True
 
-            elif attr_type in ['double3', 'float3', 'double2', 'float2', 'vector']:
+            elif attr_type in ['double3', 'float3', 'double2', 'float2', 'vector',
+                               'Tdouble3', 'Tfloat3', 'Tdouble2', 'Tfloat2']:
                 if isinstance(value, (list, tuple)):
                     # 处理嵌套列表或元组，如 [(1.0, 0.5, 0.25)]
                     if len(value) == 1 and isinstance(value[0], (list, tuple)):
                         value = value[0]
-                    
+
                     # 处理空列表
                     if not value:
                         return True
-                    
+
+                    # 判断是 2 / 3 分量
+                    n = 2 if attr_type.endswith('2') else 3
                     # 确保有足够的元素，不足的用0填充
-                    while len(value) < 3:
-                        value = list(value) + [0.0]
-                    
+                    val_list = list(value)
+                    while len(val_list) < n:
+                        val_list.append(0.0)
+                    args = [float(v) for v in val_list[:n]]
+
                     try:
-                        cmds.setAttr(full_attr, float(value[0]), float(value[1]), float(value[2]), type='double3')
+                        # 优先按类型匹配的 type 参数写入；如失败回退纯位置参数
+                        typ = 'double2' if attr_type.endswith('2') else 'double3'
+                        cmds.setAttr(full_attr, *args, type=typ)
                     except Exception as e:
-                        print(f"设置向量属性失败: {e}")
-                        return True
+                        try:
+                            cmds.setAttr(full_attr, *args)
+                        except Exception as e2:
+                            print(f"设置向量属性失败: {e} / fallback: {e2}")
+                            return True
                 elif isinstance(value, str):
                     try:
                         cleaned = value.strip().strip('[]()')
                         parts = [float(x.strip()) for x in cleaned.replace(',', ' ').split() if x.strip()]
-                        # 确保有足够的元素，不足的用0填充
-                        while len(parts) < 3:
+                        n = 2 if attr_type.endswith('2') else 3
+                        while len(parts) < n:
                             parts.append(0.0)
-                        cmds.setAttr(full_attr, parts[0], parts[1], parts[2], type='double3')
+                        args = parts[:n]
+                        typ = 'double2' if attr_type.endswith('2') else 'double3'
+                        try:
+                            cmds.setAttr(full_attr, *args, type=typ)
+                        except:
+                            cmds.setAttr(full_attr, *args)
                     except Exception as e:
                         print(f"无法解析RGB值: {value} - {e}")
                         return True
@@ -1885,7 +2707,13 @@ class MaterialConverter(QtWidgets.QDialog):
                     try:
                         # 对于单个值，设置为RGB相同的值
                         val = float(value)
-                        cmds.setAttr(full_attr, val, val, val, type='double3')
+                        n = 2 if attr_type.endswith('2') else 3
+                        args = [val] * n
+                        typ = 'double2' if attr_type.endswith('2') else 'double3'
+                        try:
+                            cmds.setAttr(full_attr, *args, type=typ)
+                        except:
+                            cmds.setAttr(full_attr, *args)
                     except Exception as e:
                         print(f"设置向量属性失败: {e}")
                         return True
@@ -1907,7 +2735,14 @@ class MaterialConverter(QtWidgets.QDialog):
 
             elif attr_type == 'compound':
                 if isinstance(value, (list, tuple)) and len(value) >= 3:
-                    cmds.setAttr(full_attr, value[0], value[1], value[2], type='double3')
+                    try:
+                        cmds.setAttr(full_attr, float(value[0]), float(value[1]), float(value[2]), type='double3')
+                    except Exception:
+                        # 回退：不指定 type，直接传 3 个位置参数
+                        try:
+                            cmds.setAttr(full_attr, float(value[0]), float(value[1]), float(value[2]))
+                        except Exception:
+                            return False
                 return True
 
             elif attr_type in ['doubleArray', 'floatArray', 'intArray']:
@@ -1927,7 +2762,13 @@ class MaterialConverter(QtWidgets.QDialog):
                 return True
 
             else:
+                # 未知类型：仍然先尝试将 list/tuple 的颜色/向量值以 3 个位置参数传入，
+                # 避免 setAttr(full_attr, (R,G,B)) 这样的参数错误导致只有部分通道生效
                 try:
+                    if isinstance(value, (list, tuple)) and 2 <= len(value) <= 4:
+                        args = [float(v) for v in value]
+                        cmds.setAttr(full_attr, *args)
+                        return True
                     cmds.setAttr(full_attr, value)
                 except Exception as e:
                     print(f"设置属性值失败 {full_attr} (类型 {attr_type}): {e}")
@@ -1961,6 +2802,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
             connections = cmds.listConnections(src_full, source=True, destination=False, plugs=True)
             if not connections:
+                print(f"[纹理转换] {src_full} 无上游连接")
                 return False
 
             src_plug = connections[0]
@@ -1977,7 +2819,7 @@ class MaterialConverter(QtWidgets.QDialog):
                 except:
                     pass
 
-            # ===== 情况1：RGB贴图 -> 浮点属性（需要桥接转换） =====
+            # ===== 情况1：RGB/标量贴图 -> 浮点属性（需要桥接转换） =====
             if dst_is_float and src_plug_attr in ['outColor', 'color', 'outValue']:
                 # 方案A：如果是file节点，优先连接outAlpha（单通道）
                 if cmds.nodeType(src_plug_node) == 'file':
@@ -1985,39 +2827,57 @@ class MaterialConverter(QtWidgets.QDialog):
                         cmds.connectAttr(f"{src_plug_node}.outAlpha", dst_full, force=True)
                         print(f"[纹理转换] {src_plug_node}.outAlpha -> {dst_full}")
                         return True
-                    except:
-                        pass
+                    except Exception as e:
+                        print(f"[纹理转换] 方案A失败: {e}")
 
-                # 方案B：连接R通道
+                # 方案B：标量输出（outValue）直接连接；向量输出（outColor/color）连R通道
                 try:
-                    cmds.connectAttr(f"{src_plug_node}.{src_plug_attr}R", dst_full, force=True)
-                    print(f"[纹理转换] {src_plug_node}.{src_plug_attr}R -> {dst_full}")
+                    if src_plug_attr == 'outValue':
+                        cmds.connectAttr(src_plug, dst_full, force=True)
+                        print(f"[纹理转换] {src_plug} -> {dst_full}")
+                    else:
+                        cmds.connectAttr(f"{src_plug_node}.{src_plug_attr}R", dst_full, force=True)
+                        print(f"[纹理转换] {src_plug_node}.{src_plug_attr}R -> {dst_full}")
                     return True
-                except:
-                    pass
+                except Exception as e:
+                    print(f"[纹理转换] 方案B失败: {e}")
 
-                # 方案C：创建luminance节点做灰度转换
+                # 方案C：仅向量输出可做 luminance 灰度转换（标量输出直接连接即可，无需转换）
+                if src_plug_attr not in ['outColor', 'color']:
+                    return False
                 try:
                     lum_node = cmds.shadingNode('luminance', name=f"{src_plug_node}_lum", asUtility=True)
-                    cmds.connectAttr(src_plug, f"{lum_node}.color", force=True)
+                    # luminance 的输入属性名因 Maya 版本而异，动态探测
+                    input_attr = None
+                    for cand in ('color', 'inputColor', 'input', 'value'):
+                        if cmds.objExists(f"{lum_node}.{cand}"):
+                            input_attr = cand
+                            break
+                    if input_attr is None:
+                        return False
+                    cmds.connectAttr(src_plug, f"{lum_node}.{input_attr}", force=True)
                     cmds.connectAttr(f"{lum_node}.outValue", dst_full, force=True)
                     print(f"[纹理转换] lum节点 {lum_node}.outValue -> {dst_full}")
                     return True
-                except:
+                except Exception as e:
+                    print(f"[纹理转换] 方案C失败: {e}")
                     return False
 
             # ===== 情况2：直接连接 =====
             else:
                 try:
                     cmds.connectAttr(src_plug, dst_full, force=True)
+                    print(f"[纹理转换] {src_plug} -> {dst_full}")
                     return True
-                except:
+                except Exception as e:
+                    print(f"[纹理转换] 直接连接失败 {src_plug} -> {dst_full}: {e}")
                     return False
 
-        except:
+        except Exception as e:
+            print(f"[纹理转换] 连接失败 {source_node}.{source_attr} -> {target_node}.{target_attr}: {e}")
             return False
 
-    def _connect_texture_with_remap(self, source_node, source_attr, target_node, target_attr, transform_name):
+    def _connect_texture_with_remap(self, source_node, source_attr, target_node, target_attr, transform_name, parameters=None):
         """为贴图连接插入remapValue转换节点
 
         当源属性有纹理连接且需要数学转换时，在连接中插入remapValue节点。
@@ -2029,6 +2889,7 @@ class MaterialConverter(QtWidgets.QDialog):
             target_node: 目标材质节点
             target_attr: 目标属性名
             transform_name: 转换函数名称
+            parameters: 可选的转换函数参数字典（来自映射文件 mapping 的 "parameters" 字段）
 
         Returns:
             bool: 是否成功
@@ -2044,7 +2905,7 @@ class MaterialConverter(QtWidgets.QDialog):
             if not connections:
                 return False
 
-            input_min, input_max, samples = precompute_remap_samples(transform_name)
+            input_min, input_max, samples = precompute_remap_samples(transform_name, parameters=parameters)
             if not samples:
                 return False
 
@@ -2072,11 +2933,15 @@ class MaterialConverter(QtWidgets.QDialog):
             cmds.setAttr(f"{remap_node}.outputMin", samples[0][1])
             cmds.setAttr(f"{remap_node}.outputMax", samples[-1][1])
 
-            for i, (in_val, out_val) in enumerate(samples):
-                cmds.setAttr(f"{remap_node}.value[{i}].value_Position", in_val)
-                cmds.setAttr(f"{remap_node}.value[{i}].value_FloatValue", out_val)
-
-            cmds.setAttr(f"{remap_node}.interpolation", 1)
+            # 只使用节点自带的首尾两个插值点（identity 0→0、1→1），
+            # 配合 inputMin/inputMax + outputMin/outputMax 即完成线性映射。
+            # 不额外扩展 value 数组，避免访问不存在的插值点导致 setAttr 失败。
+            # 注意：remapValue 没有 interpolation 属性（那是 remapColor 的），
+            # 插值类型由每个 value[i].value_Interp 控制，默认即线性，无需设置。
+            cmds.setAttr(f"{remap_node}.value[0].value_Position", 0.0)
+            cmds.setAttr(f"{remap_node}.value[0].value_FloatValue", 0.0)
+            cmds.setAttr(f"{remap_node}.value[1].value_Position", 1.0)
+            cmds.setAttr(f"{remap_node}.value[1].value_FloatValue", 1.0)
 
             cmds.connectAttr(src_plug, f"{remap_node}.inputValue", force=True)
             cmds.connectAttr(f"{remap_node}.outValue", dst_full, force=True)
@@ -2085,8 +2950,324 @@ class MaterialConverter(QtWidgets.QDialog):
             return True
 
         except Exception as e:
-            print(f"remapValue转换失败: {e}")
+            print(f"[纹理转换] remapValue转换失败 {source_node}.{source_attr} -> {target_node}.{target_attr}: {e}")
             return False
+
+    def _connect_texture_transform(self, source_node, source_attr, target_node, target_attr, transform_name, parameters=None):
+        """按转换函数类型选择合适的节点处理纹理连接
+
+        优先 remapValue（浮点输出类函数）；颜色运算类用 multiplyDivide / plusMinusAverage /
+        blendColors / clamp；通道类用 vectorComponent / luminance。
+        全部失败返回 False，调用方回退到数值转换（纹理被拍平）。
+
+        Args:
+            source_node: 源材质节点
+            source_attr: 源属性名
+            target_node: 目标材质节点
+            target_attr: 目标属性名
+            transform_name: 转换函数名称（中英文均可）
+            parameters: 可选的转换函数参数字典（来自映射文件 mapping 的 "parameters" 字段）
+
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            # 1) 可 remap 的函数：浮点目标用 remapValue（线性近似）
+            if transform_name in TRANSFORM_INPUT_RANGES:
+                if self._connect_texture_with_remap(source_node, source_attr, target_node, target_attr, transform_name, parameters):
+                    return True
+
+            src_full = f"{source_node}.{source_attr}"
+            dst_full = f"{target_node}.{target_attr}"
+            if not cmds.objExists(src_full) or not cmds.objExists(dst_full):
+                return False
+            connections = cmds.listConnections(src_full, source=True, destination=False, plugs=True)
+            if not connections:
+                return False
+            src_plug = connections[0]
+
+            func = MATERIAL_CONVERSION_FUNCTIONS.get(transform_name)
+            if func is None:
+                return False
+            fname = func.__name__
+            params = parameters or {}
+
+            dst_attr_type = cmds.getAttr(dst_full, type=True)
+            dst_is_float = dst_attr_type in ['float', 'double']
+
+            # 断开目标上的现有连接
+            existing = cmds.listConnections(dst_full, source=True, destination=False, plugs=True)
+            if existing:
+                try:
+                    cmds.disconnectAttr(existing[0], dst_full)
+                except Exception:
+                    pass
+
+            # ===== 颜色乘/除标量：multiplyDivide =====
+            if fname in ('color_mul_scalar', 'color_div_scalar'):
+                scalar = float(params.get('scalar', 1.0)) or 1.0
+                md = cmds.shadingNode('multiplyDivide', asUtility=True,
+                                      name=f"{source_node}_{source_attr}_mul")
+                if fname == 'color_div_scalar':
+                    cmds.setAttr(f"{md}.operation", 2)  # 2 = Divide
+                cmds.setAttr(f"{md}.input2X", scalar)
+                cmds.setAttr(f"{md}.input2Y", scalar)
+                cmds.setAttr(f"{md}.input2Z", scalar)
+                cmds.connectAttr(src_plug, f"{md}.input1", force=True)
+                if dst_is_float:
+                    cmds.connectAttr(f"{md}.outputX", dst_full, force=True)
+                else:
+                    cmds.connectAttr(f"{md}.output", dst_full, force=True)
+                print(f"[纹理转换] multiplyDivide {md}: {src_plug} -> {dst_full}")
+                return True
+
+            # ===== 颜色相加：plusMinusAverage（用 input3D，兼容颜色） =====
+            if fname == 'color_add':
+                color2 = params.get('color2', [1.0, 1.0, 1.0])
+                pma = cmds.shadingNode('plusMinusAverage', asUtility=True,
+                                       name=f"{source_node}_{source_attr}_add")
+                cmds.setAttr(f"{pma}.operation", 1)  # 1 = Sum
+                cmds.connectAttr(src_plug, f"{pma}.input3D[0]", force=True)
+                for i, suffix in enumerate(('x', 'y', 'z')):
+                    cmds.setAttr(f"{pma}.input3D[1].input3D{suffix}", float(color2[i]))
+                if dst_is_float:
+                    cmds.connectAttr(f"{pma}.output3Dx", dst_full, force=True)
+                else:
+                    cmds.connectAttr(f"{pma}.output3D", dst_full, force=True)
+                print(f"[纹理转换] plusMinusAverage {pma}: {src_plug} -> {dst_full}")
+                return True
+
+            # ===== 颜色插值：blendColors =====
+            if fname == 'color_lerp':
+                color2 = params.get('color2', [1.0, 1.0, 1.0])
+                t = float(params.get('t', 0.5))
+                bc = cmds.shadingNode('blendColors', asUtility=True,
+                                      name=f"{source_node}_{source_attr}_lerp")
+                cmds.connectAttr(src_plug, f"{bc}.color1", force=True)
+                for i, c in enumerate(('R', 'G', 'B')):
+                    cmds.setAttr(f"{bc}.color2{c}", float(color2[i]))
+                cmds.setAttr(f"{bc}.blender", t)
+                if dst_is_float:
+                    cmds.connectAttr(f"{bc}.outputR", dst_full, force=True)
+                else:
+                    cmds.connectAttr(f"{bc}.output", dst_full, force=True)
+                print(f"[纹理转换] blendColors {bc}: {src_plug} -> {dst_full}")
+                return True
+
+            # ===== 限制范围：clamp =====
+            if fname == 'clamp':
+                min_val = float(params.get('min_val', 0.0))
+                max_val = float(params.get('max_val', 1.0))
+                cp = cmds.shadingNode('clamp', asUtility=True,
+                                      name=f"{source_node}_{source_attr}_clamp")
+                cmds.connectAttr(src_plug, f"{cp}.input", force=True)
+                for c in ('R', 'G', 'B'):
+                    cmds.setAttr(f"{cp}.min{c}", min_val)
+                    cmds.setAttr(f"{cp}.max{c}", max_val)
+                if dst_is_float:
+                    cmds.connectAttr(f"{cp}.outputR", dst_full, force=True)
+                else:
+                    cmds.connectAttr(f"{cp}.output", dst_full, force=True)
+                print(f"[纹理转换] clamp {cp}: {src_plug} -> {dst_full}")
+                return True
+
+            # ===== 取单通道：直接连颜色通道（Maya 无 vectorComponent 节点） =====
+            if fname in ('rgb_to_channel', 'rgb_to_red', 'rgb_to_green', 'rgb_to_blue'):
+                if not dst_is_float:
+                    return False
+                index = {'rgb_to_red': 0, 'rgb_to_green': 1, 'rgb_to_blue': 2}.get(fname)
+                if index is None:
+                    ch = str(params.get('channel', 'r')).lower()
+                    index = {'r': 0, 'g': 1, 'b': 2, 'x': 0, 'y': 1, 'z': 2,
+                             'red': 0, 'green': 1, 'blue': 2}.get(ch, 0)
+                channel_suffix = ('R', 'G', 'B')[index]
+                src_plug_attr = src_plug.split('.')[-1]
+                if src_plug_attr in ('outValue', 'outAlpha'):
+                    # 源已是单通道输出，直接连接
+                    cmds.connectAttr(src_plug, dst_full, force=True)
+                    print(f"[纹理转换] 通道直连 {src_plug} -> {dst_full}")
+                else:
+                    # 颜色输出取指定通道，如 outColorR
+                    cmds.connectAttr(f"{src_plug}{channel_suffix}", dst_full, force=True)
+                    print(f"[纹理转换] 取通道 {src_plug}{channel_suffix} -> {dst_full}")
+                return True
+
+            # ===== 转灰度：luminance（输出浮点，仅浮点目标可用） =====
+            if fname == 'rgb_to_grayscale':
+                if not dst_is_float:
+                    return False
+                lum = cmds.shadingNode('luminance', asUtility=True,
+                                       name=f"{source_node}_{source_attr}_lum")
+                # luminance 的输入属性名因 Maya 版本而异，动态探测
+                input_attr = None
+                for cand in ('color', 'inputColor', 'input', 'value'):
+                    if cmds.objExists(f"{lum}.{cand}"):
+                        input_attr = cand
+                        break
+                if input_attr is None:
+                    attrs = cmds.listAttr(lum, write=True) or []
+                    for a in attrs:
+                        if a.lower() in ('color', 'inputcolor', 'input', 'value', 'inputvalue'):
+                            input_attr = a
+                            break
+                if input_attr is None:
+                    return False
+                cmds.connectAttr(src_plug, f"{lum}.{input_attr}", force=True)
+                cmds.connectAttr(f"{lum}.outValue", dst_full, force=True)
+                print(f"[纹理转换] luminance {lum}.{input_attr}: {src_plug} -> {dst_full}")
+                return True
+
+            return False
+        except Exception as e:
+            print(f"[纹理转换] 节点处理失败 {transform_name}: {e}")
+            return False
+
+    def _replace_source_material(self, source, target):
+        """原位替换材质：删除源材质，将新材质改回源材质名，并重连 SG 保持网格赋值。
+
+        Args:
+            source: 源材质节点名
+            target: 新材质节点名
+
+        Returns:
+            str: 替换后的目标材质名
+        """
+        import maya.cmds as cmds
+        # 记录源材质到 shadingEngine 的连接（surfaceShader/volumeShader 等），
+        # 避免删除源材质后 SG 输入断开导致物体丢失材质赋值
+        sg_plugs = []  # [(sg名, sg输入属性)]
+        try:
+            for plug in (cmds.listConnections(source, destination=True, plugs=True,
+                                              type="shadingEngine") or []):
+                if "." not in plug:
+                    continue
+                sg_name, sg_attr = plug.rsplit(".", 1)
+                sg_plugs.append((sg_name, sg_attr))
+        except Exception:
+            pass
+
+        try:
+            cmds.delete(source)
+        except Exception:
+            return target
+        new_name = target
+        try:
+            new_name = cmds.rename(target, source)
+        except Exception:
+            pass
+
+        # 重连 SG：目标材质 outColor → SG 的对应输入属性
+        for sg, sg_attr in sg_plugs:
+            try:
+                if not cmds.objExists(sg):
+                    continue
+                cmds.connectAttr(f"{new_name}.outColor", f"{sg}.{sg_attr}", force=True)
+            except Exception as e:
+                print(f"[替换材质] 重连 {sg}.{sg_attr} 失败: {e}")
+        return new_name
+
+    def _report_failed_materials(self, failed_materials):
+        """转换完成后报告失败材质，可选择在Maya中选中
+
+        Args:
+            failed_materials: 失败的材质节点名列表
+        """
+        if not failed_materials:
+            return
+
+        msg = t("qtool.matconv.msg.fail_list_text", count=len(failed_materials)) + ":\n\n"
+        msg += "\n".join(f"  - {m}" for m in failed_materials)
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle(t("qtool.matconv.msg.fail_list_title"))
+        box.setText(msg)
+        select_btn = box.addButton(t("qtool.matconv.btn.select_failed"), QMessageBox.AcceptRole)
+        box.addButton(t("common.close"), QMessageBox.RejectRole)
+        box.exec()
+
+        if box.clickedButton() == select_btn:
+            try:
+                cmds.select(failed_materials, replace=True)
+                print(f"已在Maya中选中 {len(failed_materials)} 个失败材质")
+            except Exception as e:
+                print(f"选中失败材质出错: {e}")
+
+    def apply_zmetal_to_material(self, source_node_data, source_scene_material, target_material, copy_textures=True):
+        """将 zmetal 源材质节点数据应用到已存在的目标材质（右键「应用材质参数」）。
+
+        - 同类型：属性直拷 + 贴图/上游节点重连
+        - 不同类型：按 {source_type}_{target_type}.mmap 映射转换后应用
+
+        Args:
+            source_node_data: zmetal 中源材质的节点数据（node_type + attrs）
+            source_scene_material: 源材质在场景中的临时节点名（其贴图连接可复用）
+            target_material: 目标材质节点名
+
+        Returns:
+            bool: 是否有属性被应用
+        """
+        import maya.cmds as cmds
+        source_type = source_node_data.get('node_type', '') or ""
+        if not source_type:
+            return False
+        target_type = cmds.nodeType(target_material)
+
+        if source_type == target_type:
+            mappings = None  # 同类型直拷
+        else:
+            path = self.find_conversion_path(source_type, target_type)
+            if not path:
+                print(f"[应用材质参数] 缺少映射: {source_type} -> {target_type}")
+                return False
+            try:
+                with open(path[0][0], 'r', encoding='utf-8') as f:
+                    mappings = json.load(f).get('mappings', [])
+            except Exception as e:
+                print(f"[应用材质参数] 加载映射失败: {e}")
+                return False
+
+        # 内部/不可写属性跳过（同类型直拷时避免把 zmetal 的 VP2 内部量写坏目标）
+        skip = {'message', 'caching', 'isHistoricallyInteresting', 'nodeState',
+                'hardwareShader', 'pointCamera', 'triangleNormalCamera',
+                'primitiveId', 'instanceId', 'base', 'raySampler', 'frozen'}
+
+        attrs = source_node_data.get('attrs', {})
+        applied = 0
+        for attr, adata in attrs.items():
+            if attr in skip:
+                continue
+            dst_attr, transform, parameters = attr, "", {}
+            if mappings is not None:
+                entry = next((m for m in mappings if m.get('source_attribute') == attr), None)
+                if entry is None:
+                    continue
+                dst_attr = entry.get('target_attribute') or ""
+                transform = entry.get('transform', "")
+                parameters = entry.get('parameters') or {}
+            if not dst_attr:
+                continue
+            full = f"{target_material}.{dst_attr}"
+            if not cmds.objExists(full):
+                continue
+            if self._is_color_child_attr(target_material, dst_attr):
+                continue
+            if adata.get('type') == 'connection' and copy_textures:
+                ok = self._connect_texture(source_scene_material, attr, target_material, dst_attr) \
+                    if not transform else self._connect_texture_transform(
+                        source_scene_material, attr, target_material, dst_attr, transform, parameters)
+                if ok:
+                    applied += 1
+            else:
+                value = adata.get('value')
+                if value is None:
+                    continue
+                if transform:
+                    value = apply_conversion(value, transform, parameters=parameters)
+                if self._set_attribute_value(target_material, dst_attr, value):
+                    applied += 1
+        print(f"[应用材质参数] 已应用 {applied} 个属性到 {target_material} ({source_type} -> {target_type})")
+        return applied > 0
 
     def convert_material(self, source_material, target_material_type, copy_textures=True):
         """转换单个材质
@@ -2105,7 +3286,7 @@ class MaterialConverter(QtWidgets.QDialog):
         try:
             source_type = cmds.nodeType(source_material)
 
-            target_material_name = f"{source_material}_converted"
+            target_material_name = _converted_material_name(source_material, target_material_type)
             # 使用shadingNode创建材质，这样会自动在Hypershade中显示
             target_material = cmds.shadingNode(target_material_type, name=target_material_name, asShader=True)
 
@@ -2121,6 +3302,7 @@ class MaterialConverter(QtWidgets.QDialog):
                 dst_attr = mapping["target_attribute"]
                 default_value_str = mapping.get("default_value", "")
                 transform_name = mapping.get("transform", "")
+                parameters = mapping.get("parameters") or {}
 
                 if not dst_attr:
                     continue
@@ -2130,27 +3312,38 @@ class MaterialConverter(QtWidgets.QDialog):
                     failed_count += 1
                     continue
 
-                value = None
-                if src_attr and cmds.objExists(f"{source_material}.{src_attr}"):
-                    if copy_textures:
-                        src_full = f"{source_material}.{src_attr}"
-                        has_texture = bool(cmds.listConnections(src_full, source=True, destination=False, plugs=True))
+                # 跳过颜色子通道目标（如 diffuseColorR）：颜色应通过父属性整体写入，
+                # 单独写子通道会被 AI 生成的垃圾映射覆盖（如 aiMatteColorA -> diffuseColorR 把红色写 0）
+                if self._is_color_child_attr(target_material, dst_attr):
+                    print(f"[跳过] 颜色子通道目标 {target_material}.{dst_attr}，由父属性统一处理")
+                    continue
 
-                        if has_texture:
-                            if transform_name:
-                                if self._connect_texture_with_remap(source_material, src_attr,
-                                                                     target_material, dst_attr,
-                                                                     transform_name):
-                                    success_count += 1
-                                    texture_count += 1
-                                    continue
-                            else:
-                                if self._connect_texture(source_material, src_attr, target_material, dst_attr):
-                                    success_count += 1
-                                    texture_count += 1
-                                    continue
+                value = None
+                src_exists = bool(src_attr) and cmds.objExists(f"{source_material}.{src_attr}")
+                if src_exists:
+                    src_full = f"{source_material}.{src_attr}"
+                    # 检测连接：上游输入（贴图等）或下游输出（AOV 等）
+                    has_connection = bool(cmds.listConnections(src_full, source=True, destination=False, plugs=True)) or \
+                                     bool(cmds.listConnections(src_full, source=False, destination=True, plugs=True))
+
+                    if copy_textures and has_connection:
+                        if transform_name:
+                            if self._connect_texture_transform(source_material, src_attr,
+                                                                target_material, dst_attr,
+                                                                transform_name, parameters):
+                                success_count += 1
+                                texture_count += 1
+                                continue
+                        else:
+                            if self._connect_texture(source_material, src_attr, target_material, dst_attr):
+                                success_count += 1
+                                texture_count += 1
+                                continue
 
                     value = self._get_attribute_value(source_material, src_attr)
+                    # 连接属性读取的值可能为空字符串，视为无值（走默认值，避免空值覆盖）
+                    if value is None or (isinstance(value, str) and not value.strip()):
+                        value = None
 
                 if value is None:
                     if default_value_str:
@@ -2165,6 +3358,11 @@ class MaterialConverter(QtWidgets.QDialog):
                     else:
                         try:
                             value = cmds.getAttr(f"{target_material}.{dst_attr}")
+                            # 系统默认值为空字符串时无实际可设置的值，跳过
+                            if isinstance(value, str) and not value.strip():
+                                print(f"[系统默认值] {target_material}.{dst_attr} 默认值为空，跳过")
+                                failed_count += 1
+                                continue
                             print(f"[系统默认值] 使用系统默认值 {value} 应用到 {target_material}.{dst_attr}")
                         except Exception as e:
                             print(f"[系统默认值] 获取系统默认值失败: {e}")
@@ -2173,14 +3371,14 @@ class MaterialConverter(QtWidgets.QDialog):
 
                 # 应用转换函数
                 if transform_name and value is not None:
-                    converted_value = apply_conversion(value, transform_name)
+                    converted_value = apply_conversion(value, transform_name, parameters=parameters)
                     if converted_value != value:
                         print(f"[转换] {transform_name}: {value} -> {converted_value}")
                     value = converted_value
 
                 if value is not None:
                     if self._set_attribute_value(target_material, dst_attr, value):
-                        if cmds.objExists(f"{source_material}.{src_attr}"):
+                        if src_attr and cmds.objExists(f"{source_material}.{src_attr}"):
                             print(f"[复制] {source_material}.{src_attr} = {value} -> {target_material}.{dst_attr}")
                         success_count += 1
                     else:
@@ -2248,6 +3446,7 @@ class MaterialConverter(QtWidgets.QDialog):
         total_converted = 0
         total_objects = 0
         total_failed = 0
+        failed_materials = []
 
         # 预先获取UI设置，避免在循环中访问可能已删除的对象
         try:
@@ -2258,23 +3457,13 @@ class MaterialConverter(QtWidgets.QDialog):
             keep_original = self.keep_original_check.isChecked()
         except RuntimeError:
             keep_original = True  # 默认值
+        try:
+            fallback_default = self.fallback_default_check.isChecked()
+        except RuntimeError:
+            fallback_default = False  # 默认值
 
         # 执行转换
         for material, source_type, target_type in materials_to_process:
-            # 查找对应的映射文件
-            mapping_file = self.find_mapping_file(source_type, target_type)
-            if not mapping_file:
-                print(f"未找到 {source_type} -> {target_type} 的映射文件")
-                continue
-
-            # 加载映射文件
-            try:
-                with open(mapping_file, 'r', encoding='utf-8') as f:
-                    mapping_data = json.load(f)
-            except Exception as e:
-                print(f"加载映射文件失败 {mapping_file}: {e}")
-                continue
-
             print(f"\n开始转换 {material} ({source_type} -> {target_type})")
 
             # 查找使用该材质的物体
@@ -2304,11 +3493,8 @@ class MaterialConverter(QtWidgets.QDialog):
                                         if obj not in objects_with_material:
                                             objects_with_material.append(obj)
 
-            # 保存当前映射数据并执行转换
-            old_mapping_data = self.mapping_data
-            self.mapping_data = mapping_data
-
-            result = self.convert_material(material, target_type, copy_textures)
+            # 通过转换路径执行（支持直连和中转）
+            result = self._convert_material_via_path(material, source_type, target_type, copy_textures, fallback_default)
 
             if result:
                 target_material, success_count, fail_count, default_count, texture_count = result
@@ -2316,16 +3502,12 @@ class MaterialConverter(QtWidgets.QDialog):
                     self.assign_material_to_objects(target_material, objects_with_material)
                     total_objects += len(objects_with_material)
                 if not keep_original:
-                    try:
-                        cmds.delete(material)
-                    except:
-                        pass
+                    target_material = self._replace_source_material(material, target_material)
                 total_converted += 1
                 total_failed += fail_count
             else:
                 print(f"材质 {material} 转换失败")
-
-            self.mapping_data = old_mapping_data
+                failed_materials.append(material)
 
         self.status_label.setText(t("qtool.matconv.status.conversion_done"))
         print(f"\n{'='*60}")
@@ -2333,7 +3515,14 @@ class MaterialConverter(QtWidgets.QDialog):
         print(f"转换材质数: {total_converted}")
         print(f"应用对象数: {total_objects}")
         print(f"失败属性: {total_failed}")
+        if failed_materials:
+            print(f"失败材质数: {len(failed_materials)}")
+            for fm in failed_materials:
+                print(f"  - {fm}")
         print(f"{'='*60}")
+
+        # 报告失败材质并支持在Maya中选中
+        self._report_failed_materials(failed_materials)
 
     def get_configured_mappings(self):
         """获取配置的材质类型映射列表"""
@@ -2342,15 +3531,12 @@ class MaterialConverter(QtWidgets.QDialog):
         
         # 收集所有映射
         for row in range(self.mapping_type_table.rowCount()):
-            src_item = self.mapping_type_table.item(row, 1)
-            dst_item = self.mapping_type_table.item(row, 2)
-            if dst_item:
-                target_type = dst_item.text()
-                if target_type:
-                    source_type = "" if not src_item else src_item.text()
-                    mappings.append((source_type, target_type))
-                    if not source_type:
-                        has_empty_source = True
+            source_type = self._get_cell_text(row, 1)
+            target_type = self._get_cell_text(row, 2)
+            if target_type:
+                mappings.append((source_type, target_type))
+                if not source_type:
+                    has_empty_source = True
         
         # 如果只有一行且源为空，返回特殊标记
         if len(mappings) == 1 and has_empty_source:
@@ -2418,6 +3604,7 @@ class MaterialConverter(QtWidgets.QDialog):
 
         total_converted = 0
         total_objects = 0
+        failed_materials = []
 
         # 预先获取UI设置，避免在循环中访问可能已删除的对象
         try:
@@ -2428,23 +3615,16 @@ class MaterialConverter(QtWidgets.QDialog):
             keep_original = self.keep_original_check.isChecked()
         except RuntimeError:
             keep_original = True  # 默认值
+        try:
+            fallback_default = self.fallback_default_check.isChecked()
+        except RuntimeError:
+            fallback_default = False  # 默认值
 
         # 执行转换
         for (source_type, target_type), mat_list in materials_by_config.items():
-            # 查找映射文件
-            mapping_file = self.find_mapping_file(source_type, target_type)
-            if not mapping_file:
-                print(f"未找到 {source_type} -> {target_type} 的映射文件")
-                continue
-
-            try:
-                with open(mapping_file, 'r', encoding='utf-8') as f:
-                    mapping_data = json.load(f)
-            except Exception as e:
-                print(f"加载映射文件失败 {mapping_file}: {e}")
-                continue
-
             for material in mat_list:
+                print(f"\n开始转换 {material} ({source_type} -> {target_type})")
+
                 # 查找使用该材质的物体
                 objects_with_material = []
                 shading_engines = cmds.listConnections(material, type='shadingEngine')
@@ -2472,11 +3652,8 @@ class MaterialConverter(QtWidgets.QDialog):
                                             if obj not in objects_with_material:
                                                 objects_with_material.append(obj)
 
-                old_mapping_data = self.mapping_data
-                self.mapping_data = mapping_data
-                self.target_material_type = target_type
-
-                result = self.convert_material(material, target_type, copy_textures)
+                # 通过转换路径执行（支持直连和中转）
+                result = self._convert_material_via_path(material, source_type, target_type, copy_textures, fallback_default)
 
                 if result:
                     target_material, success_count, fail_count, default_count, texture_count = result
@@ -2484,20 +3661,25 @@ class MaterialConverter(QtWidgets.QDialog):
                         self.assign_material_to_objects(target_material, objects_with_material)
                         total_objects += len(objects_with_material)
                     if not keep_original:
-                        try:
-                            cmds.delete(material)
-                        except:
-                            pass
+                        target_material = self._replace_source_material(material, target_material)
                     total_converted += 1
-
-                self.mapping_data = old_mapping_data
+                else:
+                    print(f"材质 {material} 转换失败")
+                    failed_materials.append(material)
 
         self.status_label.setText(t("qtool.matconv.status.conversion_done"))
         print(f"\n{'='*60}")
         print(f"选择转换完成！")
         print(f"转换材质数: {total_converted}")
         print(f"应用对象数: {total_objects}")
+        if failed_materials:
+            print(f"失败材质数: {len(failed_materials)}")
+            for fm in failed_materials:
+                print(f"  - {fm}")
         print(f"{'='*60}")
+
+        # 报告失败材质并支持在Maya中选中
+        self._report_failed_materials(failed_materials)
 
     def assign_material_to_objects(self, material, objects):
         """将材质应用到对象"""
@@ -2562,10 +3744,7 @@ class MaterialConverter(QtWidgets.QDialog):
         materials = []
         for item in selection:
             # 检查是否是材质节点
-            node_type = cmds.nodeType(item)
-            if node_type in ['lambert', 'phong', 'blinn', 'standardSurface', 'openPBRSurface',
-                           'aiStandardSurface', 'aiStandard', 'VRayMtl', 'RedshiftMaterial',
-                           'aiStandardHair', 'aiVolume']:
+            if _is_material_node(item):
                 materials.append(item)
             else:
                 # 尝试从物体获取材质
@@ -2580,10 +3759,7 @@ class MaterialConverter(QtWidgets.QDialog):
                                 connected = cmds.listConnections(se)
                                 if connected:
                                     for conn in connected:
-                                        conn_type = cmds.nodeType(conn)
-                                        if conn_type in ['lambert', 'phong', 'blinn', 'standardSurface', 'openPBRSurface',
-                                                       'aiStandardSurface', 'aiStandard', 'VRayMtl', 'RedshiftMaterial',
-                                                       'aiStandardHair', 'aiVolume']:
+                                        if _is_material_node(conn):
                                             materials.append(conn)
         return list(set(materials))
 
@@ -2592,10 +3768,7 @@ class MaterialConverter(QtWidgets.QDialog):
         objects = []
         for item in selection:
             # 如果是材质，检查它连接到的所有物体
-            node_type = cmds.nodeType(item)
-            if node_type in ['lambert', 'phong', 'blinn', 'standardSurface', 'openPBRSurface',
-                           'aiStandardSurface', 'aiStandard', 'VRayMtl', 'RedshiftMaterial',
-                           'aiStandardHair', 'aiVolume']:
+            if _is_material_node(item):
                 # 查找使用该材质的所有物体
                 shading_engines = cmds.listConnections(item, type='shadingEngine')
                 if shading_engines:
@@ -2641,6 +3814,12 @@ class MaterialConverter(QtWidgets.QDialog):
             if not os.path.exists(search_dir):
                 continue
 
+            # 平铺结构：直接扫描 {source_type}_*.mmap 文件
+            for fname in os.listdir(search_dir):
+                if fname.startswith(f"{source_type}_") and fname.endswith(".mmap"):
+                    return os.path.join(search_dir, fname)
+
+            # 子目录结构：遍历目标材质类型目录
             for target_type in os.listdir(search_dir):
                 target_path = os.path.join(search_dir, target_type)
                 if not os.path.isdir(target_path):
@@ -2734,11 +3913,8 @@ class MaterialConverter(QtWidgets.QDialog):
                 if objects_using_material:
                     self.assign_material_to_objects(target_material, objects_using_material)
 
-                # 删除原始材质
-                try:
-                    cmds.delete(material)
-                except:
-                    pass
+                # 原位替换：删除源材质，新材质改回源材质名
+                target_material = self._replace_source_material(material, target_material)
 
         self.status_label.setText(t("qtool.matconv.status.batch_conversion_done"))
 

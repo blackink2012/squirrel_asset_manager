@@ -22,16 +22,18 @@ import sys
 
 _LANG = "zh"                          # 当前语言，运行时由 set_language() 修改
 _TABLES = {}                          # {lang: dict[str, str]}
+_MTIMES = {}                          # {lang: float} 翻译文件 mtime，用于缓存失效检测
 _TRANSLATIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "translations")
 _SUPPORTED = ("zh", "en")
 _FALLBACK = "zh"                      # 找不到目标语言或缺失键时的兜底
 
 
 def _load_table(lang: str) -> dict:
-    """按需加载某语言的翻译表，带缓存。"""
-    if lang in _TABLES:
-        return _TABLES[lang]
+    """按需加载某语言的翻译表，带缓存；翻译文件变更后自动重载。"""
     path = os.path.join(_TRANSLATIONS_DIR, f"{lang}.json")
+    mtime = os.path.getmtime(path) if os.path.isfile(path) else None
+    if lang in _TABLES and _MTIMES.get(lang) == mtime:
+        return _TABLES[lang]
     table = {}
     if os.path.isfile(path):
         try:
@@ -40,6 +42,7 @@ def _load_table(lang: str) -> dict:
         except (json.JSONDecodeError, OSError) as e:
             print(f"[i18n] 加载翻译表失败 {path}: {e}")
     _TABLES[lang] = table
+    _MTIMES[lang] = mtime
     return table
 
 

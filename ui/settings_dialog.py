@@ -499,6 +499,7 @@ class SettingsDialog(QtWidgets.QDialog):
         ("preview_node", "ctx_menu.preview_node"),
         ("ai_analysis", "ctx_menu.ai_analysis"),
         ("apply_material", "ctx_menu.apply_material"),
+        ("apply_material_params", "ctx_menu.apply_material_params"),
         ("create_material", "ctx_menu.create_material"),
         ("import_texture", "ctx_menu.import_texture"),
         ("assign_texture", "ctx_menu.assign_texture"),
@@ -556,6 +557,7 @@ class SettingsDialog(QtWidgets.QDialog):
         "import": [
             "ma", "mb", "fbx", "obj", "usd", "abc",
             "ass", "vrscene", "rs", "vrmesh",
+            "zmetal", "zlight", "proxy", "vdb",
         ],
         "import_texture": ["option.all"],
         # create_material 和 create_dome_light 在运行时从 config.json 和 HDR_ligt/ 动态读取
@@ -758,6 +760,8 @@ class SettingsDialog(QtWidgets.QDialog):
                 with open(cfg_path, 'r', encoding='utf-8') as f:
                     cfg = json.load(f)
                 presets = cfg.get("material_presets", [])
+                # 第一项：自动（跟随渲染器）— 双击时按当前渲染器创建对应默认材质
+                self._dc_option_combo.addItem("自动（跟随渲染器）", "auto")
                 for p in presets:
                     node_type = p.get("node_type", "")
                     self._dc_option_combo.addItem(node_type, node_type)
@@ -1348,15 +1352,20 @@ class SettingsDialog(QtWidgets.QDialog):
         old_path = self._settings.get("last_library_path", "")
         if old_path and not any(l.get("path") == old_path for l in libs):
             libs.insert(0, {"name": "默认库", "path": old_path})
-        default_name = self._settings.get("default_library", "")
+        default_ref = self._settings.get("default_library", "")
         self._lib_data = libs
         default_idx = 0
         for i, lib in enumerate(libs):
             name = lib.get("name", os.path.basename(lib["path"]))
             path = lib["path"]
-            suffix = f"  {t('label.default_suffix')}" if name == default_name or i == 0 else ""
+            # 设置了默认库时仅匹配路径（兼容旧格式：名称匹配）；未设置默认库时以第一个为默认
+            if default_ref:
+                is_default = (path == default_ref or name == default_ref)
+            else:
+                is_default = (i == 0)
+            suffix = f"  {t('label.default_suffix')}" if is_default else ""
             self._lib_list.addItem(f"{name} — {path}{suffix}")
-            if name == default_name:
+            if is_default:
                 default_idx = i
         if self._lib_list.count() > 0:
             self._lib_list.setCurrentRow(default_idx)
@@ -1449,12 +1458,12 @@ class SettingsDialog(QtWidgets.QDialog):
         self._populate_library_list()
 
     def _on_set_default_library(self):
-        """设为默认库"""
+        """设为默认库（唯一，保存路径避免同名歧义）"""
         row = self._lib_list.currentRow()
         if row < 0:
             return
-        name = self._lib_data[row]["name"]
-        self._settings["default_library"] = name
+        lib = self._lib_data[row]
+        self._settings["default_library"] = lib["path"]
         self._populate_library_list()
 
     def _on_settings_help(self):

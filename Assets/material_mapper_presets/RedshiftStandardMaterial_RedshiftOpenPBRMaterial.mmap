@@ -1,0 +1,539 @@
+{
+    "version": "3.0",
+    "name": "RedshiftStandardMaterial → RedshiftOpenPBRMaterial",
+    "software": "maya",
+    "source_type": "RedshiftStandardMaterial",
+    "target_type": "RedshiftOpenPBRMaterial",
+    "description": "RedshiftStandardMaterial 到 RedshiftOpenPBRMaterial 的属性映射",
+    "created_date": "2026-08-26",
+    "mappings": [
+        {
+            "source_attribute": "caching",
+            "target_attribute": "caching",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "frozen",
+            "target_attribute": "frozen",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "nodeState",
+            "target_attribute": "nodeState",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "version",
+            "target_attribute": "version",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "base_color_weight",
+            "target_attribute": "base_weight",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "base_color",
+            "target_attribute": "base_color",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "diffuse_roughness",
+            "target_attribute": "base_diffuse_roughness",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "metalness",
+            "target_attribute": "base_metalness",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_weight",
+            "target_attribute": "specular_weight",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_color",
+            "target_attribute": "specular_color",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_ior",
+            "target_attribute": "specular_ior",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_roughness",
+            "target_attribute": "specular_roughness",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_aniso",
+            "target_attribute": "specular_roughness_anisotropy",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "geometry_tangent",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_weight",
+            "target_attribute": "transmission_weight",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_color",
+            "target_attribute": "transmission_color",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_depth",
+            "target_attribute": "transmission_depth",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "ss_scatter_color",
+            "target_attribute": "transmission_scatter",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "ss_phase",
+            "target_attribute": "transmission_scatter_anisotropy",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "transmission_dispersion_scale",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_abbe",
+            "target_attribute": "transmission_dispersion_abbe_number",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "ms_amount",
+            "target_attribute": "subsurface_weight",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "ms_color",
+            "target_attribute": "subsurface_color",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "ms_radius",
+            "target_attribute": "subsurface_radius",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "ms_radius_scale",
+            "target_attribute": "subsurface_radius_scale",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "ms_phase",
+            "target_attribute": "subsurface_scatter_anisotropy",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "sheen_weight",
+            "target_attribute": "fuzz_weight",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "sheen_color",
+            "target_attribute": "fuzz_color",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "sheen_roughness",
+            "target_attribute": "fuzz_roughness",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "coat_weight",
+            "target_attribute": "coat_weight",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "coat_color",
+            "target_attribute": "coat_color",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "coat_direct",
+            "target_attribute": "coat_darkening",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "coat_ior",
+            "target_attribute": "coat_ior",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "coat_roughness",
+            "target_attribute": "coat_roughness",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "coat_aniso",
+            "target_attribute": "coat_roughness_anisotropy",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "geometry_coat_tangent",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "coat_bump_input",
+            "target_attribute": "geometry_coat_normal",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_thin_walled",
+            "target_attribute": "thin_film_weight",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "thinfilm_thickness",
+            "target_attribute": "thin_film_thickness",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "thinfilm_ior",
+            "target_attribute": "thin_film_ior",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "emission_weight",
+            "target_attribute": "emission_luminance",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "emission_color",
+            "target_attribute": "emission_color",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_thin_walled",
+            "target_attribute": "geometry_thin_walled",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "opacity_color",
+            "target_attribute": "geometry_opacity",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "bump_input",
+            "target_attribute": "geometry_normal",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "depth_override",
+            "target_attribute": "rs_depth_override",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_depth",
+            "target_attribute": "rs_specular_depth",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_enablecutoff",
+            "target_attribute": "rs_specular_enablecutoff",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_cutoff",
+            "target_attribute": "rs_specular_cutoff",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_depth",
+            "target_attribute": "rs_transmission_depth",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_enablecutoff",
+            "target_attribute": "rs_transmission_enablecutoff",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_cutoff",
+            "target_attribute": "rs_transmission_cutoff",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "combined_depth",
+            "target_attribute": "rs_combined_depth",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "diffuse_direct",
+            "target_attribute": "rs_base_diffuse_direct",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "diffuse_indirect",
+            "target_attribute": "rs_base_diffuse_indirect",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_direct",
+            "target_attribute": "rs_specular_direct",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_indirect",
+            "target_attribute": "rs_specular_indirect",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_endmode",
+            "target_attribute": "rs_specular_endmode",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_samples",
+            "target_attribute": "rs_specular_samples",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_direct",
+            "target_attribute": "rs_transmission_direct",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "shadow_affected_by_fresnel_mode",
+            "target_attribute": "rs_shadow_affected_by_fresnel_mode",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "shadow_opacity",
+            "target_attribute": "rs_shadow_opacity",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "affects_alpha",
+            "target_attribute": "rs_transmission_affects_alpha",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "block_volumes",
+            "target_attribute": "rs_transmission_block_volumes",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_samples",
+            "target_attribute": "rs_transmission_samples",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "ss_samples",
+            "target_attribute": "rs_transmission_scatter_samples",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "ms_mode",
+            "target_attribute": "rs_subsurface_mode",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "ms_samples",
+            "target_attribute": "rs_subsurface_samples",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "ms_include_mode",
+            "target_attribute": "rs_subsurface_include_mode",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "sheen_direct",
+            "target_attribute": "rs_fuzz_direct",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "sheen_indirect",
+            "target_attribute": "rs_fuzz_indirect",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "sheen_samples",
+            "target_attribute": "rs_fuzz_samples",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "coat_direct",
+            "target_attribute": "rs_coat_direct",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "coat_indirect",
+            "target_attribute": "rs_coat_indirect",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "coat_samples",
+            "target_attribute": "rs_coat_samples",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "rs_uv_context",
+            "target_attribute": "rs_uv_context",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "diffuse_model",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_aniso_rotation",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "overallAffectsEmission",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_isGlossiness",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_isGlossiness",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refr_legacy_light_sampling",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "sheen_isGlossiness",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "coat_isGlossiness",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "refl_enableMultiScatterComp",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "anisotropy_orientation",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "uvSet",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "shadow_affected_by_fresnel",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        }
+    ]
+}

@@ -6,18 +6,115 @@ from typing import Optional, Dict, Any, List
 
 
 class AIAnalyzer:
+    """AI 分析器 - 支持多种后端服务
+
+    统一通过 OpenAI 兼容的 /chat/completions 接口调用：
+    - ollama  （本地，默认）：http://localhost:11434/v1
+    - deepseek（云端 API）：https://api.deepseek.com/v1（纯文本模型，不支持图片）
+    - qwen    （阿里云 DashScope 兼容模式）：https://dashscope.aliyuncs.com/compatible-mode/v1
+    """
+
     DEFAULT_MODEL = "qwen3-vl:8b"
     DEFAULT_HOST = "http://localhost:11434"
 
-    def __init__(self, model: str = None, host: str = None):
-        self._model = model or self.DEFAULT_MODEL
-        self._host = host or self.DEFAULT_HOST
+    # 服务商预设（label 仅用于 UI 展示；base_url 为空时按 provider 默认地址）
+    PROVIDERS = {
+        "ollama": {
+            "label": "Ollama（本地）",
+            "base_url": "http://localhost:11434/v1",
+            "needs_key": False,
+            "vision": True,
+            "default_model": "qwen3-vl:8b",
+            "models": [],
+        },
+        "deepseek": {
+            "label": "DeepSeek",
+            "base_url": "https://api.deepseek.com",
+            "needs_key": True,
+            "vision": False,  # 默认文本模型；deepseek-v4-flash-vision-exp 支持图片
+            "default_model": "deepseek-v4-flash",
+            "models": [
+                "deepseek-v4-flash",
+                "deepseek-v4-pro",
+                "deepseek-v4-flash-vision-exp",
+            ],
+        },
+        "qwen": {
+            "label": "通义千问（阿里云 DashScope）",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "needs_key": True,
+            "vision": True,
+            "default_model": "qwen-vl-max",
+            "models": [
+                "qwen-vl-max",
+                "qwen-vl-max-latest",
+                "qwen-vl-plus",
+                "qwen-vl-plus-latest",
+                "qwen2.5-vl-72b-instruct",
+                "qwen3-vl-plus",
+                "qwen3-vl-72b-instruct",
+            ],
+        },
+    }
+
+    def __init__(self, provider: str = None, model: str = None, host: str = None,
+                 api_key: str = None, base_url: str = None):
+        settings = self._load_settings()
+        self._provider = provider or settings.get("ai_provider") or "ollama"
+        if self._provider not in self.PROVIDERS:
+            self._provider = "ollama"
+        self._provider_cfg = self.PROVIDERS[self._provider]
+
+        # API Key（云端必填）
+        self._api_key = api_key if api_key is not None else settings.get("ai_api_key", "")
+        if self._provider_cfg["needs_key"] and not self._api_key:
+            self._api_key = ""
+
+        # 地址：优先显式传入 → 用户自定义 base_url → provider 默认
+        if base_url:
+            self._base_url = base_url.rstrip("/")
+        elif host and self._provider == "ollama":
+            self._base_url = host.rstrip("/") + "/v1"
+        else:
+            saved_base = settings.get("ai_base_url", "")
+            # 设置中保存的地址若等于某服务商默认地址，则视为未自定义，改用当前服务商默认
+            default_urls = {
+                c["base_url"].rstrip("/")
+                for c in self.PROVIDERS.values() if c.get("base_url")
+            }
+            if saved_base and saved_base.rstrip("/") not in default_urls:
+                self._base_url = saved_base.rstrip("/")
+            else:
+                self._base_url = self._provider_cfg["base_url"]
+
+        # 模型：显式传入 → 设置保存 → provider 默认
+        saved_model = settings.get("ai_model", "")
+        if model:
+            self._model = model
+        elif saved_model:
+            self._model = saved_model
+        else:
+            self._model = self._provider_cfg["default_model"]
+
         self._asset_dir = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "Assets"
         )
         self._prompt_dir = os.path.join(self._asset_dir, "prompt")
         self._config_path = os.path.join(self._asset_dir, "preset", "config.json")
         self._config_cache = None
+
+    @staticmethod
+    def _load_settings() -> Dict[str, Any]:
+        """读取用户设置（失败时返回空字典，走默认值）"""
+        try:
+            from ..utils.settings import SettingsManager
+            return SettingsManager().load()
+        except Exception:
+            return {}
+
+    @property
+    def provider(self):
+        return self._provider
 
     @property
     def model(self):
@@ -26,6 +123,14 @@ class AIAnalyzer:
     @model.setter
     def model(self, value):
         self._model = value
+
+    @property
+    def api_key(self):
+        return self._api_key
+
+    @property
+    def base_url(self):
+        return self._base_url
 
     @property
     def _config(self) -> Dict[str, Any]:
@@ -57,7 +162,21 @@ class AIAnalyzer:
         sub_cats_str = ", ".join(sub_cats)
         return prompt_template.replace("{sub_categories}", sub_cats_str)
 
+    def _supports_vision(self) -> bool:
+        """当前服务/模型是否支持图片输入"""
+        if self._provider_cfg["vision"]:
+            return True
+        # DeepSeek 实验性视觉模型
+        if self._provider == "deepseek" and "vision" in self._model.lower():
+            return True
+        return False
+
     def analyze_image(self, image_bytes: bytes, category_type: str, language: str = "中文", existing_tags: List[str] = None) -> Optional[Dict[str, Any]]:
+        # 当前模型不支持图片时拒绝
+        if not self._supports_vision():
+            print(f"[AI Analyzer] 当前模型 {self._model} 不支持图片分析")
+            return None
+
         prompt = self._build_full_prompt(category_type)
         if not prompt:
             return None
@@ -69,7 +188,17 @@ class AIAnalyzer:
 
         try:
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
-            response = self._call_ollama(base64_image, prompt)
+            response = self._chat_completions(
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
+                        {"type": "text", "text": "请分析这张图片。"},
+                    ]},
+                ],
+                temperature=0.3,
+                max_tokens=1024,
+            )
             result = self._parse_response(response)
             if result is None:
                 return None
@@ -85,23 +214,39 @@ class AIAnalyzer:
             print(f"[AI Analyzer] Error: {e}")
             return None
 
-    def _call_ollama(self, base64_image: str, prompt: str) -> str:
-        url = f"{self._host}/api/generate"
+    def _chat_completions(self, messages: List[Dict[str, Any]],
+                          temperature: float = 0.3,
+                          max_tokens: int = 1024) -> str:
+        """调用 OpenAI 兼容的 /chat/completions 接口"""
+        url = f"{self._base_url}/chat/completions"
+
+        headers = {"Content-Type": "application/json"}
+        api_key = self._api_key or "ollama"  # Ollama 不校验 key，占位即可
+        headers["Authorization"] = f"Bearer {api_key}"
 
         payload = {
             "model": self._model,
-            "prompt": prompt,
-            "images": [base64_image],
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
             "stream": False,
-            "options": {
-                "temperature": 0.3,
-                "max_tokens": 1024
-            }
         }
+        if self._provider == "deepseek":
+            # DeepSeek 思考型模型默认开启思考，思考过程会占用输出导致最终结果为空，显式关闭
+            payload["thinking"] = {"type": "disabled"}
 
-        response = requests.post(url, json=payload, timeout=60)
+        response = requests.post(url, json=payload, headers=headers, timeout=120)
         response.raise_for_status()
-        return response.json().get("response", "")
+        data = response.json()
+        try:
+            message = data["choices"][0]["message"]
+            content = message.get("content") or ""
+            if not content:
+                # 兜底：部分思考模型可能把内容放到 reasoning_content
+                content = message.get("reasoning_content") or ""
+            return content
+        except (KeyError, IndexError, TypeError):
+            return data.get("response", "")
 
     def _parse_response(self, response: str) -> Optional[Dict[str, Any]]:
         try:
@@ -124,13 +269,17 @@ class AIAnalyzer:
             return None
 
     def get_available_models(self) -> List[str]:
-        try:
-            response = requests.get(f"{self._host}/api/tags", timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            return [model.get("name", "") for model in data.get("models", [])]
-        except Exception:
-            return [self.DEFAULT_MODEL]
+        if self._provider == "ollama":
+            try:
+                ollama_base = self._provider_cfg["base_url"].rstrip("/").rsplit("/v1", 1)[0]
+                response = requests.get(f"{ollama_base}/api/tags", timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                models = [m.get("name", "") for m in data.get("models", [])]
+                return models or [self._model]
+            except Exception:
+                return [self._model]
+        return list(self._provider_cfg["models"]) or [self._model]
 
     def translate_tags(self, tags: List[str], target_language: str) -> List[str]:
         if not tags:
@@ -149,19 +298,11 @@ class AIAnalyzer:
             prompt = f"请将以下标签翻译为{target_lang_display}。只输出翻译后的JSON字符串数组，不要输出其他内容。\n\n标签: {tags_str}"
 
         try:
-            url = f"{self._host}/api/generate"
-            payload = {
-                "model": self._model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.3,
-                    "max_tokens": 1024
-                }
-            }
-            response = requests.post(url, json=payload, timeout=60)
-            response.raise_for_status()
-            result_str = response.json().get("response", "")
+            result_str = self._chat_completions(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=1024,
+            )
             return self._parse_translation_response(result_str)
         except Exception as e:
             print(f"[AI Analyzer] Translate error: {e}")
@@ -184,11 +325,17 @@ class AIAnalyzer:
             return []
 
     def is_available(self) -> bool:
-        try:
-            response = requests.get(f"{self._host}/api/tags", timeout=5)
-            return response.status_code == 200
-        except Exception:
-            return False
+        if self._provider == "ollama":
+            try:
+                response = requests.get(
+                    self._provider_cfg["base_url"].rstrip("/").rsplit("/v1", 1)[0] + "/api/tags",
+                    timeout=5,
+                )
+                return response.status_code == 200
+            except Exception:
+                return False
+        # 云端服务：仅检查 API Key 是否已配置
+        return bool(self._api_key)
 
     @staticmethod
     def _load_json(filepath: str) -> Dict[str, Any]:

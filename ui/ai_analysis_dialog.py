@@ -4,6 +4,16 @@ except ImportError:
     def t(key, **kwargs):
         return key.format(**kwargs) if kwargs else key
 
+try:
+    from ..utils.settings import SettingsManager
+except ImportError:
+    SettingsManager = None
+
+try:
+    from ..core.ai_analyzer import AIAnalyzer
+except ImportError:
+    AIAnalyzer = None
+
 from ..utils.maya_utils import get_qt_modules
 
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
@@ -240,23 +250,41 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         name_cn.setMaximumHeight(32)
         name_cn.setStyleSheet('font-size: 13px;')
         name_cn.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
-        fields.addWidget(name_cn)
+        name_cb = QtWidgets.QCheckBox(t('label.ai_apply_name'))
+        name_cb.setChecked(True)
+        name_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
+        name_cb.setFixedWidth(52)
+        name_row2 = QtWidgets.QHBoxLayout()
+        name_row2.setSpacing(4)
+        name_row2.addWidget(name_cb)
+        name_row2.addWidget(name_cn, 1)
+        fields.addLayout(name_row2)
 
         mid_row = QtWidgets.QHBoxLayout()
         mid_row.setSpacing(6)
 
+        cat_cb = QtWidgets.QCheckBox(t('label.ai_apply_category'))
+        cat_cb.setChecked(True)
+        cat_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
+        cat_cb.setFixedWidth(52)
         cat_edit = QtWidgets.QLineEdit(result.get('sub_category', ''))
         cat_edit.setPlaceholderText(t('label.sub_category'))
         cat_edit.setMaximumHeight(30)
         cat_edit.setStyleSheet('font-size: 13px;')
         cat_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
-        mid_row.addWidget(cat_edit)
+        mid_row.addWidget(cat_cb)
+        mid_row.addWidget(cat_edit, 1)
 
+        tags_cb = QtWidgets.QCheckBox(t('label.ai_apply_tags'))
+        tags_cb.setChecked(True)
+        tags_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
+        tags_cb.setFixedWidth(52)
         tags_edit = QtWidgets.QLineEdit(', '.join(result.get('tags', [])))
         tags_edit.setPlaceholderText(t('label.tags'))
         tags_edit.setMaximumHeight(30)
         tags_edit.setStyleSheet('font-size: 13px;')
         tags_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
+        mid_row.addWidget(tags_cb)
         mid_row.addWidget(tags_edit, 1)
         fields.addLayout(mid_row)
 
@@ -265,12 +293,24 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         notes_edit.setMaximumHeight(30)
         notes_edit.setStyleSheet('font-size: 13px;')
         notes_edit.textChanged.connect(lambda *a, i=index: self._on_row_activated(i))
-        fields.addWidget(notes_edit)
+        notes_cb = QtWidgets.QCheckBox(t('label.ai_apply_notes'))
+        notes_cb.setChecked(True)
+        notes_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
+        notes_cb.setFixedWidth(52)
+        notes_row = QtWidgets.QHBoxLayout()
+        notes_row.setSpacing(4)
+        notes_row.addWidget(notes_cb)
+        notes_row.addWidget(notes_edit, 1)
+        fields.addLayout(notes_row)
 
         self._edit_widgets[index] = {
+            'name_cb': name_cb,
             'name_cn': name_cn,
+            'category_cb': cat_cb,
             'category': cat_edit,
+            'tags_cb': tags_cb,
             'tags': tags_edit,
+            'notes_cb': notes_cb,
             'notes': notes_edit,
         }
 
@@ -361,29 +401,42 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
             result = entry.get('result', {}).copy()
             w = self._edit_widgets.get(i, {})
 
-            name_cn = w.get('name_cn')
-            if name_cn:
-                val = name_cn.text().strip()
-                if val:
-                    result['name_cn'] = val
+            # 仅收集勾选的字段；未勾选的从结果中移除（不应用）
+            if w.get('name_cb') and w['name_cb'].isChecked():
+                name_cn = w.get('name_cn')
+                if name_cn:
+                    val = name_cn.text().strip()
+                    if val:
+                        result['name_cn'] = val
+            else:
+                result.pop('name_cn', None)
 
-            cat_w = w.get('category')
-            if cat_w:
-                val = cat_w.text().strip()
-                if val:
-                    result['sub_category'] = val
+            if w.get('category_cb') and w['category_cb'].isChecked():
+                cat_w = w.get('category')
+                if cat_w:
+                    val = cat_w.text().strip()
+                    if val:
+                        result['sub_category'] = val
+            else:
+                result.pop('sub_category', None)
 
-            tags_w = w.get('tags')
-            if tags_w:
-                val = tags_w.text().strip()
-                if val:
-                    result['tags'] = [t.strip() for t in val.split(',') if t.strip()]
+            if w.get('tags_cb') and w['tags_cb'].isChecked():
+                tags_w = w.get('tags')
+                if tags_w:
+                    val = tags_w.text().strip()
+                    if val:
+                        result['tags'] = [t.strip() for t in val.split(',') if t.strip()]
+            else:
+                result.pop('tags', None)
 
-            notes_w = w.get('notes')
-            if notes_w:
-                val = notes_w.text().strip()
-                if val:
-                    result['notes'] = val
+            if w.get('notes_cb') and w['notes_cb'].isChecked():
+                notes_w = w.get('notes')
+                if notes_w:
+                    val = notes_w.text().strip()
+                    if val:
+                        result['notes'] = val
+            else:
+                result.pop('notes', None)
 
             selected_results.append({
                 'material': entry.get('material', {}),
@@ -401,23 +454,90 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
     def __init__(self, parent=None, available_models=None):
         super(AIAnalysisConfigDialog, self).__init__(parent)
         self._available_models = available_models or []
+        self._providers = AIAnalyzer.PROVIDERS if AIAnalyzer else {}
+        self._load_saved_settings()
         self._setup_ui()
+
+    def _load_saved_settings(self):
+        """读取上次保存的 AI 服务配置"""
+        self._saved = {}
+        if SettingsManager:
+            try:
+                self._saved = SettingsManager().load()
+            except Exception:
+                self._saved = {}
+
+    def _current_provider(self):
+        """当前服务商 key"""
+        idx = self._provider_combo.currentIndex()
+        return self._provider_combo.itemData(idx) or "ollama"
 
     def _setup_ui(self):
         self.setWindowTitle(t('dialog.ai_analysis_config.title'))
-        self.setFixedSize(380, 280)
+        self.setMinimumSize(420, 560)
+        self.resize(440, 600)
         self.setStyleSheet(_STYLE)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(14)
+        layout.setSpacing(12)
 
         title = QtWidgets.QLabel(t('dialog.ai_analysis_config.prompt'))
         title.setStyleSheet('color: #ffffff; font-size: 15px; font-weight: bold;')
         layout.addWidget(title)
 
-        layout.addSpacing(4)
+        # 服务商
+        provider_layout = QtWidgets.QHBoxLayout()
+        provider_label = QtWidgets.QLabel(t('label.ai_provider'))
+        provider_label.setFixedWidth(80)
+        provider_layout.addWidget(provider_label)
+        self._provider_combo = QtWidgets.QComboBox()
+        saved_provider = self._saved.get('ai_provider', 'ollama')
+        for key, cfg in (self._providers or {}).items():
+            self._provider_combo.addItem(cfg.get('label', key), key)
+        if self._provider_combo.count() == 0:
+            self._provider_combo.addItem('Ollama（本地）', 'ollama')
+        self._provider_combo.setCurrentIndex(
+            max(0, self._provider_combo.findData(saved_provider)))
+        self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        provider_layout.addWidget(self._provider_combo, 1)
+        layout.addLayout(provider_layout)
 
+        # API Key（Ollama 不需要）
+        key_layout = QtWidgets.QHBoxLayout()
+        key_label = QtWidgets.QLabel(t('label.ai_api_key'))
+        key_label.setFixedWidth(80)
+        key_layout.addWidget(key_label)
+        self._api_key_edit = QtWidgets.QLineEdit()
+        self._api_key_edit.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
+        self._api_key_edit.setPlaceholderText(t('dialog.ai_analysis_config.api_key_placeholder'))
+        self._api_key_edit.setText(self._saved.get('ai_api_key', ''))
+        key_layout.addWidget(self._api_key_edit, 1)
+        layout.addLayout(key_layout)
+
+        # API 地址
+        url_layout = QtWidgets.QHBoxLayout()
+        url_label = QtWidgets.QLabel(t('label.ai_base_url'))
+        url_label.setFixedWidth(80)
+        url_layout.addWidget(url_label)
+        self._base_url_edit = QtWidgets.QLineEdit()
+        self._base_url_edit.setPlaceholderText(t('dialog.ai_analysis_config.base_url_placeholder'))
+        self._base_url_edit.setText(self._saved.get('ai_base_url', ''))
+        url_layout.addWidget(self._base_url_edit, 1)
+        layout.addLayout(url_layout)
+
+        # 模型
+        model_layout = QtWidgets.QHBoxLayout()
+        model_label = QtWidgets.QLabel(t('label.ai_model'))
+        model_label.setFixedWidth(80)
+        model_layout.addWidget(model_label)
+        self._model_combo = QtWidgets.QComboBox()
+        self._model_combo.setEditable(True)
+        self._model_combo.setMinimumWidth(200)
+        model_layout.addWidget(self._model_combo, 1)
+        layout.addLayout(model_layout)
+
+        # 语言
         lang_layout = QtWidgets.QHBoxLayout()
         lang_label = QtWidgets.QLabel(t('label.output_language'))
         lang_label.setFixedWidth(80)
@@ -428,22 +548,11 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         lang_layout.addWidget(self._lang_combo, 1)
         layout.addLayout(lang_layout)
 
-        model_layout = QtWidgets.QHBoxLayout()
-        model_label = QtWidgets.QLabel(t('label.ai_model'))
-        model_label.setFixedWidth(80)
-        model_layout.addWidget(model_label)
-        self._model_combo = QtWidgets.QComboBox()
-        if self._available_models:
-            self._model_combo.addItems(self._available_models)
-            default_model = 'qwen3-vl:8b'
-            if default_model in self._available_models:
-                self._model_combo.setCurrentText(default_model)
-            elif 'qwen3.5:9b' in self._available_models:
-                self._model_combo.setCurrentText('qwen3.5:9b')
-        else:
-            self._model_combo.addItem('qwen3-vl:8b')
-        model_layout.addWidget(self._model_combo, 1)
-        layout.addLayout(model_layout)
+        # DeepSeek 无视觉模型提示
+        self._vision_tip = QtWidgets.QLabel(t('dialog.ai_analysis_config.vision_tip'))
+        self._vision_tip.setWordWrap(True)
+        self._vision_tip.setStyleSheet('color: #e0a050; font-size: 12px;')
+        layout.addWidget(self._vision_tip)
 
         self._review_cb = QtWidgets.QCheckBox(t('dialog.ai_analysis_config.review_after'))
         self._review_cb.setChecked(True)
@@ -453,7 +562,7 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         self._translate_tags_cb.setToolTip(t('dialog.ai_analysis_config.translate_tags.tooltip'))
         layout.addWidget(self._translate_tags_cb)
 
-        layout.addSpacing(6)
+        layout.addStretch()
 
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.setSpacing(10)
@@ -470,21 +579,80 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
 
         layout.addLayout(btn_layout)
 
-    def _on_confirm(self):
-        config = {
-            'language': self._lang_combo.currentText(),
-            'review_output': self._review_cb.isChecked(),
-            'model': self._model_combo.currentText(),
-            'translate_existing_tags': self._translate_tags_cb.isChecked(),
+        self._on_provider_changed()
+
+    def _on_provider_changed(self, *_):
+        """服务商切换：更新 API Key / 地址 / 模型列表 / 提示"""
+        provider = self._current_provider()
+        cfg = (self._providers or {}).get(provider, {})
+
+        needs_key = bool(cfg.get('needs_key'))
+        self._api_key_edit.setEnabled(needs_key)
+        if not needs_key:
+            self._api_key_edit.setPlaceholderText('(本地服务无需填写)')
+        else:
+            self._api_key_edit.setPlaceholderText(t('dialog.ai_analysis_config.api_key_placeholder'))
+
+        default_url = cfg.get('base_url', '')
+        # 所有服务商的默认地址集合：当前值等于任一默认值时视为未自定义，切换时更新
+        provider_defaults = {
+            c.get('base_url', '').rstrip('/')
+            for c in (self._providers or {}).values() if c.get('base_url')
         }
+        current_url = self._base_url_edit.text().strip().rstrip('/')
+        if not current_url or current_url in provider_defaults:
+            self._base_url_edit.setText(default_url)
+
+        # 模型列表
+        saved_model = self._saved.get('ai_model', '')
+        self._model_combo.blockSignals(True)
+        self._model_combo.clear()
+        if provider == 'ollama':
+            models = list(self._available_models) or ['qwen3-vl:8b']
+        else:
+            models = list(cfg.get('models', [])) or [cfg.get('default_model', '')]
+        self._model_combo.addItems(models)
+        if saved_model:
+            self._model_combo.setCurrentText(saved_model)
+        elif provider == 'ollama' and 'qwen3-vl:8b' in models:
+            self._model_combo.setCurrentText('qwen3-vl:8b')
+        elif provider == 'ollama' and 'qwen3.5:9b' in models:
+            self._model_combo.setCurrentText('qwen3.5:9b')
+        self._model_combo.blockSignals(False)
+
+        # 无视觉模型提示
+        self._vision_tip.setVisible(provider == 'deepseek')
+        if provider == 'deepseek':
+            self.adjustSize()
+
+    def _on_confirm(self):
+        config = self.get_config()
+        self._save_settings(config)
         self.configConfirmed.emit(config)
         self.accept()
 
+    def _save_settings(self, config):
+        """将 AI 服务配置保存到用户设置"""
+        if not SettingsManager:
+            return
+        try:
+            SettingsManager().save({
+                'ai_provider': config.get('provider', 'ollama'),
+                'ai_api_key': config.get('api_key', ''),
+                'ai_base_url': config.get('base_url', ''),
+                'ai_model': config.get('model', ''),
+            })
+        except Exception as e:
+            print(f"[AI Config] 保存设置失败: {e}")
+
     def get_config(self):
         return {
+            'provider': self._current_provider(),
+            'api_key': self._api_key_edit.text().strip(),
+            'base_url': self._base_url_edit.text().strip(),
+            'model': self._model_combo.currentText().strip(),
             'language': self._lang_combo.currentText(),
             'review_output': self._review_cb.isChecked(),
-            'model': self._model_combo.currentText(),
             'translate_existing_tags': self._translate_tags_cb.isChecked(),
         }
 
@@ -587,38 +755,46 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         result_layout.setSpacing(10)
         
         name_cn_layout = QtWidgets.QHBoxLayout()
-        name_cn_label = QtWidgets.QLabel(t('label.readable_name') + ':')
-        name_cn_label.setFixedWidth(70)
+        self._name_cb = QtWidgets.QCheckBox(t('label.ai_apply_name'))
+        self._name_cb.setChecked(True)
+        self._name_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
+        self._name_cb.setFixedWidth(70)
         self._name_cn_edit = QtWidgets.QLineEdit()
         self._name_cn_edit.setPlaceholderText(t('dialog.ai_analysis.name_cn_placeholder'))
-        name_cn_layout.addWidget(name_cn_label)
+        name_cn_layout.addWidget(self._name_cb)
         name_cn_layout.addWidget(self._name_cn_edit)
         result_layout.addLayout(name_cn_layout)
         
         category_layout = QtWidgets.QHBoxLayout()
-        category_label = QtWidgets.QLabel(t('label.suggested_category'))
-        category_label.setFixedWidth(70)
+        self._category_cb = QtWidgets.QCheckBox(t('label.ai_apply_category'))
+        self._category_cb.setChecked(True)
+        self._category_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
+        self._category_cb.setFixedWidth(70)
         self._category_edit = QtWidgets.QLineEdit()
         self._category_edit.setPlaceholderText(t('dialog.ai_analysis.category_placeholder'))
-        category_layout.addWidget(category_label)
+        category_layout.addWidget(self._category_cb)
         category_layout.addWidget(self._category_edit)
         result_layout.addLayout(category_layout)
         
         tags_layout = QtWidgets.QHBoxLayout()
-        tags_label = QtWidgets.QLabel(t('label.tags'))
-        tags_label.setFixedWidth(70)
+        self._tags_cb = QtWidgets.QCheckBox(t('label.ai_apply_tags'))
+        self._tags_cb.setChecked(True)
+        self._tags_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
+        self._tags_cb.setFixedWidth(70)
         self._tags_edit = QtWidgets.QLineEdit()
         self._tags_edit.setPlaceholderText(t('dialog.ai_analysis.tags_placeholder'))
-        tags_layout.addWidget(tags_label)
+        tags_layout.addWidget(self._tags_cb)
         tags_layout.addWidget(self._tags_edit)
         result_layout.addLayout(tags_layout)
         
         notes_layout = QtWidgets.QVBoxLayout()
-        notes_label = QtWidgets.QLabel(t('label.notes'))
+        self._notes_cb = QtWidgets.QCheckBox(t('label.ai_apply_notes'))
+        self._notes_cb.setChecked(True)
+        self._notes_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
         self._notes_edit = QtWidgets.QTextEdit()
         self._notes_edit.setFixedHeight(80)
         self._notes_edit.setPlaceholderText(t('dialog.ai_analysis.notes_placeholder'))
-        notes_layout.addWidget(notes_label)
+        notes_layout.addWidget(self._notes_cb)
         notes_layout.addWidget(self._notes_edit)
         result_layout.addLayout(notes_layout)
         
@@ -668,24 +844,7 @@ class AIAnalysisDialog(QtWidgets.QDialog):
             self._notes_edit.setText(self._analysis.get('notes', ''))
     
     def _on_apply(self):
-        updates = {}
-        
-        name_cn = self._name_cn_edit.text().strip()
-        if name_cn:
-            updates['name_cn'] = name_cn
-        
-        category = self._category_edit.text().strip()
-        if category:
-            updates['category'] = category
-        
-        tags_text = self._tags_edit.text().strip()
-        if tags_text:
-            tags = [t.strip() for t in tags_text.split(',') if t.strip()]
-            updates['tags'] = tags
-        
-        notes = self._notes_edit.toPlainText().strip()
-        if notes:
-            updates['notes'] = notes
+        updates = self.get_updates()
         
         if updates:
             updates['material_id'] = self._material.get('id', '')
@@ -695,23 +854,28 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         self.accept()
     
     def get_updates(self):
+        """按勾选状态收集要应用的字段（只包含勾选且非空的字段）"""
         updates = {}
         
-        name_cn = self._name_cn_edit.text().strip()
-        if name_cn:
-            updates['name_cn'] = name_cn
+        if self._name_cb.isChecked():
+            name_cn = self._name_cn_edit.text().strip()
+            if name_cn:
+                updates['name_cn'] = name_cn
         
-        category = self._category_edit.text().strip()
-        if category:
-            updates['category'] = category
+        if self._category_cb.isChecked():
+            category = self._category_edit.text().strip()
+            if category:
+                updates['category'] = category
         
-        tags_text = self._tags_edit.text().strip()
-        if tags_text:
-            tags = [t.strip() for t in tags_text.split(',') if t.strip()]
-            updates['tags'] = tags
+        if self._tags_cb.isChecked():
+            tags_text = self._tags_edit.text().strip()
+            if tags_text:
+                tags = [t.strip() for t in tags_text.split(',') if t.strip()]
+                updates['tags'] = tags
         
-        notes = self._notes_edit.toPlainText().strip()
-        if notes:
-            updates['notes'] = notes
+        if self._notes_cb.isChecked():
+            notes = self._notes_edit.toPlainText().strip()
+            if notes:
+                updates['notes'] = notes
         
         return updates

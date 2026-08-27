@@ -1274,8 +1274,12 @@ def _get_processable_attrs(node):
         is_child = False
         if len(attr) >= 2 and attr[-1] in COMPOUND_CHILD_ENDS:
             parent = attr[:-1]
+            # 只有父属性真实存在时才按复合属性子通道合并。
+            # 否则 coatIOR/specularIOR/thinFilmIOR 这类以 R 结尾的真实属性
+            # 会被误判为子通道（截断成 coatIO 等）导致导出丢失。
             if parent not in SKIP_ATTRS and parent not in VP2_INTERNAL_ATTRS \
-                    and not parent.startswith('out') and '.' not in parent:
+                    and not parent.startswith('out') and '.' not in parent \
+                    and cmds.objExists(f"{node}.{parent}"):
                 filtered.add(parent)
                 is_child = True
         if not is_child:

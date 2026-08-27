@@ -1,0 +1,521 @@
+{
+    "version": "3.0",
+    "name": "openPBRSurface → lambert",
+    "software": "maya",
+    "source_type": "openPBRSurface",
+    "target_type": "lambert",
+    "description": "openPBRSurface 到 lambert 的属性映射",
+    "created_date": "2026-08-26",
+    "mappings": [
+        {
+            "source_attribute": "",
+            "target_attribute": "refractionLimit",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "specularIOR",
+            "target_attribute": "refractiveIndex",
+            "transform": "",
+            "default_value": "1"
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "refractions",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "baseWeight",
+            "target_attribute": "diffuse",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "baseColor",
+            "target_attribute": "color",
+            "transform": "",
+            "default_value": "(1.0, 1.0, 1.0)"
+        },
+        {
+            "source_attribute": "transmissionWeight",
+            "target_attribute": "transparency",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "ambientColor",
+            "transform": "",
+            "default_value": "(1.0, 1.0, 1.0)"
+        },
+        {
+            "source_attribute": "emissionColor",
+            "target_attribute": "incandescence",
+            "transform": "",
+            "default_value": "(0, 0, 0)"
+        },
+        {
+            "source_attribute": "subsurfaceWeight",
+            "target_attribute": "translucence",
+            "transform": "translucence_to_subsurface",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "subsurfaceScatterAnisotropy",
+            "target_attribute": "translucenceFocus",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "subsurfaceRadius",
+            "target_attribute": "translucenceDepth",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "emissionLuminance",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "1000"
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "vrOverwriteDefaults",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "vrFillObject",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "baseWeight",
+            "target_attribute": "vrEdgeWeight",
+            "transform": "",
+            "default_value": "0.800000011920929"
+        },
+        {
+            "source_attribute": "aiMatteColor",
+            "target_attribute": "vrEdgeColor",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "vrEdgeStyle",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "aiDielectricPriority",
+            "target_attribute": "vrEdgePriority",
+            "transform": "",
+            "default_value": "0"
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "vrHiddenEdges",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "vrHiddenEdgesOnTransparent",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "vrOutlinesAtIntersections",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "materialAlphaGain",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "hideSource",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "transmissionDepth",
+            "target_attribute": "surfaceThickness",
+            "transform": "",
+            "default_value": "0.5"
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "shadowAttenuation",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "transmissionScatter",
+            "target_attribute": "lightAbsorbance",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "transmissionDispersionScale",
+            "target_attribute": "chromaticAberration",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "pointCamera",
+            "target_attribute": "pointCamera",
+            "transform": "",
+            "default_value": "(1.0, 1.0, 1.0)"
+        },
+        {
+            "source_attribute": "normalCamera",
+            "target_attribute": "normalCamera",
+            "transform": "",
+            "default_value": "(1.0, 1.0, 1.0)"
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "matteOpacityMode",
+            "transform": "",
+            "default_value": "1.0"
+        },
+        {
+            "source_attribute": "aiMatteColorA",
+            "target_attribute": "matteOpacity",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "hardwareShader",
+            "target_attribute": "hardwareShader",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "",
+            "target_attribute": "rsRefractionSamples",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "baseDiffuseRoughness",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "baseMetalness",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "specularWeight",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "specularColor",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(1.0, 1.0, 1.0)"
+        },
+        {
+            "source_attribute": "specularRoughness",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.30000001192092896"
+        },
+        {
+            "source_attribute": "specularRoughnessAnisotropy",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "transmissionScatterAnisotropy",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "transmissionDispersionAbbeNumber",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "20.0"
+        },
+        {
+            "source_attribute": "subsurfaceColor",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(0.800000011920929, 0.800000011920929, 0.800000011920929)"
+        },
+        {
+            "source_attribute": "subsurfaceRadiusScale",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(1.0, 0.5, 0.25)"
+        },
+        {
+            "source_attribute": "fuzzWeight",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "fuzzColor",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(1.0, 1.0, 1.0)"
+        },
+        {
+            "source_attribute": "fuzzRoughness",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.5"
+        },
+        {
+            "source_attribute": "coatWeight",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "coatColor",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(1.0, 1.0, 1.0)"
+        },
+        {
+            "source_attribute": "coatRoughness",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "coatRoughnessAnisotropy",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "coatIOR",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "1.600000023841858"
+        },
+        {
+            "source_attribute": "coatDarkening",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "1.0"
+        },
+        {
+            "source_attribute": "thinFilmWeight",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "thinFilmIOR",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "1.399999976158142"
+        },
+        {
+            "source_attribute": "geometryThinWalled",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "False"
+        },
+        {
+            "source_attribute": "geometryCoatNormal",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "geometryCoatTangent",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "triangleNormalCameraX",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "triangleNormalCameraY",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "1.0"
+        },
+        {
+            "source_attribute": "triangleNormalCameraZ",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "0.0"
+        },
+        {
+            "source_attribute": "tangentUCamera",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(1.0, 1.0, 1.0)"
+        },
+        {
+            "source_attribute": "aiUserOptions",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "aiTransmitAovs",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "False"
+        },
+        {
+            "source_attribute": "aiEnableMatte",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "False"
+        },
+        {
+            "source_attribute": "aiAovId1",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "aiId1",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "aiAovId2",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "aiId2",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "aiAovId3",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "aiId3",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "aiAovId4",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "aiId4",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "aiAovId5",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "aiId5",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "aiAovId6",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "aiId6",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "aiAovId7",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "aiId7",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "aiAovId8",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": ""
+        },
+        {
+            "source_attribute": "aiId8",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "(0.0, 0.0, 0.0)"
+        },
+        {
+            "source_attribute": "aiCaustics",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "False"
+        },
+        {
+            "source_attribute": "aiExitToBackground",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "False"
+        },
+        {
+            "source_attribute": "aiInternalReflections",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "True"
+        },
+        {
+            "source_attribute": "aiIndirectDiffuse",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "1.0"
+        },
+        {
+            "source_attribute": "aiIndirectSpecular",
+            "target_attribute": "",
+            "transform": "",
+            "default_value": "1.0"
+        }
+    ]
+}

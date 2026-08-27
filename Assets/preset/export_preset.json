@@ -89,11 +89,11 @@
         "thumb_source": "screenshot"
     },
     "textures": {
-        "zmetal": true,
+        "zmetal": false,
         "zmetal_merge": true,
         "mcm": false,
         "mcm_min_count": 2,
-        "ma": true,
+        "ma": false,
         "mb": false,
         "fbx": false,
         "obj": false,
@@ -133,11 +133,11 @@
         "thumb_source": "screenshot"
     },
     "hdr": {
-        "zmetal": true,
-        "zmetal_merge": true,
+        "zmetal": false,
+        "zmetal_merge": false,
         "mcm": false,
         "mcm_min_count": 2,
-        "ma": true,
+        "ma": false,
         "mb": false,
         "fbx": false,
         "obj": false,

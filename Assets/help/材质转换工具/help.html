@@ -57,12 +57,14 @@ td { background: #fff; font-size: 13px; }
   <a href="#execute" class="sub">2.3 执行转换</a>
   <a href="#options" class="sub">2.4 转换选项</a>
   <a href="#ui">3. 界面说明</a>
-  <a href="#buttons" class="sub">3.1 工具栏按钮</a>
+  <a href="#ui-mapping" class="sub">3.1 映射文件区域</a>
   <a href="#config-table" class="sub">3.2 映射配置表格</a>
-  <a href="#map-table" class="sub">3.3 映射文件列表</a>
-  <a href="#preset">4. 预设管理</a>
-  <a href="#tips">5. 使用技巧</a>
-  <a href="#faq">6. 常见问题</a>
+  <a href="#ui-bottom" class="sub">3.3 底部按钮与状态栏</a>
+  <a href="#openpbr">4. openPBR 中转转换</a>
+  <a href="#failure">5. 转换失败处理</a>
+  <a href="#preset">6. 预设管理</a>
+  <a href="#tips">7. 使用技巧</a>
+  <a href="#faq">8. 常见问题</a>
 </nav>
 
 <div class="content">
@@ -76,12 +78,13 @@ td { background: #fff; font-size: 13px; }
 
 <p>工具可以帮你做这些事：</p>
 <ul>
-  <li><b>批量转换</b> — 一次性转换场景中所有匹配的材质</li>
-  <li><b>类型映射</b> — 定义源材质类型到目标材质类型的对应关系</li>
+  <li><b>批量转换</b> — 一次性转换场景中所有匹配的材质，或仅转换选中的材质</li>
+  <li><b>类型映射</b> — 定义源材质类型到目标材质类型的对应关系，源/目标类型支持下拉选择</li>
   <li><b>属性映射</b> — 通过 <code>.mmap</code> 映射文件控制属性传递</li>
+  <li><b>openPBR 中转</b> — 没有直接映射文件时，自动通过 openPBR 中间格式完成两步转换</li>
+  <li><b>失败处理</b> — 转换失败的材质自动跳过并生成报告，可一键在 Maya 中选中</li>
+  <li><b>默认材质兜底</b> — 可选：无映射文件时创建目标类型的基础材质替换</li>
   <li><b>预设保存</b> — 常用映射配置可保存为 <code>.mlist</code> 文件复用</li>
-  <li><b>自动搜索</b> — 自动从映射文件夹中找到对应的 <code>.mmap</code> 映射文件</li>
-  <li><b>保留未连接属性</b> — 默认不删除源材质，方便回退</li>
 </ul>
 
 <!-- ============================================================ -->
@@ -91,7 +94,7 @@ td { background: #fff; font-size: 13px; }
 <div class="step">
 <ol>
   <li>在"材质类型映射配置"表格中，添加源材质类型和目标材质类型的映射关系</li>
-  <li>可以双击单元格手动输入材质类型（如 <code>lambert</code>、<code>aiStandardSurface</code>）</li>
+  <li>源/目标单元格是<b>下拉框</b>：选项自动来自映射文件夹中的 <code>.mmap</code> 文件（即可以进行转换的类型），也可以直接输入自定义类型</li>
   <li>也可以点击"加载源"/"加载目标"按钮从选择的材质节点载入类型</li>
   <li>当只有一行且源为空时，会将所有材质转换为该目标类型</li>
   <li>可以点击"保存预设"将当前配置保存为 <code>.mlist</code> 文件</li>
@@ -101,10 +104,9 @@ td { background: #fff; font-size: 13px; }
 <h3 id="select-map">2.2 选择映射文件</h3>
 <div class="step">
 <ol>
-  <li>点击"浏览..."按钮选择包含映射 <code>.mmap</code> 文件的文件夹</li>
-  <li>工具会自动加载该文件夹中的所有 <code>.mmap</code> 文件</li>
-  <li>映射文件会根据"源材质类型"和"目标材质类型"自动匹配</li>
-  <li>点击"打开文件夹"可快速打开映射文件目录进行管理</li>
+  <li>映射文件区域位于窗口<b>顶部</b>：点击"浏览..."按钮选择包含映射 <code>.mmap</code> 文件的文件夹</li>
+  <li>区域下方显示当前映射文件夹的目录路径，点击"打开文件夹"可快速在资源管理器中打开</li>
+  <li>工具会自动加载该文件夹中的所有 <code>.mmap</code> 文件，并根据"源材质类型"和"目标材质类型"自动匹配</li>
 </ol>
 </div>
 
@@ -117,69 +119,99 @@ td { background: #fff; font-size: 13px; }
 <ol>
   <li>配置好映射关系后，点击"<b>转换选择</b>"按钮 — 仅转换选中的材质</li>
   <li>或点击"<b>转换全部</b>"按钮 — 转换场景中所有符合映射配置的材质</li>
+  <li>转换时会自动查找转换路径：优先使用直接映射文件（A→B），找不到时自动尝试 openPBR 中转（A→openPBR→B）</li>
   <li>转换过程中会在底部状态栏显示进度</li>
-  <li>完成后会有弹窗提示成功/失败的材质数量</li>
+  <li>完成后弹窗显示成功/失败的材质数量；若有失败材质，可在弹窗中一键选中定位</li>
 </ol>
 </div>
 
 <div class="warn">
-  <b>注意：</b>建议在转换前保存场景文件。虽然工具默认不删除源材质，但批量操作前备份是个好习惯。
+  <b>注意：</b>建议在转换前保存场景文件。批量操作前备份是个好习惯。
 </div>
 
 <h3 id="options">2.4 转换选项</h3>
 <table>
 <tr><th>选项</th><th>说明</th></tr>
-<tr><td><b>删除源材质</b></td><td>转换完成后是否删除源材质节点（默认不删除）</td></tr>
-<tr><td><b>保留未连接属性</b></td><td>目标材质上未连接的属性是否保留默认值</td></tr>
-<tr><td><b>重命名目标材质</b></td><td>使用源材质的名称作为目标材质名（默认开启）</td></tr>
-<tr><td><b>复制 UV 集</b></td><td>将源材质的 UV 集复制到目标材质</td></tr>
+<tr><td><b>复制纹理连接</b></td><td>转换时将源材质的纹理（贴图文件）连接复制到目标材质（默认开启）</td></tr>
+<tr><td><b>保留原始材质</b></td><td>转换完成后保留源材质节点不删除（默认不勾选，勾选后便于回退）</td></tr>
+<tr><td><b>自动应用到选择对象</b></td><td>转换后将新材质自动赋予当前选中的对象（默认开启）</td></tr>
+<tr><td><b>无映射→默认材质</b></td><td>找不到对应映射文件时，创建目标类型的基础材质替换源材质（默认不勾选；不勾选时此类材质计入转换失败列表）</td></tr>
 </table>
 
 <!-- ============================================================ -->
 <h2 id="ui">3. 界面说明</h2>
 
-<h3 id="buttons">3.1 工具栏按钮</h3>
-<table>
-<tr><th>按钮</th><th>功能说明</th></tr>
-<tr><td><b>添加行</b></td><td>在映射配置表格中新增一行</td></tr>
-<tr><td><b>删除选中行</b></td><td>删除映射配置表格中选中的行</td></tr>
-<tr><td><b>加载源</b></td><td>将当前选中的 Maya 材质节点类型载入到"源"单元格</td></tr>
-<tr><td><b>加载目标</b></td><td>将当前选中的 Maya 材质节点类型载入到"目标"单元格</td></tr>
-<tr><td><b>保存预设</b></td><td>将当前映射配置保存为 <code>.mlist</code> 文件</td></tr>
-<tr><td><b>加载预设</b></td><td>从 <code>.mlist</code> 文件恢复映射配置</td></tr>
-<tr><td><b>浏览...</b></td><td>选择包含 <code>.mmap</code> 映射文件的文件夹</td></tr>
-<tr><td><b>打开文件夹</b></td><td>在资源管理器中打开映射文件目录</td></tr>
-<tr><td><b>刷新</b></td><td>重新扫描映射文件夹，加载最新的 <code>.mmap</code> 文件</td></tr>
-<tr><td><b>转换选择</b></td><td>仅转换当前在 Maya 中选中的材质</td></tr>
-<tr><td><b>转换全部</b></td><td>转换场景中所有匹配映射配置的材质</td></tr>
-<tr><td><b>使用帮助</b></td><td>打开本 HTML 帮助窗口</td></tr>
-</table>
+<h3 id="ui-mapping">3.1 映射文件区域（顶部）</h3>
+<p>位于窗口最上方，包含两行：</p>
+<ul>
+  <li><b>第一行</b>：映射文件路径输入框（只读）+ "浏览..."按钮 + 状态标签</li>
+  <li><b>第二行</b>：映射文件夹目录路径文本 + "打开文件夹"按钮</li>
+</ul>
 
 <h3 id="config-table">3.2 映射配置表格</h3>
 <p>配置"源材质类型 → 目标材质类型"的对应关系：</p>
 <ul>
-  <li><b>源</b>：要转换的材质类型（如 <code>lambert</code>、<code>phong</code>、<code>blinn</code>）</li>
-  <li><b>目标</b>：转换后的材质类型（如 <code>aiStandardSurface</code>、<code>redshiftStandardMaterial</code>）</li>
+  <li><b>源</b>：要转换的材质类型（如 <code>lambert</code>、<code>phong</code>、<code>blinn</code>），下拉框选择或输入</li>
+  <li><b>目标</b>：转换后的材质类型（如 <code>aiStandardSurface</code>、<code>redshiftStandardMaterial</code>），下拉框选择或输入</li>
 </ul>
+
+<p>表格下方按钮行：</p>
+<table>
+<tr><th>按钮</th><th>功能说明</th></tr>
+<tr><td><b>加载源</b></td><td>将当前选中的 Maya 材质节点类型载入到"源"单元格</td></tr>
+<tr><td><b>加载目标</b></td><td>将当前选中的 Maya 材质节点类型载入到"目标"单元格</td></tr>
+<tr><td><b>添加行</b></td><td>在映射配置表格中新增一行</td></tr>
+<tr><td><b>删除选中行</b></td><td>删除映射配置表格中选中的行</td></tr>
+<tr><td><b>清空全部</b></td><td>清空映射配置表格中的所有行</td></tr>
+<tr><td><b>保存预设</b></td><td>将当前映射配置保存为 <code>.mlist</code> 文件</td></tr>
+<tr><td><b>加载预设</b></td><td>从 <code>.mlist</code> 文件恢复映射配置</td></tr>
+</table>
 
 <div class="note">
   <b>特殊用法：</b>当只有一行且"源"留空时，会将所有材质都转换为该"目标"类型。这在"全部转换为统一类型"的场景下非常有用。
 </div>
 
-<h3 id="map-table">3.3 映射文件列表</h3>
-<p>显示当前选择的映射文件夹中找到的所有 <code>.mmap</code> 文件：</p>
-<ul>
-  <li><b>文件名</b>：<code>.mmap</code> 文件名（建议使用 <code>源_目标.mmap</code> 命名）</li>
-  <li><b>源类型</b>：该映射文件适用的源材质类型</li>
-  <li><b>目标类型</b>：该映射文件适用的目标材质类型</li>
-  <li><b>规则数</b>：该映射文件中定义的属性映射规则数量</li>
-</ul>
+<h3 id="ui-bottom">3.3 底部按钮与状态栏</h3>
+<table>
+<tr><th>按钮</th><th>功能说明</th></tr>
+<tr><td><b>转换选择</b></td><td>仅转换当前在 Maya 中选中的材质</td></tr>
+<tr><td><b>转换全部</b></td><td>转换场景中所有匹配映射配置的材质</td></tr>
+<tr><td><b>关闭</b></td><td>关闭工具窗口</td></tr>
+</table>
+<p>窗口底部状态栏显示当前操作进度与结果信息。</p>
 
 <!-- ============================================================ -->
-<h2 id="preset">4. 预设管理</h2>
+<h2 id="openpbr">4. openPBR 中转转换</h2>
+
+<p>不同渲染器之间的材质转换依赖 <code>.mmap</code> 映射文件。为避免"每种 A→B 组合都做一份映射文件"导致的文件数量膨胀，工具引入了 <b>openPBR 中间格式</b>：</p>
+
+<ul>
+  <li>只需要准备 A→openPBR、openPBR→A、B→openPBR、openPBR→B 等映射文件</li>
+  <li>当用户想要 A→B 而<b>没有直接映射文件</b>时，工具自动执行 <code>A→openPBR</code> 再 <code>openPBR→B</code> 两步转换</li>
+  <li>中转过程产生的中间 openPBR 材质会自动清理，最终只保留目标材质</li>
+</ul>
+
+<div class="note">
+  <b>示例：</b>有 <code>lambert→openPBRSurface.mmap</code> 和 <code>openPBRSurface→VRayMtl.mmap</code>，但没有 <code>lambert→VRayMtl.mmap</code> 时，工具会自动完成 lambert→openPBR→VRayMtl。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="failure">5. 转换失败处理</h2>
+
+<p>转换过程中不会因单个材质失败而中断：</p>
+<ul>
+  <li>找不到映射文件或转换出错的材质会<b>跳过</b>，继续转换其余材质</li>
+  <li>转换完成后弹窗列出<b>失败材质列表</b>及失败原因</li>
+  <li>弹窗中提供"选择失败材质"按钮，可在 Maya 视口中<b>一键选中</b>所有失败材质，便于逐个检查修复</li>
+</ul>
+
+<p>如果勾选了转换选项中的<b>"无映射→默认材质"</b>，找不到映射文件的材质不会进入失败列表，而是直接创建目标类型的基础材质替换源材质（仅保证类型正确，不复制属性）。</p>
+
+<!-- ============================================================ -->
+<h2 id="preset">6. 预设管理</h2>
 
 <h3>预设文件位置</h3>
-<p>预设文件存放在工具的 <code>preset/</code> 目录下，扩展名为 <code>.mlist</code>。点击"打开文件夹"可快速定位。</p>
+<p>预设文件存放在工具的 <code>preset/</code> 目录下，扩展名为 <code>.mlist</code>。</p>
 
 <h3>预设文件结构</h3>
 <p>预设文件是 JSON 格式，包含映射关系列表：</p>
@@ -206,42 +238,44 @@ td { background: #fff; font-size: 13px; }
 </div>
 
 <!-- ============================================================ -->
-<h2 id="tips">5. 使用技巧</h2>
+<h2 id="tips">7. 使用技巧</h2>
 
 <div class="step">
 <ol>
   <li><b>先小范围测试</b>：先用"转换选择"测试一两个材质，确认效果后再用"转换全部"</li>
-  <li><b>统一目标类型</b>：如需将所有材质统一为 PBR 材质，使用"源留空 + 单行"的预设</li>
+  <li><b>统一目标类型</b>：如需将所有材质统一为 PBR 材质，使用"源留空 + 单行"的配置</li>
+  <li><b>善用 openPBR 中转</b>：为常用渲染器各准备一份"→openPBR"和"openPBR→"映射，即可覆盖任意渲染器之间的转换</li>
   <li><b>复用映射</b>：相同材质类型转换一次后，预设和映射文件可永久复用</li>
   <li><b>分层处理</b>：复杂场景可分批转换（如先转 lambert，再转 phong）</li>
-  <li><b>检查未匹配</b>：转换完成后查看日志，注意有未被映射的材质</li>
-  <li><b>回退策略</b>：如效果不理想，由于源材质默认保留，可以手动删除目标材质</li>
-  <li><b>团队共享</b>：将 preset/ 目录加入共享路径，统一团队转换标准</li>
+  <li><b>检查失败材质</b>：转换完成后如弹窗提示失败，用"选择失败材质"按钮定位后逐个修复</li>
+  <li><b>团队共享</b>：将 preset/ 目录与映射文件目录加入共享路径，统一团队转换标准</li>
 </ol>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="faq">6. 常见问题</h2>
+<h2 id="faq">8. 常见问题</h2>
 
 <h3>Q: 转换后材质效果不对？</h3>
 <p>A: 大多数情况是 <code>.mmap</code> 映射文件不完整。可以使用"材质节点属性映射工具"创建更详细的映射规则。</p>
 
 <h3>Q: 找不到对应的 <code>.mmap</code> 文件？</h3>
-<p>A: 映射文件夹中没有匹配"源_目标"的 <code>.mmap</code> 文件。可以：<br>
-1. 在映射文件夹中创建匹配的文件名（如 <code>lambert_aiStandardSurface.mmap</code>）<br>
-2. 使用"材质节点属性映射工具"创建新的映射文件</p>
+<p>A: 映射文件夹中没有匹配的 <code>.mmap</code> 文件。可以：<br>
+1. 在映射文件夹中创建匹配的映射文件（也可准备 openPBR 中转映射）<br>
+2. 使用"材质节点属性映射工具"创建新的映射文件<br>
+3. 或勾选"无映射→默认材质"选项，让工具创建默认目标材质</p>
 
 <h3>Q: 转换失败了？</h3>
 <p>A: 检查以下几点：<br>
 1. 目标渲染器是否已加载（Arnold / Redshift 插件）<br>
 2. 源节点类型名称是否拼写正确（区分大小写）<br>
-3. 场景中是否有同名材质导致冲突</p>
+3. 场景中是否有同名材质导致冲突<br>
+4. 用转换完成后的"选择失败材质"按钮定位具体问题材质</p>
 
 <h3>Q: 转换很慢？</h3>
-<p>A: 大场景批量转换会逐个节点处理，属正常现象。可以观察状态栏进度条。如卡死请检查是否有复杂节点网络。</p>
+<p>A: 大场景批量转换会逐个节点处理，属正常现象。可以观察状态栏进度。如卡死请检查是否有复杂节点网络。</p>
 
 <h3>Q: 能撤销转换吗？</h3>
-<p>A: 工具默认不删除源材质，所以可以手动删除目标材质并重新使用源材质。如需彻底转换请在转换前保存场景。</p>
+<p>A: 勾选"保留原始材质"选项后源材质节点不会删除，可手动删除目标材质并重新使用源材质。如需彻底转换请在转换前保存场景。</p>
 
 <h3>Q: 支持哪些渲染器？</h3>
 <p>A: 理论上支持所有 Maya 已加载的渲染器。常用支持：<br>
@@ -249,7 +283,8 @@ td { background: #fff; font-size: 13px; }
 • Redshift (<code>redshiftStandardMaterial</code>)<br>
 • V-Ray (<code>VRayMtl</code>)<br>
 • RenderMan (<code>PxrSurface</code>)<br>
-• Stingray (<code>StingrayStandardMaterial</code>)</p>
+• Stingray (<code>StingrayStandardMaterial</code>)<br>
+渲染器之间没有直接映射时，通过 openPBR 中间格式也能完成转换。</p>
 
 <div class="footer">
   材质转换工具 · Squirrel Asset Manager

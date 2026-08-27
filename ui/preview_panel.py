@@ -17,6 +17,70 @@ except ImportError:
     from PySide2 import QtMultimedia, QtMultimediaWidgets
 
 
+# ── 缩略图辅助（多缩略图：主图 thumb.* + 附加 thumb_N.*） ──
+
+_THUMB_EXTENSIONS = ('.sicon', '.aicon', '.png', '.mp4')
+
+
+def _thumb_sort_key(name: str):
+    """主图（thumb.sicon/aicon/png/mp4）排最前，附加 thumb_N.* 按编号排序"""
+    low = name.lower()
+    if low in ('thumb.sicon', 'thumb.aicon', 'thumb.png', 'thumb.mp4'):
+        return (0, 0)
+    import re as _re
+    m = _re.search(r'thumb_(\d+)', low)
+    return (1, int(m.group(1)) if m else 1)
+
+
+def list_asset_thumbnails(asset_path, base_name=None) -> list:
+    """列出资产目录内缩略图文件名（主图在前，附加按编号）。
+
+    zasset（base_name=None）：主图 thumb.sicon/aicon/png/mp4 + 附加 thumb_N.*
+    文件夹资产（base_name=资产名）：主图 {name}.sicon + 附加 {name}_N.*
+    """
+    if not asset_path or not os.path.isdir(asset_path):
+        return []
+    import re as _re
+    low_base = base_name.lower() if base_name else ""
+    names = []
+    for fn in os.listdir(asset_path):
+        low = fn.lower()
+        if not os.path.isfile(os.path.join(asset_path, fn)) or not low.endswith(_THUMB_EXTENSIONS):
+            continue
+        if base_name is not None:
+            if low != f"{low_base}.sicon" and not low.startswith(low_base + "_"):
+                continue
+        elif not low.startswith('thumb'):
+            continue
+        names.append(fn)
+
+    if base_name is not None:
+        def _key(n):
+            low = n.lower()
+            if low == f"{low_base}.sicon":
+                return (0, 0)
+            m = _re.search(_re.escape(low_base) + r'_(\d+)', low)
+            return (1, int(m.group(1)) if m else 1)
+    else:
+        _key = _thumb_sort_key
+    names.sort(key=_key)
+    return names
+
+
+def next_thumb_slot(asset_path, base_name=None) -> str:
+    """返回下一个附加缩略图文件名（thumb_2.sicon / {name}_2.sicon …）"""
+    import re as _re
+    max_n = 1
+    pat = _re.compile(r'thumb_(\d+)') if base_name is None else \
+        _re.compile(_re.escape(base_name.lower()) + r'_(\d+)')
+    for n in list_asset_thumbnails(asset_path, base_name=base_name):
+        m = pat.search(n.lower())
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    prefix = "thumb" if base_name is None else base_name
+    return f"{prefix}_{max_n + 1}.sicon"
+
+
 # ── FlowLayout（换行布局） ──────────────────────────
 
 class FlowLayout(QtWidgets.QLayout):
@@ -69,6 +133,24 @@ class FlowWidget(QtWidgets.QWidget):
     def heightForWidth(self, w): return self.flow.heightForWidth(w)
 
 
+class _WheelSwitchLabel(QtWidgets.QLabel):
+    """预览图标签：滚轮切换缩略图（direction: +1 下一张 / -1 上一张）+ 双击"""
+    wheelSwitched = QtCore.Signal(int)
+    doubleClicked = QtCore.Signal()
+
+    def wheelEvent(self, event):
+        delta = event.angleDelta().y()
+        if delta:
+            self.wheelSwitched.emit(1 if delta > 0 else -1)
+            event.accept()
+        else:
+            super().wheelEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        self.doubleClicked.emit()
+        event.accept()
+
+
 # ── 材质属性面板 ────────────────────────────────────
 
 class PreviewPanelWidget(QtWidgets.QWidget):
@@ -77,6 +159,9 @@ class PreviewPanelWidget(QtWidgets.QWidget):
     editRequested = QtCore.Signal(dict)
     thumbnailCaptureRequested = QtCore.Signal(str)  # 材质 id → 截图
     thumbnailImportRequested = QtCore.Signal(str)   # 材质 id → 导入
+    addThumbnailFileRequested = QtCore.Signal(dict)  # 添加缩略图（导入文件到新槽位）
+    thumbnailDeleteRequested = QtCore.Signal(str, int)  # (材质 id, 缩略图索引) 删除附加缩略图
+    previewDoubleClicked = QtCore.Signal(dict)  # 双击预览图 → 打开资产观察窗口
     commonTagRequested = QtCore.Signal(str)         # 新增常用标签
 
     def __init__(self, parent=None):
@@ -383,12 +468,15 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         self._preview_frame.setStyleSheet("QFrame { background:#1a1a1a; }")
         self._preview_frame.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Maximum)
         fl = QtWidgets.QVBoxLayout(self._preview_frame); fl.setContentsMargins(0, 0, 0, 0); fl.setSpacing(0)
-        self._preview_label = QtWidgets.QLabel(); self._preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._preview_label = _WheelSwitchLabel()
+        self._preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._preview_label.setMinimumSize(160, 160)
+        self._preview_label.wheelSwitched.connect(self._on_preview_wheel)
+        self._preview_label.doubleClicked.connect(self._on_preview_double_clicked)
         fl.addWidget(self._preview_label)
         l.addWidget(self._preview_frame, 0)
 
-        # 缩略图操作按钮行
+        # 缩略图操作按钮行（截取 / 导入 / 添加 + 多图切换 ◀ n/n ▶ 删除）
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.setSpacing(6)
         btn_s = "QPushButton { background:#3a3a3a; color:#d0d0d0; border:none; padding:5px 12px; font-size:12px; border-radius:4px; } QPushButton:hover { background:#4a4a4a; }"
@@ -400,9 +488,41 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         imp_btn.setStyleSheet(btn_s)
         imp_btn.clicked.connect(self._on_thumbnail_import)
         btn_row.addWidget(imp_btn)
+        add_btn = QtWidgets.QPushButton(t("preview_panel.add_thumb"))
+        add_btn.setStyleSheet(btn_s)
+        add_btn.clicked.connect(self._on_thumbnail_add_file)
+        btn_row.addWidget(add_btn)
+        # 多缩略图切换控件（◀ 计数 ▶ 删除，仅有多图时显示）
+        nav_s = "QPushButton { background:#2a2a2a; color:#c8c8c8; border:1px solid #3a3a3a; padding:3px 10px; font-size:12px; border-radius:4px; } QPushButton:hover { background:#3a3a3a; } QPushButton:disabled { color:#666; }"
+        self._thumb_prev_btn = QtWidgets.QPushButton("◀")
+        self._thumb_prev_btn.setStyleSheet(nav_s)
+        self._thumb_prev_btn.setFixedWidth(34)
+        self._thumb_prev_btn.clicked.connect(self._on_thumb_prev)
+        self._thumb_counter = QtWidgets.QLabel("1/1")
+        self._thumb_counter.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._thumb_counter.setStyleSheet("color:#9a9a9a; font-size:12px;")
+        self._thumb_next_btn = QtWidgets.QPushButton("▶")
+        self._thumb_next_btn.setStyleSheet(nav_s)
+        self._thumb_next_btn.setFixedWidth(34)
+        self._thumb_next_btn.clicked.connect(self._on_thumb_next)
+        self._thumb_delete_btn = QtWidgets.QPushButton(t("preview_panel.delete_thumb"))
+        self._thumb_delete_btn.setStyleSheet(nav_s)
+        self._thumb_delete_btn.clicked.connect(self._on_thumb_delete)
+        self._thumb_nav_widget = QtWidgets.QWidget()
+        nav_row = QtWidgets.QHBoxLayout(self._thumb_nav_widget)
+        nav_row.setContentsMargins(0, 0, 0, 0)
+        nav_row.setSpacing(6)
+        nav_row.addWidget(self._thumb_prev_btn)
+        nav_row.addWidget(self._thumb_counter, 1)
+        nav_row.addWidget(self._thumb_next_btn)
+        nav_row.addWidget(self._thumb_delete_btn)
+        self._thumb_nav_widget.setVisible(False)
+        btn_row.addWidget(self._thumb_nav_widget)
         btn_row.addStretch()
         l.addLayout(btn_row)
-        self._thumb_btns = [cap_btn, imp_btn]
+        self._thumb_btns = [cap_btn, imp_btn, add_btn]
+        self._thumb_names = []
+        self._thumb_index = 0
 
         self._show_empty_preview()
         return w
@@ -480,14 +600,16 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         else:
             self._d_notes.setVisible(False)
         self._update_fav_btn()
+        self._load_thumb_list(material)
         self._draw_preview(material, clear_events=True)
         self._update_thumb_buttons()
 
     def _update_thumb_buttons(self):
-        """有选中材质时启用截取/导入按钮"""
+        """有选中材质时启用截取/导入/添加按钮"""
         enabled = self._material is not None
         for b in self._thumb_btns:
             b.setEnabled(enabled)
+        self._update_thumb_nav()
 
     def _on_thumbnail_capture(self):
         if self._material:
@@ -496,6 +618,96 @@ class PreviewPanelWidget(QtWidgets.QWidget):
     def _on_thumbnail_import(self):
         if self._material:
             self.thumbnailImportRequested.emit(self._material.get("id", ""))
+
+    def _on_thumbnail_add_file(self):
+        if self._material:
+            self.addThumbnailFileRequested.emit(self._material)
+
+    # ── 多缩略图：列表加载 / 切换 / 删除 ──────────────
+
+    def _load_thumb_list(self, material):
+        """加载当前资产的缩略图列表，重置到第 1 张"""
+        self._thumb_names = []
+        self._thumb_index = 0
+        json_path = material.get("json_path", "")
+        if json_path and not os.path.isdir(json_path):
+            json_path = os.path.dirname(json_path)
+        if json_path and os.path.isdir(json_path):
+            if material.get("is_zasset"):
+                self._thumb_names = list_asset_thumbnails(json_path)
+            else:
+                self._thumb_names = list_asset_thumbnails(json_path, base_name=material.get("name", ""))
+        self._update_thumb_nav()
+
+    def _current_thumb_bytes(self, mat):
+        """返回当前缩略图索引对应的图片字节"""
+        names = getattr(self, '_thumb_names', [])
+        idx = getattr(self, '_thumb_index', 0)
+        if names and 0 <= idx < len(names):
+            if idx == 0 and mat.get("thumb_bytes"):
+                return mat.get("thumb_bytes")
+            json_path = mat.get("json_path", "")
+            if json_path and not os.path.isdir(json_path):
+                json_path = os.path.dirname(json_path)
+            try:
+                with open(os.path.join(json_path, names[idx]), 'rb') as f:
+                    return f.read()
+            except Exception:
+                return None
+        return mat.get("thumb_bytes")
+
+    def _update_thumb_nav(self):
+        """根据缩略图数量与当前索引刷新切换行（仅多图时显示）"""
+        names = getattr(self, '_thumb_names', [])
+        idx = getattr(self, '_thumb_index', 0)
+        n = len(names)
+        self._thumb_nav_widget.setVisible(bool(self._material) and n > 1)
+        self._thumb_counter.setText(f"{idx + 1}/{n}" if n else "")
+        self._thumb_prev_btn.setEnabled(idx > 0)
+        self._thumb_next_btn.setEnabled(idx < n - 1)
+        self._thumb_delete_btn.setEnabled(n > 1 and 0 < idx < n)
+
+    def reload_thumbnails(self, target_index=0):
+        """添加/删除缩略图后重新扫描并刷新显示。
+
+        target_index 为负数时定位到最后一张（新增缩略图）。
+        """
+        if self._material:
+            self._load_thumb_list(self._material)
+            if self._thumb_names:
+                if target_index < 0:
+                    target_index = len(self._thumb_names) - 1
+                self._thumb_index = max(0, min(target_index, len(self._thumb_names) - 1))
+            self._draw_preview(self._material, clear_events=True)
+            self._update_thumb_buttons()
+
+    def _on_thumb_prev(self):
+        if self._thumb_index > 0:
+            self._thumb_index -= 1
+            self._draw_preview(self._material, clear_events=True)
+            self._update_thumb_nav()
+
+    def _on_thumb_next(self):
+        if self._thumb_index < len(self._thumb_names) - 1:
+            self._thumb_index += 1
+            self._draw_preview(self._material, clear_events=True)
+            self._update_thumb_nav()
+
+    def _on_preview_wheel(self, direction):
+        """预览图区域滚轮 → 切换缩略图（direction>0 上一张，<0 下一张）"""
+        if direction > 0:
+            self._on_thumb_prev()
+        else:
+            self._on_thumb_next()
+
+    def _on_preview_double_clicked(self):
+        """双击预览图 → 通知主窗口打开资产观察窗口"""
+        if self._material:
+            self.previewDoubleClicked.emit(self._material)
+
+    def _on_thumb_delete(self):
+        if self._material and self._thumb_index > 0 and self._thumb_names:
+            self.thumbnailDeleteRequested.emit(self._material.get("id", ""), self._thumb_index)
 
     def _set_file_info(self, material):
         # 获取 .zasset 文件路径
@@ -815,6 +1027,8 @@ class PreviewPanelWidget(QtWidgets.QWidget):
     # ── 3D 预览 ─────────────────────────────────────
 
     def _show_empty_preview(self):
+        self._thumb_names = []
+        self._thumb_index = 0
         self._draw_empty_preview(160)
 
     def _draw_empty_preview(self, size):
@@ -828,6 +1042,8 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         painter.end(); self._preview_label.setPixmap(p)
         for b in getattr(self, '_thumb_btns', []):
             b.setEnabled(False)
+        if hasattr(self, '_update_thumb_nav'):
+            self._update_thumb_nav()
 
     def _draw_preview(self, mat, clear_events=False):
         # 停止旧播放器
@@ -839,7 +1055,9 @@ class PreviewPanelWidget(QtWidgets.QWidget):
 
         thumb_path = mat.get("thumbnail_path", "")
         is_zasset = mat.get("is_zasset", False)
-        thumb_bytes = mat.get("thumb_bytes") if is_zasset else None
+        # zasset 恒走字节流；文件夹资产仅在查看附加缩略图（索引>0）时走字节流，避免破坏单图动图播放
+        use_thumb_bytes = is_zasset or getattr(self, '_thumb_index', 0) > 0
+        thumb_bytes = self._current_thumb_bytes(mat) if use_thumb_bytes else None
         json_path = mat.get("json_path", "")
 
         s = self._preview_frame.width()

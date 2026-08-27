@@ -160,6 +160,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._settings_mgr = SettingsManager() if SettingsManager else None
         self._app_settings = self._load_settings()
         self._material_manager = MaterialManager()
+        # 清理残留临时目录前需用户确认
+        self._material_manager._cleanup_confirm_cb = self._confirm_stale_cleanup
         # 注册到模块级变量，方便 Maya 控制台访问
         import sys as _sys
         _sam_mod = _sys.modules.get('squirrel_asset_manager')
@@ -178,6 +180,26 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
     # ── 数据层 ────────────────────────────────────────
 
+    def _confirm_stale_cleanup(self, safe_paths, orphan_paths):
+        """清理残留临时目录前的用户确认（由 MaterialManager._cleanup_confirm_cb 调用）。
+
+        Returns:
+            bool: True 表示用户确认删除 safe_paths
+        """
+        lines = list(safe_paths)
+        if orphan_paths:
+            lines.append("")
+            lines.append(t("msg.stale_cleanup_orphan", count=len(orphan_paths)))
+            lines.extend(orphan_paths)
+        ret = QtWidgets.QMessageBox.question(
+            self,
+            t("msg.stale_cleanup_title"),
+            t("msg.stale_cleanup_confirm", count=len(safe_paths), paths="\n".join(lines)),
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.No,
+        )
+        return ret == QtWidgets.QMessageBox.StandardButton.Yes
+
     def _init_data_layer(self, library_path=None):
         # 加载多库配置
         self._libraries = self._app_settings.get("library_paths", [])
@@ -194,7 +216,16 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 if self._settings_mgr:
                     self._settings_mgr.set("library_paths", self._libraries)
 
-        path = library_path or self._libraries[0]["path"]
+        # 启动时使用已设置的默认库（按路径匹配，兼容旧格式的名称匹配）
+        default_path = None
+        default_ref = self._app_settings.get("default_library", "")
+        if default_ref:
+            for lib in self._libraries:
+                if lib.get("path") == default_ref or lib.get("name") == default_ref:
+                    default_path = lib["path"]
+                    break
+
+        path = library_path or default_path or self._libraries[0]["path"]
         if path and os.path.isdir(path):
             try:
                 ok = self._material_manager.load_library(path)
@@ -750,6 +781,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         project_layout.setSpacing(0)
 
         self._project_mgr = MaterialManager()
+        # 清理残留临时目录前需用户确认
+        self._project_mgr._cleanup_confirm_cb = self._confirm_stale_cleanup
         # 注册到模块级变量
         import sys as _sys2
         _sam_mod2 = _sys2.modules.get('squirrel_asset_manager')
@@ -986,6 +1019,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         qt_connect(self._thumbnail_grid.clipboardChanged, self._on_clipboard_changed)
         qt_connect(self._thumbnail_grid.importRequested, self._on_grid_import)
         qt_connect(self._thumbnail_grid.assetImportRequested, self._on_asset_import_into_maya)
+        qt_connect(self._thumbnail_grid.assetDoubleClickImportRequested, self._on_dc_asset_import)
+        qt_connect(self._thumbnail_grid.applyMaterialParamsRequested, self._on_apply_material_params)
+        qt_connect(self._thumbnail_grid.convertImportRequested, self._on_convert_import)
         qt_connect(self._thumbnail_grid.addReferenceRequested, self._on_add_reference)
         qt_connect(self._thumbnail_grid.variantGeometryImportRequested, self._on_variant_geometry_import)
         qt_connect(self._thumbnail_grid.variantMaterialImportRequested, self._on_variant_material_import)
@@ -1011,6 +1047,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         qt_connect(self._thumbnail_grid.thumbnailUpdateRequested, self._on_thumbnail_update)
         qt_connect(self._thumbnail_grid.thumbnailImportRequested, self._on_preview_thumbnail_import)
         qt_connect(self._thumbnail_grid.thumbnailCaptureRequested, self._on_preview_thumbnail_capture)
+        qt_connect(self._thumbnail_grid.addThumbnailRequested, self._on_add_thumbnail_capture)
         qt_connect(self._thumbnail_grid.thumbnailPlayblastRequested, self._on_thumbnail_playblast)
         qt_connect(self._thumbnail_grid.thumbnailRenderRequested, self._on_thumbnail_render)
         qt_connect(self._thumbnail_grid.updateAssetRequested, self._on_update_asset)
@@ -1027,6 +1064,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         qt_connect(self._right_panel.tagFilterRequested, self._on_tag_filter_from_detail)
         qt_connect(self._right_panel.thumbnailCaptureRequested, self._on_preview_thumbnail_capture)
         qt_connect(self._right_panel.thumbnailImportRequested, self._on_preview_thumbnail_import)
+        qt_connect(self._right_panel.addThumbnailFileRequested, self._on_add_thumbnail_file)
+        qt_connect(self._right_panel.thumbnailDeleteRequested, self._on_thumbnail_delete)
+        qt_connect(self._right_panel.previewDoubleClicked, self._on_preview_double_clicked)
         qt_connect(self._right_panel.commonTagRequested, self._on_common_tag_added)
 
         qt_connect(self._thumb_slider.valueChanged, self._on_thumb_slider_changed)
@@ -1961,15 +2001,24 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         else:
             cur = "custom"
         imported = 0
-        for mid in self._clipboard:
-            # 先在当前激活库查找，找不到再从另一个库查找（跨库粘贴）
-            mat = self._active_mgr.get_by_id(mid)
-            if not mat:
-                other = self._project_mgr if self._active_mgr is self._material_manager else self._material_manager
-                mat = other.get_by_id(mid)
-            if not mat or not mat.json_path:
-                continue
-            result = self._active_mgr.add_material(mat.json_path, cur, sub_lib, force_category=True)
+        for item in self._clipboard:
+            # 兼容两种剪贴板条目：dict（含源路径）或 str（仅 id）
+            if isinstance(item, dict):
+                json_path = item.get("json_path", "") or ""
+                mid = item.get("id", "") or ""
+            else:
+                json_path, mid = "", item
+            # 优先使用记录源路径跨库复制（不依赖当前库索引）；
+            # 旧格式按 id 在当前/另一库查找（.zasset 是目录，用 isdir 判断）
+            if not (json_path and os.path.isdir(json_path)):
+                mat = self._active_mgr.get_by_id(mid)
+                if not mat:
+                    other = self._project_mgr if self._active_mgr is self._material_manager else self._material_manager
+                    mat = other.get_by_id(mid)
+                if not mat or not mat.json_path:
+                    continue
+                json_path = mat.json_path
+            result = self._active_mgr.add_material(json_path, cur, sub_lib, force_category=True)
             if result:
                 imported += 1
         if imported:
@@ -2642,6 +2691,18 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             name = lib.get("name", os.path.basename(lib["path"]))
             path = lib["path"]
             self._lib_combo.addItem(f"{name} — {path}", lib["path"])
+
+        # 选中当前实际加载的库（路径归一化比较）
+        target_idx = 0
+        current_path = getattr(getattr(self, '_active_mgr', None), '_library_path', None)
+        if current_path:
+            current_norm = os.path.normcase(os.path.abspath(current_path))
+            for i in range(self._lib_combo.count()):
+                item_path = os.path.normcase(os.path.abspath(self._lib_combo.itemData(i)))
+                if item_path == current_norm:
+                    target_idx = i
+                    break
+        self._lib_combo.setCurrentIndex(target_idx)
         self._lib_combo.blockSignals(False)
 
     def _on_library_switched(self, index):
@@ -2661,16 +2722,24 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._update_status_bar()
         print(f"[MaterialLibrary] 已切换资产库: {path}")
 
+    def _switch_to_default_library(self, default_ref):
+        """切换到指定的默认库（按路径匹配，兼容旧格式的名称匹配）"""
+        for i, lib in enumerate(self._libraries):
+            if lib.get("path") == default_ref or lib.get("name") == default_ref:
+                self._lib_combo.setCurrentIndex(i)
+                self._on_library_switched(i)
+                return
+
     def _on_left_tab_changed(self, index):
         """左侧选项卡切换"""
         if index == 0:  # 分类选项卡
             self._active_mgr = self._material_manager
             self._thumbnail_grid.set_manager(self._material_manager)
-        if index == 2:  # 项目选项卡
+        if index == 1:  # 项目选项卡
             self._load_project_library()
             self._active_mgr = self._project_mgr
             self._thumbnail_grid.set_manager(self._project_mgr)
-        if index == 1:  # 收藏选项卡 → 同步
+        if index == 2:  # 收藏选项卡 → 同步
             self._sync_favorites_panel()
         self._center_stack.setCurrentIndex(0)
 
@@ -2720,6 +2789,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         cur = self._proj_category_tree.get_active_category()
         self._project_loaded = False
         self._project_mgr = MaterialManager()
+        # 清理残留临时目录前需用户确认
+        self._project_mgr._cleanup_confirm_cb = self._confirm_stale_cleanup
         self._load_project_library()
         self._thumbnail_grid.set_manager(self._project_mgr)
         # 恢复选中分类
@@ -3228,6 +3299,220 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 return _json.load(f).get(key, [])
         except Exception:
             return []
+
+    def _get_selected_material_nodes(self):
+        """获取场景中当前选中的材质节点（按 shader 分类识别，兼容各渲染器）"""
+        import maya.cmds as cmds
+        result = []
+        for n in (cmds.ls(selection=True) or []):
+            try:
+                if cmds.getClassification(cmds.nodeType(n), satisfies="shader"):
+                    result.append(n)
+            except Exception:
+                continue
+        return result
+
+    def _on_apply_material_params(self, mat):
+        """右键「应用材质参数」：将库资产材质的参数应用到场景中选中的材质。
+
+        同类型直拷属性并重连贴图；不同类型按 .mmap 映射转换后应用。
+        """
+        import maya.cmds as cmds
+        json_path = mat.get('json_path', '')
+        if not json_path or not json_path.endswith('.zasset'):
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"),
+                                          t("msg.apply_params_no_zmetal"))
+            return
+
+        targets = self._get_selected_material_nodes()
+        if not targets:
+            QtWidgets.QMessageBox.information(self, t("common.tip"),
+                                              t("msg.apply_params_no_target"))
+            return
+
+        # 读取 zmetal 根材质节点数据
+        import json as _json
+        from ..core.zasset_io import ZassetIO
+        all_names = ZassetIO.list_contents(json_path)
+        zn = "node.zmetal" if "node.zmetal" in all_names else (
+            next((n for n in all_names if n.endswith(".zmetal")), ""))
+        if not zn:
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"),
+                                          t("msg.apply_params_no_zmetal"))
+            return
+        data = _json.loads(ZassetIO.read_file(json_path, zn))
+        nodes = data.get("nodes", {})
+        roots = data.get("root_materials", [])
+        src_name = roots[0] if roots else (next(iter(nodes), "") if nodes else "")
+        src_data = nodes.get(src_name)
+        if not src_data:
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"),
+                                          t("msg.apply_params_no_zmetal"))
+            return
+
+        # 临时导入源材质网络到场景（含贴图节点），用于复用连接
+        from ..integration.import_executor import apply_zmetal_as_material
+        ok, name_map = apply_zmetal_as_material(json_path)
+        if not ok:
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"),
+                                          t("msg.apply_params_import_fail"))
+            return
+        src_scene = name_map.get(src_name) or src_name
+
+        applied = []
+        try:
+            from ..quicktools.材质转换工具 import MaterialConverter
+            conv = MaterialConverter(self)
+            for tgt in targets:
+                try:
+                    if conv.apply_zmetal_to_material(src_data, src_scene, tgt, copy_textures=True):
+                        applied.append(tgt)
+                except Exception as e:
+                    print(f"[应用材质参数] 应用到 {tgt} 失败: {e}")
+        finally:
+            # 清理临时导入的源材质节点（其贴图节点已被目标引用则保留）
+            try:
+                if src_scene and cmds.objExists(src_scene):
+                    cmds.delete(src_scene)
+            except Exception:
+                pass
+
+        if applied:
+            try:
+                cmds.select(applied, replace=True)
+            except Exception:
+                pass
+            print(f"[应用材质参数] 已应用到 {len(applied)} 个材质: {applied}")
+        else:
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"),
+                                          t("msg.apply_params_none_applied"))
+
+    def _on_convert_import(self, mat, target):
+        """右键「转换导入 ▶」：把材质资产导入 Maya 场景后，转换为选定的目标材质类型。
+
+        可转换的目标类型在菜单中由映射表动态列出（见 thumbnail_view 的子菜单构建），
+        此处直接执行导入 + 转换，与材质转换工具保持一致。
+        """
+        import maya.cmds as cmds
+        json_path = mat.get('json_path', '')
+        if not json_path or not json_path.endswith('.zasset'):
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"),
+                                          t("msg.convert_import_need_zasset"))
+            return
+
+        # 选择导入格式（材质优先 zmetal）
+        from ..integration.import_executor import get_available_formats
+        try:
+            formats = get_available_formats(json_path)
+        except Exception:
+            formats = []
+        fmt = "zmetal" if "zmetal" in formats else (formats[0] if formats else "")
+        if not fmt:
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"),
+                                          t("msg.convert_import_no_format"))
+            return
+
+        # 1. 导入到场景，收集新建材质
+        before_mats = set(cmds.ls(materials=True) or [])
+        ok = self._import_asset_select_materials(json_path, fmt)
+        if not ok:
+            return
+        new_mats = sorted(set(cmds.ls(materials=True) or []) - before_mats)
+        if not new_mats:
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"),
+                                          t("msg.convert_import_no_material"))
+            return
+
+        # 2. 逐个转换并替换原材质
+        from ..quicktools.材质转换工具 import MaterialConverter
+        conv = MaterialConverter(self)
+        done = []
+        for m in new_mats:
+            try:
+                ntype = cmds.nodeType(m)
+                result = conv._convert_material_via_path(
+                    m, ntype, target, copy_textures=True, fallback_default=False)
+                if result:
+                    conv._replace_source_material(m, result[0])
+                    done.append(result[0])
+            except Exception as e:
+                print(f"[转换导入] 转换失败 {m}: {e}")
+        if done:
+            try:
+                cmds.select(done, replace=True)
+            except Exception:
+                pass
+            print(f"[转换导入] 已导入并转换 {len(done)} 个材质 → {target}: {done}")
+        else:
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"),
+                                          t("msg.convert_import_conv_fail"))
+
+    @staticmethod
+    def _material_type_renderer(node_type) -> str:
+        """材质类型 → 渲染器（与 _renderer_suffix 对称；无法归属返回空串）"""
+        t = (node_type or "").lower()
+        if "vray" in t:
+            return "vray"
+        if "redshift" in t or t.startswith("rs") or t == "rsmaterial":
+            return "redshift"
+        if "ai" in t or "arnold" in t or "openpbr" in t:
+            return "arnold"
+        return ""
+
+    def _on_dc_asset_import(self, zasset_path, format_name):
+        """材质分类双击导入：导入后若材质类型与当前渲染器不匹配，询问转换为默认材质"""
+        import maya.cmds as cmds
+        before_mats = set(cmds.ls(materials=True) or [])
+        ok = self._import_asset_select_materials(zasset_path, format_name)
+        if not ok:
+            return
+        new_mats = sorted(set(cmds.ls(materials=True) or []) - before_mats)
+        if new_mats:
+            self._maybe_convert_imported_materials(new_mats)
+
+    def _maybe_convert_imported_materials(self, new_mats):
+        """导入的材质与当前渲染器不匹配时，询问是否转换为当前渲染器默认材质（替换原材质）"""
+        import maya.cmds as cmds
+        from .thumbnail_view import RENDERER_DEFAULT_MATERIALS
+        current = ""
+        try:
+            current = str(cmds.getAttr("defaultRenderGlobals.currentRenderer") or "").lower()
+        except Exception:
+            return
+        target_default = RENDERER_DEFAULT_MATERIALS.get(current, "")
+        if not target_default:
+            return
+        for mat in new_mats:
+            try:
+                ntype = cmds.nodeType(mat)
+            except Exception:
+                continue
+            src_renderer = self._material_type_renderer(ntype)
+            if not src_renderer or src_renderer == current:
+                continue
+            reply = QtWidgets.QMessageBox.question(
+                self, t("msg.import_renderer_title"),
+                t("msg.import_renderer_confirm", mat=mat, ntype=ntype,
+                  src=src_renderer, cur=current, target=target_default),
+                QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+                QtWidgets.QMessageBox.StandardButton.Yes)
+            if reply != QtWidgets.QMessageBox.StandardButton.Yes:
+                continue
+            try:
+                from ..quicktools.材质转换工具 import MaterialConverter
+                conv = MaterialConverter(self)
+                result = conv._convert_material_via_path(
+                    mat, ntype, target_default, copy_textures=True, fallback_default=False)
+                if result:
+                    target_mat = result[0]
+                    conv._replace_source_material(mat, target_mat)
+                    print(f"[Import] 已转换为当前渲染器默认材质: {target_mat} ({target_default})")
+                else:
+                    QtWidgets.QMessageBox.warning(
+                        self, t("msg.import_renderer_conv_fail_title"),
+                        t("msg.import_renderer_conv_fail", mat=mat, src=ntype, target=target_default))
+            except Exception as e:
+                print(f"[Import] 材质转换失败 {mat}: {e}")
 
     def _on_asset_import_into_maya(self, zasset_path, format_name):
         """右键 → 导入 → 将资产导入到 Maya 场景（成功后选中新建材质）"""
@@ -4912,6 +5197,134 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         self._right_panel._update_thumb_buttons()
 
+    # ── 多缩略图：添加（截取/导入到新槽位）/ 删除 ───────────
+
+    def _add_thumb_dest(self, mat):
+        """返回添加缩略图的目标路径（zasset → thumb_N.sicon；文件夹资产 → name_N.sicon）"""
+        from .preview_panel import next_thumb_slot
+        if mat.is_zasset:
+            return os.path.join(mat.zasset_path, next_thumb_slot(mat.zasset_path))
+        asset_dir = os.path.dirname(mat.json_path)
+        return os.path.join(asset_dir, next_thumb_slot(asset_dir, base_name=mat.name))
+
+    def _on_add_thumbnail_capture(self, mat):
+        """右键「添加缩略图」→ 截图覆盖层直接保存到新槽位"""
+        if self._use_mock:
+            return
+        if not mat or not mat.get("json_path"):
+            return
+        mgr = self._active_mgr
+        mid = mat.get("id", "")
+        m = mgr.get_by_id(mid) if mgr else None
+        if not m:
+            return
+        thumb_dest = self._add_thumb_dest(m)
+
+        from .thumbnail_capture_overlay import ThumbnailCaptureOverlay
+        existing = ThumbnailCaptureOverlay.find_existing()
+        if existing is not None:
+            try:
+                existing.winId()
+                if existing.toolbar:
+                    existing.toolbar.winId()
+                self._capture_overlay = existing
+            except RuntimeError:
+                existing = None
+                self._capture_overlay = None
+        if self._capture_overlay and self._capture_overlay.isVisible():
+            self._capture_overlay.save_path_override = thumb_dest
+            self._capture_overlay.raise_()
+            self._capture_overlay.activateWindow()
+            if hasattr(self._capture_overlay, 'toolbar'):
+                tt = self._capture_overlay.toolbar
+                if not tt.isVisible():
+                    tt.show()
+                    tt.raise_()
+        else:
+            self._capture_overlay = ThumbnailCaptureOverlay(keep_alive=True)
+            self._capture_overlay.save_path_override = thumb_dest
+            self._capture_overlay.show()
+
+        for sig_name in ("captured", "cancelled", "recordingFinished"):
+            sig = getattr(self._capture_overlay, sig_name, None)
+            if sig is None:
+                continue
+            try:
+                sig.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+
+        def on_done(pixmap):
+            if pixmap.isNull():
+                return
+            self._right_panel.reload_thumbnails(target_index=-1)
+
+        def on_recording(gif_path):
+            if os.path.isfile(gif_path):
+                self._right_panel.reload_thumbnails(target_index=-1)
+
+        self._capture_overlay.captured.connect(on_done)
+        self._capture_overlay.recordingFinished.connect(on_recording)
+
+    def _on_add_thumbnail_file(self, mat):
+        """预览面板「添加」→ 导入文件到新槽位（可多选，覆盖语义的「导入」保持主图）"""
+        file_paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            self, t("menu.add_thumbnail"), "",
+            "图片 (*.sicon *.jpg *.jpeg *.aicon *.bmp *.png);;所有文件 (*.*)")
+        if not file_paths:
+            return
+        if not mat or not mat.get("json_path"):
+            return
+        mgr = self._active_mgr
+        m = mgr.get_by_id(mat.get("id", "")) if mgr else None
+        if not m:
+            return
+        import shutil
+        ok = 0
+        for file_path in file_paths:
+            try:
+                shutil.copy2(file_path, self._add_thumb_dest(m))
+                ok += 1
+            except Exception as e:
+                print(f"[MultiThumb] 复制缩略图失败 {file_path}: {e}")
+        if not ok:
+            return
+        self._right_panel.reload_thumbnails(target_index=-1)
+
+    def _on_thumbnail_delete(self, material_id, index):
+        """删除附加缩略图（索引 0 为主图不可删）"""
+        if index <= 0:
+            return
+        mgr = self._active_mgr
+        mat = mgr.get_by_id(material_id) if mgr else None
+        if not mat or not mat.json_path:
+            return
+        from .preview_panel import list_asset_thumbnails
+        asset_dir = mat.zasset_path if mat.is_zasset else os.path.dirname(mat.json_path)
+        base_name = None if mat.is_zasset else mat.name
+        names = list_asset_thumbnails(asset_dir, base_name=base_name)
+        if not (0 <= index < len(names)):
+            return
+        target = os.path.join(asset_dir, names[index])
+        try:
+            os.remove(target)
+        except OSError as e:
+            print(f"[MultiThumb] 删除缩略图失败: {e}")
+            return
+        if self._right_panel._material and self._right_panel._material.get("id") == material_id:
+            self._right_panel.reload_thumbnails(target_index=index)
+        else:
+            self._right_panel.reload_thumbnails()
+
+    def _on_preview_double_clicked(self, mat):
+        """双击右侧预览图 → 打开资产观察窗口（左大图预览 / 右属性，可拖动缩放）"""
+        if not mat or not mat.get("json_path"):
+            return
+        from .asset_preview_dialog import AssetPreviewDialog
+        dlg = AssetPreviewDialog(mat, self)
+        self._asset_preview_dlg = dlg  # 持有引用，防止被 GC
+        dlg.show()
+
     # ── 资产创建 ───────────────────────────────────────
 
     def _get_current_asset_type(self) -> str:
@@ -5029,14 +5442,11 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 t("msg.ai_select_first"))
             return
 
+        # 获取 Ollama 本地模型列表，供下拉选择（未启动时为空列表）
         try:
             from ..core.ai_analyzer import AIAnalyzer
-            analyzer = AIAnalyzer()
-            if not analyzer.is_available():
-                QtWidgets.QMessageBox.warning(self, t("progress.ai.title"),
-                    t("msg.ai_ollama_help"))
-                return
-            models = analyzer.get_available_models()
+            probe = AIAnalyzer(provider="ollama")
+            models = probe.get_available_models() if probe.is_available() else []
         except Exception:
             models = []
 
@@ -5055,6 +5465,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         review = config.get('review_output', True)
         model = config.get('model', '')
         translate_existing_tags = config.get('translate_existing_tags', False)
+        provider = config.get('provider', None)
+        api_key = config.get('api_key', None)
+        base_url = config.get('base_url', None)
 
         selected = self._thumbnail_grid.get_selected_materials_list()
         if not selected:
@@ -5066,9 +5479,16 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         try:
             from ..core.ai_analyzer import AIAnalyzer
-            analyzer = AIAnalyzer()
+            kwargs = {}
+            if provider:
+                kwargs['provider'] = provider
             if model:
-                analyzer.model = model
+                kwargs['model'] = model
+            if api_key:
+                kwargs['api_key'] = api_key
+            if base_url:
+                kwargs['base_url'] = base_url
+            analyzer = AIAnalyzer(**kwargs)
             if not analyzer.is_available():
                 QtWidgets.QMessageBox.warning(self, t("progress.ai.title"),
                     t("msg.ai_ollama_unavailable"))
@@ -5510,7 +5930,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                         os.replace(old_path, tmp_rename)
                     shutil.move(new_zasset, old_path)
                     if os.path.exists(tmp_rename):
-                        os.remove(tmp_rename)
+                        # os.remove 不能删除目录（Windows 上会抛 PermissionError 导致残留），用 rmtree
+                        shutil.rmtree(tmp_rename, ignore_errors=True)
                 except Exception:
                     if os.path.exists(tmp_rename):
                         os.replace(tmp_rename, old_path)
@@ -6588,6 +7009,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         dialog.show()
 
     def _on_settings_changed(self, settings):
+        old_default = self._app_settings.get("default_library", "")
         self._app_settings.update(settings)
         if self._settings_mgr:
             for k, v in settings.items():
@@ -6597,6 +7019,11 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         if "library_paths" in settings:
             self._libraries = settings["library_paths"]
             self._populate_library_combo()
+
+            # 默认库变更 → 立即切换到新默认库
+            new_default = settings.get("default_library", "")
+            if new_default and new_default != old_default:
+                self._switch_to_default_library(new_default)
 
         # 按变更项增量更新
         font_changed = "font_size" in settings

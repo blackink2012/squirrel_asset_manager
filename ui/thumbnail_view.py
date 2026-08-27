@@ -92,6 +92,24 @@ def _load_double_click_preset() -> dict:
         return {}
 
 
+# 渲染器 → 默认材质类型映射（双击「自动」创建材质时使用）
+RENDERER_DEFAULT_MATERIALS = {
+    "arnold": "aiStandardSurface",
+    "redshift": "RedshiftStandardMaterial",
+    "vray": "VRayMtl",
+}
+
+
+def detect_default_material_type(configured="aiStandardSurface"):
+    """检测当前渲染器，返回对应默认材质类型；检测不到时回退 configured。"""
+    try:
+        import maya.cmds as cmds
+        renderer = str(cmds.getAttr("defaultRenderGlobals.currentRenderer") or "").lower()
+    except Exception:
+        return configured
+    return RENDERER_DEFAULT_MATERIALS.get(renderer, configured)
+
+
 def _is_ctx_enabled(sub_lib: str, item_key: str, preset: dict) -> bool:
     """检查指定子库的某个右键菜单项是否启用（默认 False，仅预设中显式标记 true 的才启用）"""
     entry = preset.get(sub_lib, {})
@@ -349,6 +367,11 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
     pasteRequested = QtCore.Signal()
     importRequested = QtCore.Signal(str)  # "folder" or "files"
     assetImportRequested = QtCore.Signal(str, str)  # (zasset_path, format_name)
+    # 双击导入专用信号（区别于右键导入，用于导入后渲染器匹配检查）
+    assetDoubleClickImportRequested = QtCore.Signal(str, str)  # (zasset_path, format_name)
+    applyMaterialParamsRequested = QtCore.Signal(dict)  # (mat) 应用材质参数到场景选中材质
+    convertImportRequested = QtCore.Signal(dict, str)  # (mat, target_type) 转换导入：导入后转换为指定材质类型
+    addThumbnailRequested = QtCore.Signal(dict)  # (mat) 添加缩略图（截图到新槽位）
     addReferenceRequested = QtCore.Signal(str, str)  # (zasset_path, format_name) 添加引用
     variantGeometryImportRequested = QtCore.Signal(str, str, str)  # (zasset_path, version, lod)
     variantMaterialImportRequested = QtCore.Signal(str, str)  # (zasset_path, version)
@@ -711,7 +734,13 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         menu = QtWidgets.QMenu(self)
         menu.setStyleSheet(_get_sub_style(font_size))
         apply_action = menu.addAction(t("common.apply_material")) if _is_ctx_enabled(sub_lib, "apply_material", ctx_preset) else None
-        if apply_action:
+        apply_params_action = menu.addAction(t("menu.apply_material_params")) if _is_ctx_enabled(sub_lib, "apply_material_params", ctx_preset) else None
+        convert_import_sub = None
+        if sub_lib == 'materials' and _is_ctx_enabled(sub_lib, "convert_import", ctx_preset):
+            convert_import_sub = self._build_convert_import_submenu(menu, mat, font_size)
+            if convert_import_sub:
+                menu.addMenu(convert_import_sub)
+        if apply_action or apply_params_action or convert_import_sub:
             menu.addSeparator()
 
         # 收藏夹子菜单（列表视图）
@@ -756,8 +785,9 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         imp_action = None
         playblast_action = None
         render_action = None
+        add_thumb_action = None
         if _is_ctx_enabled(sub_lib, "update_thumbnail", ctx_preset):
-            # 更新缩略图 → 子菜单（截取 / 导入 / Maya拍屏 / 渲染图）
+            # 更新缩略图 → 子菜单（截取 / 导入 / Maya拍屏 / 渲染图 / 添加）
             thumb_menu = QtWidgets.QMenu(t("menu.update_thumbnail"), menu)
             thumb_menu.setStyleSheet(_get_sub_style(font_size))
             cap_action = thumb_menu.addAction(t("menu.capture_thumbnail"))
@@ -765,6 +795,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             thumb_menu.addSeparator()
             playblast_action = thumb_menu.addAction(t("menu.maya_playblast"))
             render_action = thumb_menu.addAction(t("menu.render_image"))
+            add_thumb_action = thumb_menu.addAction(t("menu.add_thumbnail"))
             menu.addMenu(thumb_menu)
         ref_table_action = menu.addAction(t("menu.add_reference")) if _is_ctx_enabled(sub_lib, "add_reference", ctx_preset) else None
         delete_action = menu.addAction(t("common.delete")) if _is_ctx_enabled(sub_lib, "delete", ctx_preset) else None
@@ -772,6 +803,8 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         action = qt_exec(menu, self._table_view.viewport().mapToGlobal(pos))
         if action == apply_action:
             self.materialApplied.emit(mat)
+        elif action == apply_params_action:
+            self.applyMaterialParamsRequested.emit(mat)
         elif action == edit_action:
             self.editMaterialRequested.emit(mat)
         elif action == export_action:
@@ -793,6 +826,8 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             ani_mode = _show_frame_mode_dialog(self)
             if ani_mode:
                 self.thumbnailRenderRequested.emit(mat.get("id", ""), ani_mode)
+        elif action == add_thumb_action:
+            self.addThumbnailRequested.emit(mat)
         elif action == ref_table_action:
             json_path = mat.get("json_path", "")
             if json_path:
@@ -1713,7 +1748,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                         print(f"[MaterialLibrary] \u53cc\u51fb\u5bfc\u5165: \u683c\u5f0f {target_fmt} \u4e0d\u53ef\u7528\uff0c\u56de\u9000\u5230 {fmt}")
                 except Exception:
                     pass
-                self.assetImportRequested.emit(json_path, fmt)
+                self.assetDoubleClickImportRequested.emit(json_path, fmt)
         elif cmd == 'import_texture':
             json_path = mat.get('json_path', '')
             if json_path:
@@ -1731,6 +1766,9 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             json_path = mat.get('json_path', '')
             if json_path:
                 node_type = option or "aiStandardSurface"
+                if node_type == "auto":
+                    # 自动：按当前渲染器创建对应默认材质，检测不到时回退配置值
+                    node_type = detect_default_material_type()
                 self.createMaterialRequested.emit(node_type, mat, '')
         elif cmd == 'assign_texture':
             if sub_lib == 'hdr':
@@ -1996,6 +2034,13 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             if _is_ctx_enabled(sub_lib, "apply_material", ctx_preset):
                 menu.addAction(t("menu.apply_material_to_selected")).triggered.connect(
                     lambda: self._do_apply_material(mat))
+            if _is_ctx_enabled(sub_lib, "apply_material_params", ctx_preset):
+                menu.addAction(t("menu.apply_material_params")).triggered.connect(
+                    lambda: self.applyMaterialParamsRequested.emit(mat))
+            if _is_ctx_enabled(sub_lib, "convert_import", ctx_preset):
+                ci_sub = self._build_convert_import_submenu(menu, mat, font_size)
+                if ci_sub:
+                    menu.addMenu(ci_sub)
         elif sub_lib == 'textures':
             if _is_ctx_enabled(sub_lib, "apply_material", ctx_preset):
                 menu.addAction(t("menu.apply_material_to_selected")).triggered.connect(
@@ -2145,6 +2190,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         imp_thumb_action = None
         playblast_action = None
         render_action = None
+        add_thumb_action = None
         if _is_ctx_enabled(sub_lib, "update_thumbnail", ctx_preset):
             thumb_menu = QtWidgets.QMenu(t("menu.update_thumbnail"), menu)
             thumb_menu.setStyleSheet(_get_sub_style(font_size))
@@ -2153,6 +2199,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             thumb_menu.addSeparator()
             playblast_action = thumb_menu.addAction(t("menu.maya_playblast"))
             render_action = thumb_menu.addAction(t("menu.render_image"))
+            add_thumb_action = thumb_menu.addAction(t("menu.add_thumbnail"))
             menu.addMenu(thumb_menu)
         
         update_asset_action = menu.addAction(t("menu.update_asset")) if _is_ctx_enabled(sub_lib, "update_asset", ctx_preset) else None
@@ -2201,6 +2248,8 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             ani_mode = _show_frame_mode_dialog(self)
             if ani_mode:
                 self.thumbnailRenderRequested.emit(mat.get('id', ''), ani_mode)
+        elif action == add_thumb_action:
+            self.addThumbnailRequested.emit(mat)
         elif action == update_asset_action:
             self.updateAssetRequested.emit(mid)
         elif action == delete_action:
@@ -2272,9 +2321,53 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             elif action_type == 'lod':
                 self.variantLodDeleteRequested.emit(json_path, args[0], args[1])
 
+    def show_context_menu_for_material(self, mat, global_pos, anchor_widget=None):
+        """供外部窗口（资产观察弹窗）复用资产卡片右键菜单。
+
+        anchor_widget 为菜单锚点（需支持 mapToGlobal/mapFromGlobal，
+        并临时挂载 material_data 供 _on_context_menu 读取资产信息），
+        缺省用网格自身。
+        """
+        anchor = anchor_widget if anchor_widget is not None else self
+        had = hasattr(anchor, "material_data")
+        old = getattr(anchor, "material_data", None)
+        anchor.material_data = mat
+        try:
+            self._on_context_menu(anchor.mapFromGlobal(global_pos), anchor)
+        finally:
+            if had:
+                anchor.material_data = old
+            else:
+                del anchor.material_data
+
     def _do_apply_material(self, mat):
         print(f"[MaterialLibrary] \u5e94\u7528\u6750\u8d28: {mat.get('name_cn')}")
         self.materialApplied.emit(mat)
+
+    def _build_convert_import_submenu(self, menu, mat, font_size=13):
+        """构建「转换导入 ▶」子菜单：列出该材质可转换的目标材质类型。
+
+        仅列出映射表存在转换路径（直连或中转）的类型；源类型未知或无可转换
+        目标时不生成子菜单（返回 None）。
+        """
+        src_type = mat.get("node_type", "")
+        if not src_type:
+            return None
+        try:
+            from ..quicktools.材质转换工具 import list_convertible_targets, _renderer_suffix
+            cands = list_convertible_targets(src_type)
+        except Exception:
+            return None
+        if not cands:
+            return None
+        sub = QtWidgets.QMenu(t("menu.convert_import"), menu)
+        sub.setStyleSheet(_get_sub_style(font_size))
+        for ctype in cands:
+            suf = _renderer_suffix(ctype)
+            label = f"  {ctype}（{suf.upper()}）" if suf else f"  {ctype}"
+            a = sub.addAction(label)
+            a.triggered.connect(lambda *a, tt=ctype: self.convertImportRequested.emit(mat, tt))
+        return sub
 
     def _build_favorites_submenu(self, menu, mid, font_size=13):
         if not self._manager:
@@ -2322,15 +2415,23 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
     def _copy_selected_to_clipboard(self, mid="", mat=None):
         """复制选中资产到系统剪贴板（支持资源管理器粘贴）+ 内部剪贴板"""
-        ids = list(self._selected_materials.keys()) if self._selected_materials else ([mid] if mid else [])
-        if ids:
-            self.clipboardChanged.emit(ids)
-        # 写入系统剪贴板（文件路径 → QUrl）
         mats = list(self._selected_materials.values()) if self._selected_materials else ([mat] if mat else [])
+        # 内部剪贴板携带源路径：跨资产库粘贴时不再依赖当前库的内存索引
+        entries = []
+        for m in mats:
+            if not m:
+                continue
+            entries.append({
+                "id": m.get("id", ""),
+                "json_path": m.get("json_path", ""),
+            })
+        if entries:
+            self.clipboardChanged.emit(entries)
+        # 写入系统剪贴板（文件路径 → QUrl，.zasset 为目录）
         file_urls = []
         for m in mats:
             fp = m.get("json_path", "")
-            if fp and os.path.isfile(fp):
+            if fp and os.path.exists(fp):
                 file_urls.append(QtCore.QUrl.fromLocalFile(fp))
         if file_urls:
             mime = QtCore.QMimeData()

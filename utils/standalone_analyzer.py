@@ -290,9 +290,10 @@ class VLMClient:
     def __init__(self, base_url: str = "http://127.0.0.1:11434/v1",
                  model: str = "qwen3-vl:8b",
                  max_retries: int = 3,
-                 vocab: Optional[Vocabulary] = None):
+                 vocab: Optional[Vocabulary] = None,
+                 api_key: Optional[str] = None):
         from openai import OpenAI
-        self.client = OpenAI(base_url=base_url, api_key="not-needed")
+        self.client = OpenAI(base_url=base_url, api_key=api_key or "not-needed")
         self.model = model
         self.max_retries = max_retries
         self.vocab = vocab
@@ -422,10 +423,12 @@ class StandaloneAnalyzer:
 
     def __init__(self, base_url: str = "http://127.0.0.1:11434/v1",
                  model: str = "qwen3-vl:8b",
-                 max_retries: int = 3):
+                 max_retries: int = 3,
+                 api_key: Optional[str] = None):
         self.base_url = base_url
         self.model = model
         self.max_retries = max_retries
+        self.api_key = api_key
 
     # ------------------------------------------------------------------
     # 图片分析
@@ -452,7 +455,7 @@ class StandaloneAnalyzer:
             raise FileNotFoundError(f"Image not found: {image_path}")
 
         v = self._resolve_vocab(vocab)
-        client = VLMClient(self.base_url, self.model, self.max_retries, v)
+        client = VLMClient(self.base_url, self.model, self.max_retries, v, self.api_key)
 
         if prompt:
             custom_sp = (
@@ -503,7 +506,7 @@ class StandaloneAnalyzer:
             raise FileNotFoundError(f"Video not found: {video_path}")
 
         v = self._resolve_vocab(vocab)
-        client = VLMClient(self.base_url, self.model, self.max_retries, v)
+        client = VLMClient(self.base_url, self.model, self.max_retries, v, self.api_key)
 
         def _p(stage, pct, detail=""):
             if progress_callback:
@@ -652,6 +655,7 @@ if __name__ == "__main__":
     ap.add_argument("file", help="Image or video file path")
     ap.add_argument("--base-url", default="http://127.0.0.1:11434/v1")
     ap.add_argument("--model", default="qwen3-vl:8b")
+    ap.add_argument("--api-key", default=None, help="API key for cloud services (DeepSeek / Qwen)")
     ap.add_argument("--prompt", default=None, help="Custom prompt text")
     ap.add_argument("--vocab", default=None, help="Path to vocab JSON file")
     ap.add_argument("--mode", choices=["image", "video", "auto"], default="auto")
@@ -659,7 +663,7 @@ if __name__ == "__main__":
     ap.add_argument("--scene-threshold", type=float, default=0.3)
     args = ap.parse_args()
 
-    a = StandaloneAnalyzer(base_url=args.base_url, model=args.model)
+    a = StandaloneAnalyzer(base_url=args.base_url, model=args.model, api_key=args.api_key)
 
     ext = os.path.splitext(args.file)[1].lower()
     video_exts = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".m4v"}

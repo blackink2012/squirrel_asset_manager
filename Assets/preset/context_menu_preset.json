@@ -3,8 +3,10 @@
     "materials": {
         "import": true,
         "import_geometry": true,
-        "add_reference": true,
+        "add_reference": false,
         "apply_material": true,
+        "apply_material_params": true,
+        "convert_import": true,
         "favorites": true,
         "select_all": true,
         "duplicate": true,

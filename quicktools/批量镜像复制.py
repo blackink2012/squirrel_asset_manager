@@ -10,14 +10,19 @@ from datetime import datetime
 _T = None
 _help_path = lambda p: p
 try:
-    from utils.i18n import t as _T, help_path as _hpath
+    # 优先包内相对导入，避免误命中 sys.path 中其他副本（如独立库 release 目录）的顶层 utils 包
+    from ..utils.i18n import t as _T, help_path as _hpath
     _help_path = _hpath
 except ImportError:
     try:
         from squirrel_asset_manager.utils.i18n import t as _T, help_path as _hpath
         _help_path = _hpath
     except ImportError:
-        _T = None
+        try:
+            from utils.i18n import t as _T, help_path as _hpath
+            _help_path = _hpath
+        except ImportError:
+            _T = None
 
 def t(key, **kwargs):
     return _T(key, **kwargs) if _T is not None else (key.format(**kwargs) if kwargs else key)
@@ -60,6 +65,54 @@ QFrame = QtWidgets.QFrame
 QTimer = QtCore.QTimer
 Qt = QtCore.Qt
 QFont = QtGui.QFont
+
+
+# ---- 字体 DPI 适配：以 4K 27 英寸屏（约 163 DPI）为视觉基准 ----
+# 不同 DPI 屏幕按比例缩放字号与尺寸，保证视觉大小一致（4K 正常、2K 偏大的问题）。
+# 如基准屏尺寸不是 27 英寸，可调整 REFERENCE_DPI 值。
+REFERENCE_DPI = 163.0
+
+
+def _font_scale():
+    """返回当前屏幕相对基准 DPI 的字体缩放系数"""
+    try:
+        app = QtWidgets.QApplication.instance()
+        screen = app.primaryScreen() if app is not None else None
+        dpi = float(screen.physicalDotsPerInch()) if screen is not None else REFERENCE_DPI
+        if dpi <= 0:
+            dpi = REFERENCE_DPI
+        return max(0.6, min(dpi / REFERENCE_DPI, 1.5))
+    except Exception:
+        return 1.0
+
+
+FONT_SCALE = _font_scale()
+
+
+def _fs(px):
+    """按 DPI 缩放字号（样式表 px），最小 8px 保证可读"""
+    return max(8, int(px * FONT_SCALE))
+
+
+def _fp(pt):
+    """按 DPI 缩放字体点值（QFont pt），最小 6pt 保证可读"""
+    return max(6, int(round(pt * FONT_SCALE)))
+
+
+def _sc(px):
+    """按 DPI 缩放尺寸（按钮 padding / min-height / min-width 等），最小 1px"""
+    return max(1, int(px * FONT_SCALE))
+
+
+def _font_style(text):
+    """将样式文本中的 @FONT_nn@（字号）与 @SIZE_nn@（尺寸）占位符按 DPI 缩放"""
+    import re
+
+    def _repl(m):
+        tag, val = m.group(1), int(m.group(2))
+        return str(_fs(val)) if tag == "FONT" else str(_sc(val))
+
+    return re.sub(r'@(FONT|SIZE)_(\d+)@', _repl, text)
 
 
 def find_files_by_extensions(root_folder, extensions):
@@ -176,7 +229,7 @@ class MirrorCopyWindow(QWidget):
 
         title_row = QHBoxLayout()
         title = QLabel(t("qtool.mirror.title"))
-        title_font = QFont("Arial", 16)
+        title_font = QFont("Arial", _fp(16))
         title_font.setBold(True)
         title.setFont(title_font)
         title_row.addWidget(title)
@@ -184,12 +237,14 @@ class MirrorCopyWindow(QWidget):
         title_row.addStretch()
 
         help_btn = QPushButton("?")
-        help_btn.setFixedSize(34, 34)
+        help_btn.setFixedSize(_sc(34), _sc(34))
         help_btn.setToolTip(t("qtool.mirror.help_tooltip"))
         help_btn.setStyleSheet(
-            "QPushButton { background-color: #3a3a3a; color: #ffa502; border: none;"
-            "font-size: 18px; font-weight: bold; border-radius: 4px; }"
-            "QPushButton:hover { background-color: #4a4a4a; }"
+            _font_style(
+                "QPushButton { background-color: #3a3a3a; color: #ffa502; border: none;"
+                "font-size: @FONT_18@px; font-weight: bold; border-radius: @SIZE_4@px; }"
+                "QPushButton:hover { background-color: #4a4a4a; }"
+            )
         )
         help_btn.clicked.connect(self._on_help)
         title_row.addWidget(help_btn)
@@ -201,13 +256,13 @@ class MirrorCopyWindow(QWidget):
         src_layout = QVBoxLayout()
         src_layout.setSpacing(3)
         src_label = QLabel(t("qtool.mirror.source_folder") + ":")
-        src_label.setFont(QFont("Arial", 10))
+        src_label.setFont(QFont("Arial", _fp(10)))
         src_layout.addWidget(src_label)
 
         src_row = QHBoxLayout()
         src_row.setSpacing(5)
         self.src_edit = QLineEdit()
-        self.src_edit.setFont(QFont("Arial", 10))
+        self.src_edit.setFont(QFont("Arial", _fp(10)))
         src_row.addWidget(self.src_edit)
 
         self.src_btn = QPushButton(t("qtool.mirror.browse"))
@@ -220,13 +275,13 @@ class MirrorCopyWindow(QWidget):
         dest_layout = QVBoxLayout()
         dest_layout.setSpacing(3)
         dest_label = QLabel(t("qtool.mirror.dest_folder") + ":")
-        dest_label.setFont(QFont("Arial", 10))
+        dest_label.setFont(QFont("Arial", _fp(10)))
         dest_layout.addWidget(dest_label)
 
         dest_row = QHBoxLayout()
         dest_row.setSpacing(5)
         self.dest_edit = QLineEdit()
-        self.dest_edit.setFont(QFont("Arial", 10))
+        self.dest_edit.setFont(QFont("Arial", _fp(10)))
         dest_row.addWidget(self.dest_edit)
 
         self.dest_btn = QPushButton(t("qtool.mirror.browse"))
@@ -239,11 +294,11 @@ class MirrorCopyWindow(QWidget):
         fmt_layout = QVBoxLayout()
         fmt_layout.setSpacing(3)
         fmt_label = QLabel(t("qtool.mirror.fmt_label") + ":")
-        fmt_label.setFont(QFont("Arial", 10))
+        fmt_label.setFont(QFont("Arial", _fp(10)))
         fmt_layout.addWidget(fmt_label)
 
         self.fmt_edit = QLineEdit(".exr, .hdr, .png, .jpg")
-        self.fmt_edit.setFont(QFont("Arial", 10))
+        self.fmt_edit.setFont(QFont("Arial", _fp(10)))
         fmt_layout.addWidget(self.fmt_edit)
         layout.addLayout(fmt_layout)
 
@@ -252,11 +307,11 @@ class MirrorCopyWindow(QWidget):
         action_layout.setSpacing(15)
 
         self.preview_cb = QCheckBox(t("qtool.mirror.preview_only"))
-        self.preview_cb.setFont(QFont("Arial", 10))
+        self.preview_cb.setFont(QFont("Arial", _fp(10)))
         action_layout.addWidget(self.preview_cb)
 
         self.structure_cb = QCheckBox(t("qtool.mirror.copy_structure"))
-        self.structure_cb.setFont(QFont("Arial", 10))
+        self.structure_cb.setFont(QFont("Arial", _fp(10)))
         self.structure_cb.setChecked(True)
         self.structure_cb.stateChanged.connect(self._on_structure_changed)
         action_layout.addWidget(self.structure_cb)
@@ -281,7 +336,7 @@ class MirrorCopyWindow(QWidget):
         progress_layout = QVBoxLayout()
         progress_layout.setSpacing(3)
         self.progress_label = QLabel(t("qtool.mirror.waiting"))
-        self.progress_label.setFont(QFont("Arial", 10))
+        self.progress_label.setFont(QFont("Arial", _fp(10)))
         progress_layout.addWidget(self.progress_label)
 
         self.progress_bar = QProgressBar()
@@ -291,12 +346,12 @@ class MirrorCopyWindow(QWidget):
 
         # 日志
         log_label = QLabel(t("qtool.mirror.operation_log") + ":")
-        log_label.setFont(QFont("Arial", 10))
+        log_label.setFont(QFont("Arial", _fp(10)))
         log_label.setStyleSheet("font-weight: bold;")
         layout.addWidget(log_label)
 
         self.log_text = QTextEdit()
-        self.log_text.setFont(QFont("Courier New", 9))
+        self.log_text.setFont(QFont("Courier New", _fp(9)))
         self.log_text.setReadOnly(True)
         layout.addWidget(self.log_text, stretch=1)
 
