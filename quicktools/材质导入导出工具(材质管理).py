@@ -1557,14 +1557,7 @@ def _get_auto_export_params(target_dir=None, custom_name=None, export_all=False,
 
 
 def radar_export_materials(target_dir=None, custom_name=None, separate_files=False, export_objects=False, color_space=None, category=None, tags=None, export_all=False, name_cn=None, selection_is_material=False, export_metadata=False, create_material_folder=False, pack_textures=False):
-    """全频雷达版导出材质"""
-    auto_dir, auto_name = _get_auto_export_params(target_dir, custom_name, export_all, selection_is_material)
-    if auto_dir is None:
-        return
-    
-    target_dir = auto_dir
-    custom_name = auto_name
-    
+    """全频雷达版导出材质（工具内置实现，不依赖插件，可独立运行）"""
     if export_all:
         materials = cmds.ls(materials=True) or []
         materials = [m for m in materials if cmds.objExists(m) and (cmds.getAttr(m + ".aiSurfaceType", checkParameter=True) is not None or cmds.objectType(m) in ['aiStandardSurface', 'standardSurface', 'lambert', 'blinn', 'phong', 'openPBRSurface'] or not cmds.attributeQuery('aiSurfaceType', node=m, exists=True))]
@@ -1578,19 +1571,19 @@ def radar_export_materials(target_dir=None, custom_name=None, separate_files=Fal
     else:
         selection = cmds.ls(sl=True)
         if not selection:
-            cmds.warning(t("qtool.matexport.msg.select_model_or_material"))
+            cmds.warning(t("zjg.select_model_or_material"))
             return
 
         if selection_is_material:
-            material_types = {'aiStandardSurface', 'standardSurface', 'lambert', 'blinn', 'phong', 'openPBRSurface', 'pxrSurface', 'aiHair', 'aiSkin', 'aiVolume'}
-            materials = [item for item in selection if cmds.nodeType(item) in material_types]
+            materials = [item for item in selection if cmds.objExists(item)]
             if not materials:
-                cmds.warning(t("qtool.matexport.msg.need_valid_material"))
+                cmds.warning(t("zjg.invalid_export_node"))
                 return
+            print(f"[radar_export] 选中 {len(materials)} 个可导出节点: {[cmds.nodeType(m) for m in materials]}")
         else:
             materials = _get_materials_from_selection(selection)
             if not materials:
-                cmds.warning(t("qtool.matexport.msg.no_material_associated"))
+                cmds.warning(t("zjg.no_related_material"))
                 return
 
         selected_shapes = set(_get_all_shapes_with_material_from_selection(selection))
@@ -1600,15 +1593,11 @@ def radar_export_materials(target_dir=None, custom_name=None, separate_files=Fal
         maya_basename = os.path.basename(maya_file)
         default_name = os.path.splitext(maya_basename)[0]
     else:
-        default_name = custom_name
+        default_name = "MaterialData"
 
     if separate_files:
         face_assignments = _get_face_material_assignments(selected_shapes) if export_objects else {}
-        
-        base_folder = os.path.join(target_dir, custom_name).replace("\\", "/")
-        if not os.path.exists(base_folder):
-            os.makedirs(base_folder)
-        
+
         for mat in materials:
             data = {
                 'root_materials': [mat],
@@ -1616,30 +1605,82 @@ def radar_export_materials(target_dir=None, custom_name=None, separate_files=Fal
             }
             _serialize_node(mat, data['nodes'])
 
-            mat_name_clean = mat.split('|')[-1].split(':')[-1]
-            material_folder = os.path.join(base_folder, mat_name_clean).replace("\\", "/")
-            textures_dir = os.path.join(material_folder, "textures").replace("\\", "/")
-            filepath = os.path.join(material_folder, mat_name_clean + ".zmetal").replace("\\", "/")
+            material_folder = None
+            textures_dir = None
+            file_name = custom_name if custom_name else mat
+            filepath = None
 
-            if not os.path.exists(material_folder):
-                os.makedirs(material_folder)
-            if not os.path.exists(textures_dir):
-                os.makedirs(textures_dir)
+            if target_dir and os.path.isdir(target_dir):
+                if create_material_folder:
+                    material_folder = os.path.join(target_dir, file_name).replace("\\", "/")
+                    if not os.path.exists(material_folder):
+                        os.makedirs(material_folder)
+                    textures_dir = os.path.join(material_folder, "textures").replace("\\", "/")
+                    if not os.path.exists(textures_dir):
+                        os.makedirs(textures_dir)
+                    filepath = os.path.join(material_folder, file_name + ".zmetal").replace("\\", "/")
+                else:
+                    filepath = os.path.join(target_dir, file_name + ".zmetal").replace("\\", "/")
 
-            if pack_textures:
+            if not filepath:
+                result = cmds.fileDialog2(fileMode=0, fileFilter="Material Files (*.zmetal)", caption=f"导出材质 {mat} 为 .zmetal")
+                if result:
+                    chosen = result[0]
+                    if create_material_folder:
+                        parent_dir = os.path.dirname(chosen)
+                        base = os.path.splitext(os.path.basename(chosen))[0]
+                        material_folder = os.path.join(parent_dir, base).replace("\\", "/")
+                        if not os.path.exists(material_folder):
+                            os.makedirs(material_folder)
+                        textures_dir = os.path.join(material_folder, "textures").replace("\\", "/")
+                        if not os.path.exists(textures_dir):
+                            os.makedirs(textures_dir)
+                        filepath = os.path.join(material_folder, base + ".zmetal").replace("\\", "/")
+                    else:
+                        filepath = chosen
+
+            if pack_textures and textures_dir is None:
+                if not filepath:
+                    textures_dir = None
+                else:
+                    if create_material_folder and material_folder:
+                        textures_dir = os.path.join(material_folder, "textures").replace("\\", "/")
+                    else:
+                        textures_dir = os.path.join(os.path.dirname(filepath), "textures").replace("\\", "/")
+
+            if pack_textures and filepath:
+                if not textures_dir:
+                    parent = os.path.dirname(filepath)
+                    textures_dir = os.path.join(parent, "textures").replace("\\", "/")
                 _pack_textures_and_replace(data['nodes'], textures_dir)
                 print(f"[纹理打包] {mat}: 纹理 -> {textures_dir}")
 
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=4, ensure_ascii=False)
-            print(f"[材质导出] 成功: 材质 {mat} 及贴图全参数 -> {filepath}")
+            if filepath:
+                if not os.path.exists(os.path.dirname(filepath)):
+                    os.makedirs(os.path.dirname(filepath))
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=4, ensure_ascii=False)
+                print(f"[材质导出] 成功: 材质 {mat} 及贴图全参数 -> {filepath}")
 
             if export_metadata:
                 meta_data = _build_metadata_json([mat], color_space, category, tags, name_cn)
-                meta_filepath = os.path.join(material_folder, mat_name_clean + ".ameta").replace("\\", "/")
-                with open(meta_filepath, 'w', encoding='utf-8') as f:
-                    json.dump(meta_data, f, indent=4, ensure_ascii=False)
-                print(f"[元数据导出] 成功: {mat} -> {meta_filepath}")
+                meta_filepath = None
+                if filepath:
+                    if create_material_folder and material_folder:
+                        meta_filepath = os.path.join(material_folder, file_name + ".ameta").replace("\\", "/")
+                    else:
+                        meta_filepath = filepath.replace('.zmetal', '.ameta')
+                if not meta_filepath and target_dir and os.path.isdir(target_dir):
+                    file_name_meta = file_name + ".ameta"
+                    meta_filepath = os.path.join(target_dir, file_name_meta).replace("\\", "/")
+                if not meta_filepath:
+                    result = cmds.fileDialog2(fileMode=0, fileFilter="Meta Files (*.ameta)", caption=f"导出材质 {mat} 元数据为 .ameta")
+                    if result:
+                        meta_filepath = result[0]
+                if meta_filepath:
+                    with open(meta_filepath, 'w', encoding='utf-8') as f:
+                        json.dump(meta_data, f, indent=4, ensure_ascii=False)
+                    print(f"[元数据导出] 成功: {mat} -> {meta_filepath}")
 
             if export_objects:
                 all_assigned = _get_assigned_objects(mat)
@@ -1649,7 +1690,7 @@ def radar_export_materials(target_dir=None, custom_name=None, separate_files=Fal
                     for mesh_name, mat_faces_map in face_assignments.items():
                         if mat in mat_faces_map:
                             mat_face_assignments[mesh_name] = {mat: mat_faces_map[mat]}
-                    
+
                     objects_data = {
                         mat: {
                             'count': len(assigned_objects),
@@ -1657,10 +1698,23 @@ def radar_export_materials(target_dir=None, custom_name=None, separate_files=Fal
                             'face_assignments': mat_face_assignments
                         }
                     }
-                    objects_filepath = os.path.join(material_folder, mat_name_clean + ".mcm").replace("\\", "/")
-                    with open(objects_filepath, 'w', encoding='utf-8') as f:
-                        json.dump(objects_data, f, indent=4, ensure_ascii=False)
-                    print(f"[模型导出] 成功: {mat} 对应 {len(assigned_objects)} 个模型 -> {objects_filepath}")
+                    objects_filepath = None
+                    if filepath:
+                        if create_material_folder and material_folder:
+                            objects_filepath = os.path.join(material_folder, file_name + ".mcm").replace("\\", "/")
+                        else:
+                            objects_filepath = filepath.replace('.zmetal', '.mcm')
+                    if not objects_filepath and target_dir and os.path.isdir(target_dir):
+                        file_name_obj = file_name + ".mcm"
+                        objects_filepath = os.path.join(target_dir, file_name_obj).replace("\\", "/")
+                    if not objects_filepath:
+                        result = cmds.fileDialog2(fileMode=0, fileFilter="Mapping Files (*.mcm)", caption=f"导出材质对应模型 {mat} 为 .mcm")
+                        if result:
+                            objects_filepath = result[0]
+                    if objects_filepath:
+                        with open(objects_filepath, 'w', encoding='utf-8') as f:
+                            json.dump(objects_data, f, indent=4, ensure_ascii=False)
+                        print(f"[模型导出] 成功: {mat} 对应 {len(assigned_objects)} 个模型 -> {objects_filepath}")
     else:
         data = {
             'root_materials': materials,
@@ -1669,52 +1723,105 @@ def radar_export_materials(target_dir=None, custom_name=None, separate_files=Fal
         for mat in materials:
             _serialize_node(mat, data['nodes'])
 
-        material_folder = os.path.join(target_dir, custom_name).replace("\\", "/")
-        textures_dir = os.path.join(material_folder, "textures").replace("\\", "/")
-        filepath = os.path.join(material_folder, custom_name + ".zmetal").replace("\\", "/")
+        if custom_name:
+            file_name = custom_name + ".zmetal"
+        else:
+            file_name = default_name + ".zmetal"
 
-        if not os.path.exists(material_folder):
-            os.makedirs(material_folder)
-        if pack_textures and not os.path.exists(textures_dir):
-            os.makedirs(textures_dir)
+        material_folder = None
+        textures_dir = None
+        filepath = None
+        if target_dir and os.path.isdir(target_dir):
+            if create_material_folder:
+                base_name = custom_name if custom_name else default_name
+                material_folder = os.path.join(target_dir, base_name).replace("\\", "/")
+                if not os.path.exists(material_folder):
+                    os.makedirs(material_folder)
+                textures_dir = os.path.join(material_folder, "textures").replace("\\", "/")
+                if not os.path.exists(textures_dir):
+                    os.makedirs(textures_dir)
+                filepath = os.path.join(material_folder, base_name + ".zmetal").replace("\\", "/")
+            else:
+                filepath = os.path.join(target_dir, file_name).replace("\\", "/")
 
-        if pack_textures:
+        if not filepath:
+            result = cmds.fileDialog2(fileMode=0, fileFilter="Material Files (*.zmetal)", caption="导出材质为 .zmetal")
+            if result:
+                filepath = result[0]
+
+        if pack_textures and filepath:
+            if textures_dir is None:
+                textures_dir = os.path.join(os.path.dirname(filepath), "textures").replace("\\", "/")
             _pack_textures_and_replace(data['nodes'], textures_dir)
             print(f"[纹理打包] {len(materials)} 个材质纹理 -> {textures_dir}")
 
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
-        print(f"[材质导出] 成功: {len(materials)} 个材质及贴图全参数 -> {filepath}")
+        if filepath:
+            if not os.path.exists(os.path.dirname(filepath)):
+                os.makedirs(os.path.dirname(filepath))
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+            print(f"[材质导出] 成功: {len(materials)} 个材质及贴图全参数 -> {filepath}")
 
         if export_metadata:
             meta_data = _build_metadata_json(materials, color_space, category, tags, name_cn)
-            meta_filepath = os.path.join(material_folder, custom_name + ".ameta").replace("\\", "/")
-            with open(meta_filepath, 'w', encoding='utf-8') as f:
-                json.dump(meta_data, f, indent=4, ensure_ascii=False)
-            print(f"[元数据导出] 成功: {len(materials)} 个材质元数据 -> {meta_filepath}")
+            meta_filepath = None
+            if filepath:
+                if create_material_folder and material_folder:
+                    base_name = custom_name if custom_name else default_name
+                    meta_filepath = os.path.join(material_folder, base_name + ".ameta").replace("\\", "/")
+                else:
+                    meta_filepath = filepath.replace('.zmetal', '.ameta')
+            if not meta_filepath and target_dir and os.path.isdir(target_dir):
+                file_name_meta = (custom_name if custom_name else default_name) + ".ameta"
+                meta_filepath = os.path.join(target_dir, file_name_meta).replace("\\", "/")
+            if not meta_filepath:
+                result = cmds.fileDialog2(fileMode=0, fileFilter="Meta Files (*.ameta)", caption="导出材质元数据为 .ameta")
+                if result:
+                    meta_filepath = result[0]
+            if meta_filepath:
+                with open(meta_filepath, 'w', encoding='utf-8') as f:
+                    json.dump(meta_data, f, indent=4, ensure_ascii=False)
+                print(f"[元数据导出] 成功: {len(materials)} 个材质元数据 -> {meta_filepath}")
 
         if export_objects:
             material_to_objects = {}
+            # 获取面级材质指定（只处理选择的模型）
             face_assignments = _get_face_material_assignments(selected_shapes)
             for mat in materials:
                 all_assigned = _get_assigned_objects(mat)
                 assigned_objects = [obj for obj in all_assigned if obj in selected_shapes]
                 if assigned_objects:
+                    # 过滤出只与当前材质相关的面级指定
                     mat_face_assignments = {}
                     for mesh_name, mat_faces_map in face_assignments.items():
+                        # 只保留当前材质的面级指定
                         if mat in mat_faces_map:
                             mat_face_assignments[mesh_name] = {mat: mat_faces_map[mat]}
-                    
+
                     material_to_objects[mat] = {
                         'count': len(assigned_objects),
                         'objects': assigned_objects,
                         'face_assignments': mat_face_assignments
                     }
             if material_to_objects:
-                objects_filepath = os.path.join(material_folder, custom_name + ".mcm").replace("\\", "/")
-                with open(objects_filepath, 'w', encoding='utf-8') as f:
-                    json.dump(material_to_objects, f, indent=4, ensure_ascii=False)
-                print(f"[模型导出] 成功: {len(material_to_objects)} 个材质的模型映射 -> {objects_filepath}")
+                objects_filepath = None
+                if filepath:
+                    if create_material_folder and material_folder:
+                        base_name = custom_name if custom_name else default_name
+                        objects_filepath = os.path.join(material_folder, base_name + ".mcm").replace("\\", "/")
+                    else:
+                        objects_filepath = filepath.replace('.zmetal', '.mcm')
+                if not objects_filepath and target_dir and os.path.isdir(target_dir):
+                    file_name_obj = (custom_name if custom_name else default_name) + ".mcm"
+                    objects_filepath = os.path.join(target_dir, file_name_obj).replace("\\", "/")
+                if not objects_filepath:
+                    result = cmds.fileDialog2(fileMode=0, fileFilter="Mapping Files (*.mcm)", caption="导出材质对应模型为 .mcm")
+                    if result:
+                        objects_filepath = result[0]
+                if objects_filepath:
+                    with open(objects_filepath, 'w', encoding='utf-8') as f:
+                        json.dump(material_to_objects, f, indent=4, ensure_ascii=False)
+                    print(f"[模型导出] 成功: {len(material_to_objects)} 个材质的模型映射 -> {objects_filepath}")
 
 
 def _get_connected_nodes(node_name, node_info, all_nodes, visited=None):

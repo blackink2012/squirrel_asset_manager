@@ -10,6 +10,7 @@ import json
 import re
 import sys
 import uuid
+import threading
 from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,6 +43,7 @@ except ImportError:
 
 from core.zasset_io import ZassetIO
 from core.zasset_builder import ZassetBuilder
+from core.ai_analyzer import AIAnalyzer
 
 def get_qt_modules():
     """动态获取Qt模块，兼容PySide6和PySide2"""
@@ -56,6 +58,262 @@ def get_qt_modules():
             return None, None, None
 
 QtWidgets, QtCore, QtGui = get_qt_modules()
+
+
+# ==================== AI 目录结构解析辅助 ====================
+# 提交给 AI 的数据仅包含目录结构（文件夹名+文件名），不含任何文件内容。
+# 相关提示词要求 AI 只输出 JSON 路由配置。
+
+# 跳过这些名称的目录（缓存/版本管理/系统目录等噪音）
+_AI_SKIP_DIRS = {'.git', '.svn', '.hg', '__pycache__', '__MACOSX',
+                 'node_modules', '.idea', '.vscode', 'Thumbs', 'thumbnails'}
+
+
+def _build_directory_tree_text(root_dir, max_depth=6, max_files_per_dir=60, max_total=1200):
+    """构建目录结构文本（仅文件夹名+文件名，不包含文件内容）
+
+    Args:
+        root_dir: 资产根目录
+        max_depth: 最大递归深度
+        max_files_per_dir: 单目录最多列出的文件数，超出部分用省略提示
+        max_total: 总共最多列出的条目数，防止目录过大撑爆提示词
+
+    Returns:
+        str: 形如 "BrickWall/\n  basecolor.png\n  textures/\n    normal.png" 的树形文本
+    """
+    if not root_dir or not os.path.isdir(root_dir):
+        return ""
+    root_name = os.path.basename(os.path.normpath(root_dir)) or root_dir
+    lines = []
+    count = [0]
+
+    def _walk(current, depth):
+        if count[0] >= max_total:
+            return
+        try:
+            entries = sorted(os.listdir(current))
+        except (PermissionError, OSError):
+            return
+        dirs = [e for e in entries if os.path.isdir(os.path.join(current, e))]
+        files = [e for e in entries if not os.path.isdir(os.path.join(current, e))]
+        indent = "  " * depth
+        for d in dirs:
+            if d.lower() in _AI_SKIP_DIRS:
+                continue
+            if count[0] >= max_total:
+                return
+            count[0] += 1
+            lines.append(indent + d + "/")
+            if depth < max_depth:
+                _walk(os.path.join(current, d), depth + 1)
+        files_shown = 0
+        for f in files:
+            if count[0] >= max_total or files_shown >= max_files_per_dir:
+                break
+            count[0] += 1
+            lines.append(indent + f)
+            files_shown += 1
+        if len(files) > files_shown:
+            lines.append(indent + "…（其余 %d 个文件已省略）" % (len(files) - files_shown))
+
+    _walk(root_dir, 0)
+    return root_name + "/\n" + "\n".join(lines)
+
+
+def _pick_ci(data, *names):
+    """不区分大小写地取第一个命中的键值（兼容 AI 返回不同的键名写法）"""
+    if not isinstance(data, dict):
+        return None
+    low = {str(k).lower(): v for k, v in data.items()}
+    for n in names:
+        if n.lower() in low:
+            return low[n.lower()]
+    return None
+
+
+def _build_ai_prompt(tree_text, tool_type):
+    """构造 AI 推断提示词：严格按标准化模板表达式结构输出 JSON
+
+    file_routing / thumbnail_search_paths / metadata_sources 的字段名、
+    层级与 {占位符} 模板表达式必须与目标数据结构完全一致（普适性），
+    禁止输出具体文件名。
+    """
+    if tool_type == "model":
+        placeholder = "{assetName}"
+        guidance = (
+            "常见约定：\n"
+            "- 模型文件（ma/mb/obj/fbx/usd/usda/usdc/abc/mcm/zmetal/mtl）→ root\n"
+            "- 贴图/依赖文件（jpg/jpeg/png/tga/tif/tiff/exr/hdr/bmp/tx/dds）→ textures\n"
+            "- ass 文件 → ass\n"
+            "- 其他辅助文件按目录语义归类到对应子目录"
+        )
+        schema = (
+            '{\n'
+            '  "file_routing": {\n'
+            '    "root": [".ma", ".mb", ".obj", ".fbx", ".usd", ".usda", ".usdc", ".abc", ".mcm", ".zmetal", ".mtl"],\n'
+            '    "textures": [".jpg", ".jpeg", ".png", ".tga", ".tif", ".tiff", ".exr", ".hdr", ".bmp", ".tx", ".dds"],\n'
+            '    "ass": [".ass"]\n'
+            '  },\n'
+            '  "thumbnail_search_paths": [\n'
+            f'    "{{{placeholder[1:-1]}}}_fileDependencies/thumbnail.jpg",\n'
+            f'    "{{{placeholder[1:-1]}}}_fileDependencies/thumbnail.png",\n'
+            f'    "{{{placeholder[1:-1]}}}_ma_fileDependencies/thumbnail.jpg",\n'
+            f'    "{{{placeholder[1:-1]}}}_ma_fileDependencies/thumbnail.png"\n'
+            '  ],\n'
+            '  "metadata_sources": [\n'
+            '    {\n'
+            f'      "file_pattern": "{{{placeholder[1:-1]}}}_fileDependencies/{{{placeholder[1:-1]}}}.zooInfo",\n'
+            '      "file_format": "json",\n'
+            '      "field_mapping": [\n'
+            '        {"source": "description", "target": "description"},\n'
+            '        {"source": "tags", "target": "tags", "processor": "split_comma"},\n'
+            '        {"source": "creators", "target": "author"},\n'
+            '        {"source": "version", "target": "version"},\n'
+            '        {"source": "websites", "target": "source_url"}\n'
+            '      ]\n'
+            '    }\n'
+            '  ]\n'
+            '}'
+        )
+    else:
+        placeholder = "{materialName}"
+        guidance = (
+            "常见约定：\n"
+            "- PBR 贴图（png/jpg/jpeg/exr/hdr/tga/tif/tiff/bmp/psd/tx/dds）→ textures\n"
+            "- 模型/说明等其他文件 → root\n"
+            "- 按目录语义把不同用途文件归类到对应子目录"
+        )
+        schema = (
+            '{\n'
+            '  "file_routing": {\n'
+            '    "textures": [".png", ".jpg", ".jpeg", ".exr", ".hdr", ".tga", ".tif", ".tiff", ".bmp", ".psd", ".tx", ".dds"],\n'
+            '    "root": [".ma", ".mb"]\n'
+            '  },\n'
+            '  "thumbnail_search_paths": [\n'
+            '    "previews/{materialName}_Popup_3840_sp.jpg",\n'
+            '    "{materialName}_Preview.png"\n'
+            '  ],\n'
+            '  "metadata_sources": [\n'
+            '    {\n'
+            '      "file_pattern": "{materialName}.json",\n'
+            '      "file_format": "json",\n'
+            '      "field_mapping": [\n'
+            '        {"source": "description", "target": "description"},\n'
+            '        {"source": "tags", "target": "tags", "processor": "split_comma"},\n'
+            '        {"source": "creators", "target": "author"},\n'
+            '        {"source": "version", "target": "version"},\n'
+            '        {"source": "websites", "target": "source_url"}\n'
+            '      ]\n'
+            '    }\n'
+            '  ]\n'
+            '}'
+        )
+    return f"""你是一位数字资产生成工具的文件路由与元数据配置专家。请分析下列资产目录结构，
+严格按下面的目标数据结构输出 JSON（字段名、层级、占位符模板表达式必须与此完全一致，
+不得输出任何其他字段）：
+
+{schema}
+
+规则：
+1. 占位符 {placeholder} 表示"资产名/贴图公共前缀"：即目录中贴图或资源文件的公共名称前缀
+   （例如目录中 wczjegqs_4K_Albedo.jpg、wczjegqs_4K_Normal.jpg 的公共前缀是 wczjegqs），不是资产文件夹名。
+   所有路径必须用它组成"模板表达式"，禁止写死具体文件名（如禁止 wczjegqs_Preview.png，应写 {placeholder}_Preview.png）。
+2. "file_routing"：键=压缩包内目标目录名（"root" 表示根目录），值=扩展名数组（带小数点前缀）。
+   覆盖目录结构中实际出现的扩展名并按常见格式归类，参考上面 schema 的归类方式。
+3. "thumbnail_search_paths" 缩略图识别规则：
+   - 名称含 preview / thumb / thumbnail / Thumbs 的文件夹（如 previews/、Thumbs/）内的文件通常就是缩略图；
+   - 以 _Preview、_Thumbnail、_Popup 结尾的文件（如 wczjegqs_Preview.png、wczjegqs_Popup_3840_sp.jpg）也是缩略图；
+   - 模板用 {placeholder} 占位公共前缀，按目录中缩略图实际所在位置（如 previews/、根目录、Thumbs/1k/）输出对应模板数组。
+4. "metadata_sources"：每项必须含 file_pattern（{placeholder} 模板）、file_format（json/txt）、
+   field_mapping（字段映射数组：source/target/processor；tags 用 split_comma 处理器；无字段映射时用空数组 []）。
+   注意元数据文件（如 wczjegqs.json）同样用公共前缀命名，模板写 {placeholder}.json。
+5. 目录中没有缩略图或元数据文件时，对应字段返回空数组 []。
+6. 只输出上述 JSON，不要输出任何解释文字。
+
+{guidance}
+
+目录结构：
+{tree_text}
+"""
+
+
+def _parse_ai_response(text):
+    """解析 AI 返回的 JSON 文本 → {file_routing, thumbnail_search_paths, metadata_sources}"""
+    data = AIAnalyzer.extract_json(text)
+    if not isinstance(data, dict):
+        return {}
+    result = {}
+
+    # 文件路由
+    routing_src = _pick_ci(data, 'file_routing', 'routing') or {}
+    if isinstance(routing_src, dict):
+        routing = {}
+        for folder, exts in routing_src.items():
+            folder = str(folder).strip()
+            if not folder or not isinstance(exts, list):
+                continue
+            clean = []
+            for e in exts:
+                e = str(e).strip().lower()
+                if not e:
+                    continue
+                if e != 'root':
+                    e = e if e.startswith('.') else '.' + e
+                if e not in clean:
+                    clean.append(e)
+            if clean:
+                routing[folder] = clean
+        if routing:
+            result['file_routing'] = routing
+
+    # 缩略图搜索路径（兼容多种键名与元素结构）
+    paths_src = _pick_ci(
+        data, 'thumbnail_search_paths', 'thumbnail_paths', 'thumb_paths',
+        'thumbnail_search', 'thumbnails') or []
+    if isinstance(paths_src, list):
+        paths = []
+        for p in paths_src:
+            if isinstance(p, dict):
+                p = str(p.get('path') or p.get('pattern') or p.get('template') or '').strip()
+            else:
+                p = str(p).strip()
+            if p:
+                paths.append(p)
+        if paths:
+            result['thumbnail_search_paths'] = paths
+
+    # 元数据源（兼容多种键名，保留 field_mapping）
+    metas_src = _pick_ci(data, 'metadata_sources', 'meta_sources', 'metadata') or []
+    if isinstance(metas_src, list):
+        metas = []
+        for s in metas_src:
+            if isinstance(s, dict):
+                pat = str(s.get('file_pattern', '')).strip()
+                if not pat:
+                    continue
+                fmt = str(s.get('file_format', 'json')).strip().lower()
+                fields = []
+                fmap = s.get('field_mapping') or s.get('field_map') or []
+                if isinstance(fmap, list):
+                    for fm in fmap:
+                        if not isinstance(fm, dict):
+                            continue
+                        src = str(fm.get('source', '')).strip()
+                        tgt = str(fm.get('target', '')).strip() or src
+                        proc = str(fm.get('processor', 'none')).strip() or 'none'
+                        if src:
+                            fields.append({'source': src, 'target': tgt, 'processor': proc})
+                metas.append({
+                    'file_pattern': pat,
+                    'file_format': fmt if fmt in ('json', 'txt') else 'json',
+                    'field_mapping': fields,
+                })
+            elif isinstance(s, str) and s.strip():
+                metas.append({'file_pattern': s.strip(), 'file_format': 'json', 'field_mapping': []})
+        if metas:
+            result['metadata_sources'] = metas
+
+    return result
 
 
 def _get_export_header():
@@ -155,13 +413,38 @@ def _res_key(res_name):
         return -int(m.group(1))
     return 0
 
+# 表达式配置键：AI 解析/用户保存的模板表达式，独立存放，不混入预设 json
+EXPRESSION_KEYS = ('file_routing', 'thumbnail_search_paths', 'metadata_sources')
+
+
+def _expression_config_path():
+    """独立表达式配置文件路径（AI解析/用户保存的模板表达式）"""
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                        'Assets', 'preset', 'pbr_expression.json')
+
+
 def load_config():
-    """加载PBR映射配置"""
+    """加载PBR映射配置：预设json + 独立表达式文件（表达式文件优先覆盖）"""
+    config = {}
     config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Assets', 'preset', 'pbr_mapping.json')
     if os.path.exists(config_path):
-        with open(config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {}
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        except Exception:
+            config = {}
+    # 独立表达式文件覆盖预设中的表达式键（file_routing / 缩略图路径 / 元数据源）
+    expr_path = _expression_config_path()
+    if os.path.exists(expr_path):
+        try:
+            with open(expr_path, 'r', encoding='utf-8') as f:
+                expr = json.load(f)
+            for key in EXPRESSION_KEYS:
+                if key in expr:
+                    config[key] = expr[key]
+        except Exception:
+            pass
+    return config
 
 def find_existing_thumbnail(asset_folder, name_fallbacks, config):
     """在资产文件夹中查找已有缩略图
@@ -1285,7 +1568,11 @@ def _copy_zassets_to_category(src_folder, category_path):
 
 class PBRToZAssetDialog(QtWidgets.QDialog):
     """PBR贴图转资产工具UI"""
-    
+
+    # AI 跨线程信号（后台线程 → 主线程回调）
+    ai_models_ready = QtCore.Signal(str, object)   # (provider, 可用模型列表)
+    ai_routing_ready = QtCore.Signal(object, str)  # (路由dict, 错误信息)
+
     def __init__(self, parent=None):
         super(PBRToZAssetDialog, self).__init__(parent)
         self.setWindowTitle(t("qtool.pbr.title"))
@@ -1328,6 +1615,9 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         self._setup_ui()
         self._rebuild_routing_ui()
         self._rebuild_meta_ui()
+        self.ai_models_ready.connect(self._on_ai_models_ready)
+        self.ai_routing_ready.connect(self._on_ai_routing_ready)
+        self._load_ai_settings_into_ui()
 
     def _on_cancel(self):
         if getattr(self, '_is_converting', False):
@@ -1373,7 +1663,65 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         left_scroll = QtWidgets.QScrollArea()
         left_scroll.setWidgetResizable(True)
         left_scroll.setWidget(left_widget)
-        
+        self._left_scroll = left_scroll
+
+        # ── AI 目录解析（独立布局，置于最上方） ──
+        ai_group = QtWidgets.QGroupBox(t("qtool.pbr.ai_group"))
+        ai_layout = QtWidgets.QVBoxLayout(ai_group)
+        ai_layout.setContentsMargins(8, 8, 8, 8)
+        ai_layout.setSpacing(6)
+
+        # 独立解析路径（不与资产转换输入路径混用）
+        ai_path_row = QtWidgets.QHBoxLayout()
+        ai_path_row.addWidget(QtWidgets.QLabel(t("qtool.pbr.ai_path_label")))
+        self._ai_path_edit = QtWidgets.QLineEdit()
+        self._ai_path_edit.setPlaceholderText(t("qtool.pbr.ai_path_placeholder"))
+        ai_path_row.addWidget(self._ai_path_edit, 1)
+        ai_path_browse_btn = QtWidgets.QPushButton(t("common.browse"))
+        ai_path_browse_btn.clicked.connect(self._browse_ai_path)
+        ai_path_row.addWidget(ai_path_browse_btn)
+        ai_layout.addLayout(ai_path_row)
+
+        ai_btn_row = QtWidgets.QHBoxLayout()
+        self._ai_parse_btn = QtWidgets.QPushButton(t("qtool.pbr.ai_parse"))
+        self._ai_parse_btn.setToolTip(t("qtool.pbr.ai_parse_tooltip"))
+        self._ai_parse_btn.setStyleSheet(
+            "QPushButton { background-color: #2e7d32; color: white; font-weight: bold;"
+            " border: none; border-radius: 4px; padding: 8px 18px; font-size: 14px; }"
+            "QPushButton:hover { background-color: #3a9a40; }"
+            "QPushButton:disabled { background-color: #555555; color: #aaaaaa; }")
+        self._ai_parse_btn.clicked.connect(self._ai_parse_routing)
+        ai_btn_row.addWidget(self._ai_parse_btn)
+        ai_btn_row.addStretch()
+        ai_layout.addLayout(ai_btn_row)
+
+        # 服务设置行（带边框容器，视觉上成组）
+        settings_frame = QtWidgets.QFrame()
+        settings_frame.setStyleSheet(
+            "QFrame { background: #333333; border: 1px solid #4a4a4a; border-radius: 4px; }")
+        settings_layout = QtWidgets.QHBoxLayout(settings_frame)
+        settings_layout.setContentsMargins(6, 4, 6, 4)
+        settings_layout.setSpacing(4)
+        settings_layout.addWidget(QtWidgets.QLabel(t("qtool.pbr.ai_service")))
+        self._ai_provider_combo = QtWidgets.QComboBox()
+        for key, cfg in AIAnalyzer.PROVIDERS.items():
+            self._ai_provider_combo.addItem(cfg.get("label", key), key)
+        self._ai_provider_combo.currentIndexChanged.connect(self._on_ai_provider_changed)
+        settings_layout.addWidget(self._ai_provider_combo)
+        settings_layout.addWidget(QtWidgets.QLabel(t("qtool.pbr.ai_model")))
+        self._ai_model_combo = QtWidgets.QComboBox()
+        self._ai_model_combo.setEditable(True)
+        self._ai_model_combo.addItem(AIAnalyzer.DEFAULT_MODEL)
+        settings_layout.addWidget(self._ai_model_combo, 1)
+        settings_layout.addWidget(QtWidgets.QLabel(t("qtool.pbr.ai_api_key")))
+        self._ai_api_key_edit = QtWidgets.QLineEdit()
+        self._ai_api_key_edit.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
+        self._ai_api_key_edit.setFixedWidth(80)
+        settings_layout.addWidget(self._ai_api_key_edit)
+        ai_layout.addWidget(settings_frame)
+
+        left_layout.addWidget(ai_group)
+
         # 输入文件夹选择
         input_group = QtWidgets.QGroupBox(t("qtool.pbr.input_group"))
         input_layout = QtWidgets.QHBoxLayout(input_group)
@@ -1499,6 +1847,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         
         # ── 文件路由配置 ──
         routing_group = QtWidgets.QGroupBox(t("qtool.pbr.routing_group"))
+        self._routing_group = routing_group
         routing_layout = QtWidgets.QVBoxLayout(routing_group)
         routing_layout.setContentsMargins(8, 8, 8, 8)
         routing_layout.setSpacing(4)
@@ -1735,8 +2084,8 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         for folder, ext_list in routing.items():
             self._add_routing_row(folder, ' '.join(ext_list))
     
-    def _save_routing_config(self):
-        """从UI收集并保存文件路由配置"""
+    def _collect_routing_from_ui(self):
+        """从UI收集文件路由配置（不写内存/不落盘，扩展名去重）"""
         routing = {}
         for i in range(self._routing_layout.count()):
             frame = self._routing_layout.itemAt(i).widget()
@@ -1749,17 +2098,302 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
             folder = folder_edit.text().strip()
             exts = exts_edit.text().strip().split()
             if folder and exts:
-                routing[folder] = [e if e.startswith('.') else '.' + e for e in exts]
-        self.config['file_routing'] = routing
-        
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Assets', 'preset', 'pbr_mapping.json')
+                routing[folder] = list(dict.fromkeys(
+                    e if e.startswith('.') else '.' + e for e in exts))
+        return routing
+
+    def _collect_thumb_paths_from_ui(self):
+        """从UI收集缩略图搜索路径（去重）"""
+        paths = []
+        seen = set()
+        for i in range(self._thumb_paths_layout.count()):
+            row = self._thumb_paths_layout.itemAt(i).widget()
+            if not row:
+                continue
+            edit = row.findChild(QtWidgets.QLineEdit, "thumb_path")
+            if edit and edit.text().strip():
+                p = edit.text().strip()
+                if p not in seen:
+                    seen.add(p)
+                    paths.append(p)
+        return paths
+
+    def _sync_ui_to_config(self):
+        """将UI当前内容同步到内存config（不落盘）。
+
+        转换/扫描/预览始终以 UI 为准：用户在界面填写的路由、缩略图路径、
+        元数据源无需先点"保存"即生效。
+        """
+        self.config['file_routing'] = self._collect_routing_from_ui()
+        self.config['thumbnail_search_paths'] = self._collect_thumb_paths_from_ui()
+        self.config['metadata_sources'] = self._collect_meta_config()
+
+    def _write_expression_file(self, **updates):
+        """把表达式配置写入独立表达式文件（不混入预设 json）"""
+        expr = {}
+        expr_path = _expression_config_path()
+        if os.path.exists(expr_path):
+            try:
+                with open(expr_path, 'r', encoding='utf-8') as f:
+                    expr = json.load(f)
+            except Exception:
+                expr = {}
+        expr.update(updates)
         try:
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(self.config, f, indent=2, ensure_ascii=False)
-            self._status_label.setText(t("msg.routing_saved"))
+            with open(expr_path, 'w', encoding='utf-8') as f:
+                json.dump(expr, f, indent=2, ensure_ascii=False)
         except Exception as e:
             QtWidgets.QMessageBox.warning(self, t("msg.save_failed_title"), t("msg.save_failed_body", e=e))
-    
+
+    def _save_routing_config(self):
+        """从UI收集并保存文件路由配置（写入独立表达式文件）"""
+        self.config['file_routing'] = self._collect_routing_from_ui()
+        self._write_expression_file(file_routing=self.config['file_routing'])
+        self._status_label.setText(t("msg.routing_saved"))
+
+    # ==================== AI 目录结构解析 ====================
+
+    def _load_ai_settings_into_ui(self):
+        """将已保存的 AI 配置预填到界面（与主窗口共享）"""
+        settings = self._load_ai_settings()
+        provider = settings.get("ai_provider", "ollama")
+        # 屏蔽信号：避免 setCurrentIndex 触发服务商切换回调重复刷新模型列表
+        self._ai_provider_combo.blockSignals(True)
+        idx = self._ai_provider_combo.findData(provider)
+        if idx >= 0:
+            self._ai_provider_combo.setCurrentIndex(idx)
+        self._ai_provider_combo.blockSignals(False)
+
+        try:
+            from squirrel_asset_manager.utils.settings import get_ai_api_key
+            api_key = get_ai_api_key(settings, provider)
+        except ImportError:
+            api_key = settings.get("ai_api_key", "")
+        self._ai_api_key_edit.setText(api_key)
+        needs_key = bool(AIAnalyzer.PROVIDERS.get(provider, {}).get("needs_key"))
+        self._ai_api_key_edit.setEnabled(needs_key)
+        self._ai_api_key_edit.setPlaceholderText(
+            t("qtool.pbr.ai_key_local") if not needs_key else t("qtool.pbr.ai_key_required"))
+
+        saved_model = settings.get("ai_model", "")
+        if saved_model:
+            self._ai_model_combo.setCurrentText(saved_model)
+
+        # 后台线程刷新模型列表，不阻塞界面
+        self._refresh_ai_models(silent=True)
+
+    @staticmethod
+    def _load_ai_settings():
+        try:
+            from squirrel_asset_manager.utils.settings import SettingsManager
+        except ImportError:
+            try:
+                from utils.settings import SettingsManager
+            except ImportError:
+                return {}
+        try:
+            return SettingsManager().load()
+        except Exception:
+            return {}
+
+    def _save_ai_settings_to_settings(self):
+        """将当前界面 AI 配置保存到用户设置（与主窗口共享）"""
+        try:
+            from squirrel_asset_manager.utils.settings import SettingsManager, set_ai_api_key
+        except ImportError:
+            try:
+                from utils.settings import SettingsManager, set_ai_api_key
+            except ImportError:
+                return
+        provider = self._ai_provider_combo.itemData(self._ai_provider_combo.currentIndex()) or "ollama"
+        key = self._ai_api_key_edit.text().strip()
+        new_settings = set_ai_api_key(SettingsManager().load(), provider, key)
+        new_settings["ai_provider"] = provider
+        new_settings["ai_model"] = self._ai_model_combo.currentText().strip()
+        SettingsManager().save(new_settings)
+
+    def _on_ai_provider_changed(self, *_):
+        """服务商切换：控制 API Key 输入、刷新模型列表"""
+        provider = self._ai_provider_combo.itemData(self._ai_provider_combo.currentIndex()) or "ollama"
+        needs_key = bool(AIAnalyzer.PROVIDERS.get(provider, {}).get("needs_key"))
+        self._ai_api_key_edit.setEnabled(needs_key)
+        self._ai_api_key_edit.setPlaceholderText(
+            t("qtool.pbr.ai_key_local") if not needs_key else t("qtool.pbr.ai_key_required"))
+        # 切换服务商时加载该服务商自己保存的 API Key
+        try:
+            from squirrel_asset_manager.utils.settings import SettingsManager, get_ai_api_key
+        except ImportError:
+            try:
+                from utils.settings import SettingsManager, get_ai_api_key
+            except ImportError:
+                return
+        self._ai_api_key_edit.setText(get_ai_api_key(SettingsManager().load(), provider))
+
+        # 立即用新服务商静态模型列表填充，避免残留上一个服务商的模型；异步刷新后替换
+        static = list(AIAnalyzer.PROVIDERS.get(provider, {}).get("models", [])) or [AIAnalyzer.DEFAULT_MODEL]
+        self._ai_model_combo.blockSignals(True)
+        self._ai_model_combo.clear()
+        self._ai_model_combo.addItems(static)
+        self._ai_model_combo.setCurrentIndex(0)
+        self._ai_model_combo.blockSignals(False)
+
+        self._refresh_ai_models(silent=True)
+
+    def _refresh_ai_models(self, silent=False):
+        """刷新当前服务商的可用模型列表（后台线程，不阻塞界面）"""
+        provider = self._ai_provider_combo.itemData(self._ai_provider_combo.currentIndex()) or "ollama"
+
+        def _worker():
+            try:
+                analyzer = AIAnalyzer(
+                    provider=provider,
+                    api_key=self._ai_api_key_edit.text().strip() or None)
+                models = analyzer.get_available_models()
+            except Exception:
+                models = []
+            self.ai_models_ready.emit(provider, models)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_ai_models_ready(self, provider, models):
+        """模型列表加载完成（主线程回调，更新下拉框）"""
+        # 已切换到其他服务商时丢弃过期响应，避免旧服务商列表覆盖
+        current_provider = self._ai_provider_combo.itemData(self._ai_provider_combo.currentIndex()) or "ollama"
+        if provider != current_provider or not models:
+            return
+        current = self._ai_model_combo.currentText()
+        self._ai_model_combo.blockSignals(True)
+        self._ai_model_combo.clear()
+        self._ai_model_combo.addItems(models)
+        if current in models:
+            self._ai_model_combo.setCurrentText(current)
+        elif AIAnalyzer.DEFAULT_MODEL in models:
+            self._ai_model_combo.setCurrentText(AIAnalyzer.DEFAULT_MODEL)
+        elif models:
+            # 下拉框可编辑：未命中时选中首个模型，避免残留上一个服务商的模型文本
+            self._ai_model_combo.setCurrentIndex(0)
+        self._ai_model_combo.blockSignals(False)
+
+    def _browse_ai_path(self):
+        """浏览 AI 解析路径（独立目录，不与资产转换路径混用）"""
+        start = self._ai_path_edit.text().strip() or self._input_path.text().strip()
+        folder = QtWidgets.QFileDialog.getExistingDirectory(
+            self, t("qtool.pbr.ai_path_label"), start,
+            QtWidgets.QFileDialog.ShowDirsOnly | QtWidgets.QFileDialog.DontResolveSymlinks
+        )
+        if folder:
+            self._ai_path_edit.setText(folder)
+
+    def _ai_parse_routing(self):
+        """AI 解析资产结构：解析独立路径下的目录结构，自动生成文件路由配置"""
+        folder = self._ai_path_edit.text().strip()
+        if not folder or not os.path.isdir(folder):
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"), t("qtool.pbr.ai_no_path"))
+            return
+
+        # 先保存当前 AI 配置，供后续直接复用
+        self._save_ai_settings_to_settings()
+        provider = self._ai_provider_combo.itemData(self._ai_provider_combo.currentIndex()) or "ollama"
+        model = self._ai_model_combo.currentText().strip() or AIAnalyzer.DEFAULT_MODEL
+        api_key = self._ai_api_key_edit.text().strip()
+
+        tree_text = _build_directory_tree_text(folder)
+        if not tree_text:
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"), t("qtool.pbr.ai_no_path"))
+            return
+        prompt = _build_ai_prompt(tree_text, "pbr")
+
+        self._ai_parse_btn.setEnabled(False)
+        self._status_label.setText(t("qtool.pbr.ai_analyzing"))
+
+        def _worker():
+            try:
+                analyzer = AIAnalyzer(provider=provider, model=model, api_key=api_key)
+                response = analyzer.chat_text(prompt)
+                print("[PBR AI 解析] 原始返回:", (response or "")[:600])
+                result = _parse_ai_response(response)
+                if not result.get('file_routing'):
+                    raise RuntimeError(t("qtool.pbr.ai_bad_response"))
+                self.ai_routing_ready.emit(result, "")
+            except Exception as e:
+                self.ai_routing_ready.emit({}, str(e))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_ai_routing_ready(self, result, err):
+        """AI 解析完成（主线程回调）：向现有配置追加路由、缩略图路径、元数据源（不替换已有内容）"""
+        self._ai_parse_btn.setEnabled(True)
+        if err:
+            QtWidgets.QMessageBox.warning(self, t("msg.warning"), t("qtool.pbr.ai_parse_failed", err=err))
+            self._status_label.setText(t("qtool.pbr.ready"))
+            return
+
+        added = 0
+
+        # 文件路由：已有文件夹合并扩展名，新文件夹追加行
+        existing_folders = {}
+        for i in range(self._routing_layout.count()):
+            frame = self._routing_layout.itemAt(i).widget()
+            if not frame:
+                continue
+            folder_edit = frame.findChild(QtWidgets.QLineEdit, "route_folder")
+            exts_edit = frame.findChild(QtWidgets.QLineEdit, "route_exts")
+            if folder_edit and exts_edit and folder_edit.text().strip():
+                existing_folders[folder_edit.text().strip()] = exts_edit
+        for folder, ext_list in result.get('file_routing', {}).items():
+            exts_edit = existing_folders.get(folder)
+            if exts_edit is not None:
+                cur = exts_edit.text().split()
+                merged = list(dict.fromkeys(cur + ext_list))  # 去重保序
+                if merged != cur:
+                    exts_edit.setText(' '.join(merged))
+                    added += 1
+            else:
+                self._add_routing_row(folder, ' '.join(ext_list))
+                existing_folders[folder] = None
+                added += 1
+
+        # 缩略图搜索路径：只追加不重复的
+        existing_paths = set()
+        for i in range(self._thumb_paths_layout.count()):
+            row = self._thumb_paths_layout.itemAt(i).widget()
+            if not row:
+                continue
+            edit = row.findChild(QtWidgets.QLineEdit, "thumb_path")
+            if edit and edit.text().strip():
+                existing_paths.add(edit.text().strip())
+        for p in result.get('thumbnail_search_paths', []):
+            if p not in existing_paths:
+                self._add_thumb_path_row(p)
+                existing_paths.add(p)
+                added += 1
+
+        # 元数据源：只追加 file_pattern 不重复的
+        existing_patterns = set()
+        for i in range(self._meta_container_layout.count()):
+            frame = self._meta_container_layout.itemAt(i).widget()
+            if not frame:
+                continue
+            pat = frame.findChild(QtWidgets.QLineEdit, "meta_pattern")
+            if pat and pat.text().strip():
+                existing_patterns.add(pat.text().strip())
+        for src in result.get('metadata_sources', []):
+            pat = src.get('file_pattern', '')
+            if pat and pat not in existing_patterns:
+                self._add_meta_source_widget(src)
+                existing_patterns.add(pat)
+                added += 1
+
+        # 同步到内存 config（扫描/转换立即生效），不落盘 —— 持久化需用户手动点保存
+        self._sync_ui_to_config()
+        if added:
+            self._status_label.setText(t("qtool.pbr.ai_parse_done"))
+        else:
+            self._status_label.setText(t("qtool.pbr.ai_parse_no_change"))
+        # 滚动到路由配置区，让用户立即看到刚填入的条目
+        if getattr(self, '_left_scroll', None) and getattr(self, '_routing_group', None):
+            self._left_scroll.ensureWidgetVisible(self._routing_group)
+
     def _rebuild_meta_ui(self):
         """从配置重建元数据源UI和缩略图路径"""
         # 清除缩略图路径行
@@ -1892,8 +2526,9 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         self._add_meta_source_widget({})
     
     def _collect_meta_config(self):
-        """从UI收集元数据源配置"""
+        """从UI收集元数据源配置（file_pattern 去重，保留首个）"""
         sources = []
+        seen = set()
         for i in range(self._meta_container_layout.count()):
             frame = self._meta_container_layout.itemAt(i).widget()
             if not frame or not isinstance(frame, QtWidgets.QFrame):
@@ -1903,6 +2538,10 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
             fmt_combo = frame.findChild(QtWidgets.QComboBox, "meta_format")
             if not pattern_edit or not fmt_combo:
                 continue
+            pattern = pattern_edit.text().strip()
+            if not pattern or pattern in seen:
+                continue
+            seen.add(pattern)
             
             fields = []
             mapping_layout = None
@@ -1927,7 +2566,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
                         })
             
             sources.append({
-                'file_pattern': pattern_edit.text(),
+                'file_pattern': pattern,
                 'file_format': fmt_combo.currentText(),
                 'field_mapping': fields
             })
@@ -1935,27 +2574,13 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         return sources
     
     def _save_meta_config(self):
-        """保存元数据源配置和缩略图路径到 pbr_mapping.json"""
-        sources = self._collect_meta_config()
-        self.config['metadata_sources'] = sources
-        
-        paths = []
-        for i in range(self._thumb_paths_layout.count()):
-            row = self._thumb_paths_layout.itemAt(i).widget()
-            if not row:
-                continue
-            edit = row.findChild(QtWidgets.QLineEdit, "thumb_path")
-            if edit and edit.text().strip():
-                paths.append(edit.text().strip())
-        self.config['thumbnail_search_paths'] = paths
-        
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Assets', 'preset', 'pbr_mapping.json')
-        try:
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(self.config, f, indent=2, ensure_ascii=False)
-            self._status_label.setText(t("msg.config_saved"))
-        except Exception as e:
-            QtWidgets.QMessageBox.warning(self, t("msg.save_failed_title"), t("msg.save_failed_body", e=e))
+        """保存元数据源配置和缩略图路径（写入独立表达式文件）"""
+        self.config['metadata_sources'] = self._collect_meta_config()
+        self.config['thumbnail_search_paths'] = self._collect_thumb_paths_from_ui()
+        self._write_expression_file(
+            thumbnail_search_paths=self.config['thumbnail_search_paths'],
+            metadata_sources=self.config['metadata_sources'])
+        self._status_label.setText(t("msg.config_saved"))
     
     def _on_recursive_toggled(self, checked):
         """递归扫描复选框切换"""
@@ -1976,6 +2601,7 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
 
     def _scan_textures(self):
         """扫描贴图"""
+        self._sync_ui_to_config()  # 优先使用UI当前设置
         folder_path = self._input_path.text()
         if not folder_path or not os.path.exists(folder_path):
             QtWidgets.QMessageBox.warning(self, t("common.warning"), t("msg.select_valid_folder"))
@@ -2161,6 +2787,8 @@ class PBRToZAssetDialog(QtWidgets.QDialog):
         """执行转换"""
         if getattr(self, '_is_converting', False):
             return
+
+        self._sync_ui_to_config()  # 优先使用UI当前设置
 
         has_data = bool(self.textures) or bool(self._batch_results)
         if not has_data:

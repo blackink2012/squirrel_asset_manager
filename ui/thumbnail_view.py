@@ -424,7 +424,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         self._card_pool = {}               # material_id → QFrame（虚拟化卡片池）
         self._columns = 8                  # 当前列数（默认最大列数，卡片最小）
         self._min_columns = 2              # 最小列数（最大卡片）
-        self._max_columns = 8              # 最大列数（最小卡片）
+        self._max_columns = 16             # 最大列数（最小卡片，约为原 8 列的一半大小）
         self._last_thumb_size = 0          # 上次的卡片大小，用于避免不必要的重建
         self._zoom_timer = QtCore.QTimer()
         self._zoom_timer.setSingleShot(True)
@@ -434,11 +434,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         self._scroll_timer.setSingleShot(True)
         self._scroll_timer.setInterval(50)
         self._scroll_timer.timeout.connect(self._update_visible_cards)
-        # 框选节流定时器
-        self._rubber_timer = QtCore.QTimer()
-        self._rubber_timer.setSingleShot(True)
-        self._rubber_timer.setInterval(30)
-        self._rubber_timer.timeout.connect(self._do_rubber_update)
+        # 框选当前矩形（拖动中由 _icon_mouse_move 直接刷新，不依赖 QTimer）
         self._rubber_pending_rect = None
 
         self._setup_icon_view()
@@ -566,12 +562,14 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         if self._rubber_band and self._rubber_origin:
             rect = QtCore.QRect(self._rubber_origin, _event_pos(event)).normalized()
             self._rubber_band.setGeometry(rect)
-            # 节流：30ms内只执行一次框选更新
+            # 立即刷新框选高亮，不依赖 QTimer 节流：
+            # Maya 事件循环下短间隔 QTimer 触发不可靠，曾导致拖动过程中
+            # 选中状态不实时更新、松手后才统一变蓝。
             self._rubber_pending_rect = rect
-            self._rubber_timer.start()
+            self._do_rubber_update()
 
     def _do_rubber_update(self):
-        """节流后的框选更新，只更新状态变化的卡片"""
+        """更新框选高亮，只更新状态变化的卡片"""
         rect = self._rubber_pending_rect
         if rect is None:
             return
@@ -856,8 +854,9 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         if self._view_mode == self.VIEW_ICON:
             if hasattr(self, '_scroll'):
                 avail = self._scroll.viewport().width() - self.PADDING * 2
-                if avail >= 80:
-                    self._columns = max(self._min_columns, min(8, avail // self._thumb_size))
+                if avail >= 40:
+                    self._columns = max(self._min_columns,
+                                        min(self._max_columns, avail // self._thumb_size))
                     self._auto_columns()
                 else:
                     self._zoom_timer.start()
@@ -869,10 +868,10 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         if not hasattr(self, '_icon_container') or not hasattr(self, '_scroll'):
             return
         avail = self._scroll.viewport().width() - self.PADDING * 2
-        if avail < 80:  # 太窄，不处理
+        if avail < 40:  # 太窄，不处理
             return
 
-        min_thumb_size = 80
+        min_thumb_size = 40
         
         # 当卡片太小放不下时，自动减少列数（换行）
         while self._columns > self._min_columns:

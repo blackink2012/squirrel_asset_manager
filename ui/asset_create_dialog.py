@@ -9,6 +9,7 @@ AssetCreateDialog V3 — 资产导出对话框（双列非模态版）
 """
 
 import math
+import os
 import sys as _sys
 from ..utils.maya_utils import get_qt_modules
 from ..utils.settings import SettingsManager, apply_font_size_to_widget
@@ -437,6 +438,17 @@ class AssetCreateDialog(QtWidgets.QDialog):
         thumb_src_row.addWidget(self._thumb_playblast)
         thumb_src_row.addWidget(self._thumb_render)
         thumb_src_row.addStretch()
+
+        # 创建模型下拉按钮（列出插件自带 Meshes 目录下的模型文件，选择后导入到场景）
+        create_mesh_btn = QtWidgets.QPushButton(t("btn.create_model"))
+        create_mesh_btn.setFixedHeight(24)
+        create_mesh_btn.setStyleSheet(
+            "QPushButton { background-color: #2d3a5a; color: #d0e0ff; border: none; "
+            "padding: 2px 10px; font-size: 11px; border-radius: 3px; }"
+            "QPushButton:hover { background-color: #3d4a6a; }"
+        )
+        create_mesh_btn.setMenu(self._build_mesh_menu())
+        thumb_src_row.addWidget(create_mesh_btn)
 
         create_light_btn = QtWidgets.QPushButton(t("btn.create_light"))
         create_light_btn.setFixedHeight(24)
@@ -887,6 +899,77 @@ class AssetCreateDialog(QtWidgets.QDialog):
         if self._thumb_render.isChecked():
             return "render"
         return "screenshot"
+
+    @staticmethod
+    def _meshes_dir():
+        """插件自带模型目录（squirrel_asset_manager/Assets/Meshes）"""
+        return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "Assets", "Meshes")
+
+    _MESH_EXTS = (".fbx", ".obj", ".ma", ".mb", ".abc",
+                  ".usd", ".usda", ".usdc", ".glb", ".gltf")
+
+    def _build_mesh_menu(self):
+        """创建模型下拉菜单（弹出前由 aboutToShow 刷新文件列表）"""
+        if getattr(self, "_mesh_menu", None) is None:
+            self._mesh_menu = QtWidgets.QMenu(self)
+            self._mesh_menu.setStyleSheet(
+                "QMenu { background-color:#2a2a2a; color:#d0d0d0;"
+                "border:1px solid #3a3a3a; padding:4px; }"
+                "QMenu::item { padding:3px 24px 3px 14px; font-size:12px; }"
+                "QMenu::item:selected { background-color:#2d4a6f; color:#5294e2; }"
+                "QMenu::item:disabled { color:#606060; }"
+            )
+            self._mesh_menu.aboutToShow.connect(self._refresh_mesh_menu)
+        return self._mesh_menu
+
+    def _refresh_mesh_menu(self):
+        """列出 Meshes 目录下的模型文件到下拉菜单"""
+        self._mesh_menu.clear()
+        mesh_dir = self._meshes_dir()
+        files = []
+        if os.path.isdir(mesh_dir):
+            files = sorted(
+                f for f in os.listdir(mesh_dir)
+                if f.lower().endswith(self._MESH_EXTS)
+            )
+        if not files:
+            act = self._mesh_menu.addAction(t("menu.create_mesh_empty"))
+            act.setEnabled(False)
+            return
+        for f in files:
+            path = os.path.join(mesh_dir, f)
+            act = self._mesh_menu.addAction(f)
+            act.triggered.connect(
+                lambda checked=False, p=path: self._on_create_mesh_selected(p)
+            )
+
+    def _on_create_mesh_selected(self, path):
+        """将选中的模型文件导入到 Maya 场景"""
+        try:
+            import maya.cmds as cmds
+            previous_selection = cmds.ls(selection=True) or []
+        except Exception:
+            previous_selection = []
+        try:
+            if path.lower().endswith(".fbx"):
+                try:
+                    cmds.loadPlugin("fbxmaya", quiet=True)
+                except Exception:
+                    pass
+            cmds.file(path, i=True, ignoreVersion=True,
+                      mergeNamespacesOnClash=False, namespace=":")
+            print(f"[Mesh] 已导入模型: {os.path.basename(path)}")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[Mesh] 导入模型失败 {os.path.basename(path)}: {e}")
+        finally:
+            if previous_selection:
+                try:
+                    cmds.select(previous_selection, replace=True)
+                except Exception:
+                    pass
 
     def _on_create_dome_light(self):
         try:

@@ -134,7 +134,7 @@ def _build_metadata_json(materials, color_space=None, category=None, tags=None, 
             "software": header['software'],
             "renderer": header['renderer'],
             "color_space": header['color_space'],
-            "create_date": header['export_date'],
+            "create_date": header['create_date'],
             "name": mat_meta['name'],
             "name_cn": mat_meta['name_cn'],
             "node_type": mat_meta['node_type'],
@@ -154,7 +154,7 @@ def _build_metadata_json(materials, color_space=None, category=None, tags=None, 
             "software": header['software'],
             "renderer": header['renderer'],
             "color_space": header['color_space'],
-            "create_date": header['export_date'],
+            "create_date": header['create_date'],
             "materials": mats_meta
         }
 

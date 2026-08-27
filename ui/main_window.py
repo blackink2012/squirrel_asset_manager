@@ -3,6 +3,7 @@ import json
 import subprocess
 import tempfile
 import uuid
+import copy
 
 from ..utils.maya_utils import get_qt_modules, get_maya_window, qt_exec, qt_connect, qt_single_shot
 
@@ -86,6 +87,7 @@ try:
     from ..utils.i18n import t, set_language as _i18n_set_language
     from ..utils.i18n import t as _t  # 别名，规避局部变量 t 遮蔽
     from ..utils.i18n import help_path as _i18n_help_path
+    from ..utils.i18n import get_language as _i18n_get_language
 except ImportError:
     def t(key, **kwargs):
         return key.format(**kwargs) if kwargs else key
@@ -95,6 +97,8 @@ except ImportError:
         return key.format(**kwargs) if kwargs else key
     def _i18n_help_path(p):
         return p
+    def _i18n_get_language():
+        return "zh"
 
 try:
     from ..utils.error_handler import handle_errors
@@ -130,11 +134,16 @@ def _load_material_color_mapping():
     return mapping
 
 
+# 内置核心子库（英文界面下本地化显示；用户自定义子库/分类不受影响）
+_CORE_SUB_LIBS = frozenset({"materials", "models", "lights", "textures", "scenes", "hdr", "ani"})
+
+
 class MaterialLibraryWindow(QtWidgets.QMainWindow):
     VERSION = "1.0.0-beta"
     WINDOW_NAME = "MaterialLibraryWindow"
     VIEW_ICON = 0
     VIEW_LIST = 1
+    THUMB_MAX_COLUMNS = 16  # 缩略图最大列数（最小卡片），需与 ThumbnailGridWidget._max_columns 保持一致
 
     def __init__(self, parent=None, library_path=None):
         if parent is None:
@@ -202,50 +211,83 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
     def _init_data_layer(self, library_path=None):
         # 加载多库配置
-        self._libraries = self._app_settings.get("library_paths", [])
-        if not self._libraries:
-            # 兼容旧格式：last_library_path
-            old_path = self._app_settings.get("last_library_path", "")
+        self._libraries = list(self._app_settings.get("library_paths", []) or [])
+        old_path = self._app_settings.get("last_library_path", "")
+        default_ref = self._app_settings.get("default_library", "")
+
+        # 迁移：自动创建的默认库不再使用硬编码名"默认库"，改为文件夹名
+        # （避免 UI 中出现"默认库"前缀字样）
+        renamed = False
+        for lib in self._libraries:
+            if lib.get("name") == "默认库":
+                lib["name"] = os.path.basename((lib.get("path") or "").rstrip("\\/")) or "资产库"
+                renamed = True
+        if renamed:
+            self._app_settings["library_paths"] = self._libraries
+            if self._settings_mgr:
+                self._settings_mgr.set("library_paths", self._libraries)
+
+        # 修复：default_library 指向的库若不在 library_paths 中（如配置曾被覆盖丢失），
+        # 恢复该条目，避免"指定的库被丢失"（目录已不存在时不恢复，防止复活已删除的库）
+        if (default_ref and os.path.isdir(default_ref)
+                and not any(lib.get("path") == default_ref or lib.get("name") == default_ref
+                            for lib in self._libraries)):
+            restored_name = os.path.basename(default_ref.rstrip("\\/")) or "资产库"
+            self._libraries.insert(0, {"name": restored_name, "path": default_ref})
+            self._app_settings["library_paths"] = self._libraries
+            if self._settings_mgr:
+                self._settings_mgr.set("library_paths", self._libraries)
+
+        # 完全没有配置任何库时才创建默认库（首次运行）。
+        # 但设置文件刚因损坏回退默认值时不创建，避免覆盖/重建用户已删除的默认库
+        # （损坏的原文件已备份为 .bak，用户可手动恢复其中的 library_paths）
+        if not self._libraries and not getattr(self._settings_mgr, "_had_load_error", False):
             if old_path:
-                self._libraries = [{"name": "默认库", "path": old_path}]
+                self._libraries = [{"name": os.path.basename(old_path.rstrip("\\/")) or "资产库",
+                                    "path": old_path}]
             else:
                 default_path = os.path.join(os.path.expanduser("~"), "SquirrelLib")
                 os.makedirs(default_path, exist_ok=True)
-                self._libraries = [{"name": "默认库", "path": default_path}]
+                self._libraries = [{"name": os.path.basename(default_path), "path": default_path}]
                 self._app_settings["library_paths"] = self._libraries
                 if self._settings_mgr:
                     self._settings_mgr.set("library_paths", self._libraries)
 
-        # 启动时使用已设置的默认库（按路径匹配，兼容旧格式的名称匹配）
-        default_path = None
-        default_ref = self._app_settings.get("default_library", "")
+        # 加载优先级：显式传入 → default_library → last_library_path → 配置列表顺序
+        candidates = []
+        if library_path:
+            candidates.append(library_path)
         if default_ref:
             for lib in self._libraries:
                 if lib.get("path") == default_ref or lib.get("name") == default_ref:
-                    default_path = lib["path"]
+                    candidates.append(lib["path"])
                     break
+        if old_path:
+            candidates.append(old_path)
+        for lib in self._libraries:
+            candidates.append(lib.get("path", ""))
 
-        path = library_path or default_path or self._libraries[0]["path"]
-        if path and os.path.isdir(path):
+        seen = set()
+        for path in candidates:
+            if not path or path in seen:
+                continue
+            seen.add(path)
+            if not os.path.isdir(path):
+                continue
             try:
                 ok = self._material_manager.load_library(path)
-                if ok:
-                    self._use_mock = False
-                    print(f"[MaterialLibrary] 已加载材质库: {path} "
-                          f"({self._material_manager.get_material_count()} 个材质)")
-                    return
             except Exception as e:
-                print(f"[MaterialLibrary] 加载材质库失败: {e}")
+                print(f"[MaterialLibrary] 加载材质库失败: {path}: {e}")
+                ok = False
+            if ok:
+                self._use_mock = False
+                print(f"[MaterialLibrary] 已加载材质库: {path} "
+                      f"({self._material_manager.get_material_count()} 个材质)")
+                return
 
-        # 回退：自动创建默认
-        default_path = os.path.join(os.path.expanduser("~"), "SquirrelLib")
-        os.makedirs(default_path, exist_ok=True)
-        ok = self._material_manager.load_library(default_path)
-        if ok:
-            self._use_mock = False
-            print(f"[MaterialLibrary] 已回退到默认材质库: {default_path}")
-            return
-
+        # 所有已配置库均不可用：不再静默重建被删除的默认库（避免"还原回默认库"），
+        # 仅记录日志，进入空库状态。
+        print("[MaterialLibrary] 所有已配置资产库均无法加载，进入空库状态")
         self._use_mock = True
 
     def _load_data(self):
@@ -465,7 +507,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         if not self._use_mock:
             if force:
                 self._active_mgr._cached_tree = None
-            tree = self._active_mgr.get_category_tree()
+            # deepcopy：get_category_tree 返回缓存引用，本地化不能原地改缓存
+            tree = copy.deepcopy(self._active_mgr.get_category_tree())
+            self._localize_category_tree(tree)
             # 分类树变更时清除缓存
             self._cached_cat_tree = None
             if hasattr(self, '_cached_ui_data'):
@@ -474,6 +518,25 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 self._proj_category_tree.refresh_tree(tree)
             else:
                 self._category_tree.refresh_tree(tree)
+
+    def _localize_category_tree(self, nodes):
+        """英文界面下把内置默认分类显示名本地化（用户自定义分类保持原样）。
+
+        内置子库（materials 等 7 个）与各子库的默认子分类（config 的
+        default_sub_categories）显示英文；其余分类（用户新建/改名）不动。
+        """
+        if _i18n_get_language() != "en" or not nodes:
+            return
+        sub_cats = getattr(self._active_mgr, "DEFAULT_SUB_CATEGORIES", {})
+        for node in nodes:
+            cid = node.get("id", "")
+            ntype = node.get("type", "")
+            if cid in _CORE_SUB_LIBS:
+                node["name_cn"] = t(f"library.{cid}", no_warn=True)
+            elif any(dc_id == cid for dc_id, _ in sub_cats.get(ntype, [])):
+                node["name_cn"] = t(f"sub_category.{ntype}.{cid}", no_warn=True)
+            if node.get("children"):
+                self._localize_category_tree(node["children"])
 
     # ── UI 布局 ───────────────────────────────────────
 
@@ -941,7 +1004,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         layout.addWidget(thumb_label)
 
         self._thumb_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self._thumb_slider.setRange(2, 8)
+        # 值 = 10 - 列数：左端(最小)对应最大列数(THUMB_MAX_COLUMNS=16)，右端(最大)对应 2 列
+        self._thumb_slider.setRange(10 - self.THUMB_MAX_COLUMNS, 8)
         self._thumb_slider.setValue(2)
         self._thumb_slider.setFixedWidth(120)
         self._thumb_slider.setStyleSheet(
@@ -1410,6 +1474,16 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             # 跳过搜索栏内的按钮（由 search_bar.set_font_size 管理）
             if btn.parent() and hasattr(btn.parent(), '_search_input'):
                 continue
+            # 跳过批量操作栏内的按钮（样式由 batch_action_bar 自行管理，
+            # 避免被这里的通用样式覆盖导致颜色丢失）
+            if self._batch_action_bar is not None:
+                _p = btn.parent()
+                while _p is not None:
+                    if _p is self._batch_action_bar:
+                        break
+                    _p = _p.parent()
+                if _p is not None:
+                    continue
             if btn.objectName() == "help_btn":
                 btn.setFixedSize(btn_height, btn_height)
                 btn.setStyleSheet(
@@ -2652,11 +2726,12 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         self._search_bar.set_active_tags(lower_tags)
 
     def _on_thumb_slider_changed(self, value):
-        """滑块值反向：向左=小卡片多列，向右=大卡片少列"""
-        self._thumbnail_grid._columns = max(2, min(8, 10 - value))
-        self._thumbnail_grid._auto_columns()
-        if self._thumbnail_grid._view_mode == self._thumbnail_grid.VIEW_ICON:
-            self._thumbnail_grid._zoom_timer.start()
+        """滑块值反向：向左=小卡片多列，向右=大卡片少列（值 = 10 - 列数）"""
+        grid = self._thumbnail_grid
+        grid._columns = max(grid._min_columns, min(grid._max_columns, 10 - value))
+        grid._auto_columns()
+        if grid._view_mode == grid.VIEW_ICON:
+            grid._zoom_timer.start()
 
     def _on_grid_thumb_changed(self, column_count):
         """鼠标滚轮缩放 → 同步滑块（反向：列数转滑块值）"""
@@ -7032,6 +7107,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         # 语言变更 → 立即生效到 i18n，并提示重启
         if "language" in settings:
             _i18n_set_language(settings["language"])
+            # 分类树立即按新语言重建（内置默认分类的显示名本地化），无需重启
+            self._refresh_keep_current()
             QtWidgets.QMessageBox.information(
                 self,
                 "语言 / Language",

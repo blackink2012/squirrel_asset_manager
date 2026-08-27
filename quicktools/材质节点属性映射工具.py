@@ -18,6 +18,15 @@ PRESET_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "Assets", "material
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# 复用主 UI 的 AI 分析器配置（服务商预设 / 模型列表 / API 调用）
+try:
+    from core.ai_analyzer import AIAnalyzer
+except ImportError:
+    try:
+        from squirrel_asset_manager.core.ai_analyzer import AIAnalyzer
+    except ImportError:
+        AIAnalyzer = None
+
 # 尝试导入 PySide6
 try:
     from PySide6 import QtWidgets, QtCore, QtGui
@@ -323,37 +332,8 @@ class OllamaMapper:
     DEFAULT_HOST = "http://localhost:11434"
     DEFAULT_MODEL = "qwen3-vl:8b"
 
-    # 服务商预设（与 core.ai_analyzer.AIAnalyzer.PROVIDERS 保持一致）
-    PROVIDERS = {
-        "ollama": {
-            "label": "Ollama（本地）",
-            "base_url": "http://localhost:11434/v1",
-            "needs_key": False,
-            "default_model": "qwen3-vl:8b",
-            "models": [],
-        },
-        "deepseek": {
-            "label": "DeepSeek",
-            "base_url": "https://api.deepseek.com",
-            "needs_key": True,
-            "default_model": "deepseek-v4-flash",
-            "models": [
-                "deepseek-v4-flash",
-                "deepseek-v4-pro",
-                "deepseek-v4-flash-vision-exp",
-            ],
-        },
-        "qwen": {
-            "label": "通义千问（阿里云 DashScope）",
-            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "needs_key": True,
-            "default_model": "qwen-vl-max",
-            "models": [
-                "qwen-vl-max", "qwen-vl-max-latest", "qwen-vl-plus",
-                "qwen2.5-vl-72b-instruct", "qwen3-vl-plus", "qwen3-vl-72b-instruct",
-            ],
-        },
-    }
+    # 服务商预设：直接复用主 UI 的 AIAnalyzer.PROVIDERS，保证与主界面完全一致（不再单独维护）
+    PROVIDERS = AIAnalyzer.PROVIDERS if AIAnalyzer else {}
 
     def __init__(self, host=None, model=None, provider=None, api_key=None, base_url=None):
         settings = self._load_settings()
@@ -365,7 +345,16 @@ class OllamaMapper:
         if api_key is not None:
             self.api_key = api_key
         else:
-            self.api_key = settings.get("ai_api_key", "")
+            # 各供应商独立存储 API Key，优先取当前供应商的 Key
+            try:
+                from squirrel_asset_manager.utils.settings import get_ai_api_key
+                self.api_key = get_ai_api_key(settings, self.provider)
+            except ImportError:
+                try:
+                    from utils.settings import get_ai_api_key
+                    self.api_key = get_ai_api_key(settings, self.provider)
+                except ImportError:
+                    self.api_key = settings.get("ai_api_key", "")
 
         if base_url:
             self.base_url = base_url.rstrip("/")
@@ -415,7 +404,7 @@ class OllamaMapper:
         return bool(self.api_key)
 
     def get_available_models(self):
-        """获取可用模型列表"""
+        """获取可用模型列表（Ollama 实时 /api/tags；云端实时 /models，失败回退静态列表）"""
         if self.provider == "ollama":
             try:
                 ollama_base = self.base_url.rstrip("/").rsplit("/v1", 1)[0]
@@ -425,7 +414,31 @@ class OllamaMapper:
                 return models or [self.model]
             except Exception:
                 return [self.model]
-        return list(self.PROVIDERS[self.provider]["models"]) or [self.model]
+
+        static = list(self.PROVIDERS[self.provider]["models"]) or [self.model]
+        fetched = []
+        try:
+            headers = {"Authorization": f"Bearer {self.api_key or 'ollama'}"}
+            response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            fetched = [m.get("id", "") for m in data.get("data", [])]
+        except Exception:
+            fetched = []
+        if self.provider == "openai":
+            # OpenAI /models 会返回嵌入/语音/图像生成等非对话模型，仅保留对话模型
+            fetched = [
+                m for m in fetched
+                if m.startswith("gpt-") or m.startswith("chatgpt-")
+                or (len(m) > 1 and m[0] == "o" and m[1].isdigit())
+            ]
+        # 实时列表与静态列表合并去重（保留静态列表中的视觉模型等，它们可能不在 /models 返回中）
+        seen, merged = set(), []
+        for m in list(fetched) + static:
+            if m and m not in seen:
+                seen.add(m)
+                merged.append(m)
+        return merged or static
 
     def suggest_mapping(self, source_type, target_type, source_attrs, target_attrs, transform_list):
         """请求 AI 推断属性映射
@@ -496,6 +509,24 @@ class OllamaMapper:
         if self.provider == "deepseek":
             # DeepSeek 思考型模型默认开启思考，思考过程会占用输出导致最终结果为空，显式关闭
             payload["thinking"] = {"type": "disabled"}
+        elif self.provider == "zhipu":
+            model_l = self.model.lower()
+            if model_l.startswith("glm-5.2") or model_l.startswith("glm-5.3"):
+                # glm-5.2/5.3 始终思考，不支持 thinking.disabled（否则 400 错误码 1210）；
+                # 用官方 reasoning_effort 参数降到最低档
+                payload["reasoning_effort"] = "low"
+            else:
+                # glm-4.x / glm-5 / glm-5-turbo / glm-5.1 可显式关闭思考
+                payload["thinking"] = {"type": "disabled"}
+        elif self.provider == "openai":
+            model_l = self.model.lower()
+            # o 系列 / GPT-5 推理模型：不支持 temperature / max_tokens，
+            # 改用 reasoning_effort（最低档）+ max_completion_tokens
+            if model_l.startswith("gpt-5") or (len(model_l) > 1 and model_l[0] == "o" and model_l[1].isdigit()):
+                payload.pop("temperature", None)
+                payload.pop("max_tokens", None)
+                payload["max_completion_tokens"] = 8192
+                payload["reasoning_effort"] = "low"
         response = requests.post(url, json=payload, headers=headers, timeout=180)
         response.raise_for_status()
         data = response.json()
@@ -623,7 +654,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
     """材质属性映射工具主窗口"""
 
     # AI 模型列表加载完成信号（跨线程回调，参数：模型列表, 是否静默）
-    models_ready = QtCore.Signal(list, bool)
+    models_ready = QtCore.Signal(str, list, bool)   # (provider, 可用模型列表, silent)
 
     def __init__(self, parent=None):
         # 尝试获取Maya主窗口作为父窗口
@@ -635,7 +666,7 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
 
         self.setWindowTitle(t("qtool.matprop.window_title"))
         self.setMinimumSize(_sc(860), _sc(700))
-        self.resize(_sc(980), _sc(820))
+        self.resize(_sc(1960), _sc(1230))
 
         # 增大下拉按钮宽度
         self.setStyleSheet(_font_style("""
@@ -1919,7 +1950,12 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
             self.ai_provider_combo.setCurrentIndex(idx)
         self.ai_provider_combo.blockSignals(False)
 
-        self.ai_api_key_edit.setText(settings.get("ai_api_key", ""))
+        try:
+            from squirrel_asset_manager.utils.settings import get_ai_api_key
+            api_key = get_ai_api_key(settings, provider)
+        except ImportError:
+            api_key = settings.get("ai_api_key", "")
+        self.ai_api_key_edit.setText(api_key)
         # 仅同步 API Key 输入框的可用状态，不触发模型刷新
         needs_key = bool(OllamaMapper.PROVIDERS.get(provider, {}).get("needs_key"))
         self.ai_api_key_edit.setEnabled(needs_key)
@@ -1942,23 +1978,41 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
             self.ai_api_key_edit.setPlaceholderText("API Key（本地服务无需填写）")
         else:
             self.ai_api_key_edit.setPlaceholderText("API Key")
+        # 切换服务商时加载该服务商自己保存的 API Key
+        try:
+            from squirrel_asset_manager.utils.settings import SettingsManager, get_ai_api_key
+        except ImportError:
+            try:
+                from utils.settings import SettingsManager, get_ai_api_key
+            except ImportError:
+                return
+        self.ai_api_key_edit.setText(get_ai_api_key(SettingsManager().load(), provider))
+
+        # 立即用新服务商静态模型列表填充，避免残留上一个服务商的模型；异步刷新后替换
+        static = list(OllamaMapper.PROVIDERS.get(provider, {}).get("models", [])) or [OllamaMapper.DEFAULT_MODEL]
+        self.ai_model_combo.blockSignals(True)
+        self.ai_model_combo.clear()
+        self.ai_model_combo.addItems(static)
+        self.ai_model_combo.setCurrentIndex(0)
+        self.ai_model_combo.blockSignals(False)
+
         self.refresh_ai_models(silent=True)
 
     def _save_ai_settings_to_settings(self):
         """将当前界面 AI 配置保存到用户设置（与主窗口共享）"""
         try:
-            from squirrel_asset_manager.utils.settings import SettingsManager
+            from squirrel_asset_manager.utils.settings import SettingsManager, set_ai_api_key
         except ImportError:
             try:
-                from utils.settings import SettingsManager
+                from utils.settings import SettingsManager, set_ai_api_key
             except ImportError:
                 return
         provider = self.ai_provider_combo.itemData(self.ai_provider_combo.currentIndex()) or "ollama"
-        SettingsManager().save({
-            "ai_provider": provider,
-            "ai_api_key": self.ai_api_key_edit.text().strip(),
-            "ai_model": self.ai_model_combo.currentText().strip(),
-        })
+        key = self.ai_api_key_edit.text().strip()
+        new_settings = set_ai_api_key(SettingsManager().load(), provider, key)
+        new_settings["ai_provider"] = provider
+        new_settings["ai_model"] = self.ai_model_combo.currentText().strip()
+        SettingsManager().save(new_settings)
 
     def refresh_ai_models(self, silent=False):
         """刷新当前服务商的可用模型列表（后台线程执行，不阻塞界面）
@@ -1973,16 +2027,22 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
 
         def _worker():
             try:
-                mapper = OllamaMapper(provider=provider)
+                mapper = OllamaMapper(
+                    provider=provider,
+                    api_key=self.ai_api_key_edit.text().strip() or None)
                 models = mapper.get_available_models()
             except Exception:
                 models = []
-            self.models_ready.emit(models, silent)
+            self.models_ready.emit(provider, models, silent)
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    def _on_models_ready(self, models, silent):
+    def _on_models_ready(self, provider, models, silent):
         """模型列表加载完成（主线程回调，更新下拉框）"""
+        # 已切换到其他服务商时丢弃过期响应，避免旧服务商列表覆盖
+        current_provider = self.ai_provider_combo.itemData(self.ai_provider_combo.currentIndex()) or "ollama"
+        if provider != current_provider:
+            return
         if models:
             current = self.ai_model_combo.currentText()
             self.ai_model_combo.blockSignals(True)
@@ -1992,6 +2052,9 @@ class MaterialPropertyMapper(QtWidgets.QDialog):
                 self.ai_model_combo.setCurrentText(current)
             elif OllamaMapper.DEFAULT_MODEL in models:
                 self.ai_model_combo.setCurrentText(OllamaMapper.DEFAULT_MODEL)
+            elif models:
+                # 下拉框可编辑：未命中时选中首个模型，避免残留上一个服务商的模型文本
+                self.ai_model_combo.setCurrentIndex(0)
             self.ai_model_combo.blockSignals(False)
         elif not silent:
             QMessageBox.warning(self, t("msg.warning"),

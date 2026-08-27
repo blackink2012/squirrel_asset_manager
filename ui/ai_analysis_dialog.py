@@ -5,9 +5,11 @@ except ImportError:
         return key.format(**kwargs) if kwargs else key
 
 try:
-    from ..utils.settings import SettingsManager
+    from ..utils.settings import SettingsManager, get_ai_api_key, set_ai_api_key
 except ImportError:
     SettingsManager = None
+    get_ai_api_key = lambda settings, provider: settings.get("ai_api_key", "")
+    set_ai_api_key = lambda settings, provider, key: settings
 
 try:
     from ..core.ai_analyzer import AIAnalyzer
@@ -450,10 +452,12 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
 
 class AIAnalysisConfigDialog(QtWidgets.QDialog):
     configConfirmed = QtCore.Signal(dict)
+    modelsFetched = QtCore.Signal(str, int, list)  # (provider, seq, models)
 
     def __init__(self, parent=None, available_models=None):
         super(AIAnalysisConfigDialog, self).__init__(parent)
         self._available_models = available_models or []
+        self._models_fetch_seq = 0  # 模型列表异步请求序号，用于丢弃过期响应
         self._providers = AIAnalyzer.PROVIDERS if AIAnalyzer else {}
         self._load_saved_settings()
         self._setup_ui()
@@ -511,7 +515,8 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         self._api_key_edit = QtWidgets.QLineEdit()
         self._api_key_edit.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
         self._api_key_edit.setPlaceholderText(t('dialog.ai_analysis_config.api_key_placeholder'))
-        self._api_key_edit.setText(self._saved.get('ai_api_key', ''))
+        self._api_key_edit.setText(get_ai_api_key(self._saved, self._saved.get('ai_provider', 'ollama')))
+        self._api_key_edit.editingFinished.connect(self._on_api_key_edited)
         key_layout.addWidget(self._api_key_edit, 1)
         layout.addLayout(key_layout)
 
@@ -579,6 +584,7 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
 
         layout.addLayout(btn_layout)
 
+        self.modelsFetched.connect(self._on_models_fetched)
         self._on_provider_changed()
 
     def _on_provider_changed(self, *_):
@@ -592,6 +598,8 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
             self._api_key_edit.setPlaceholderText('(本地服务无需填写)')
         else:
             self._api_key_edit.setPlaceholderText(t('dialog.ai_analysis_config.api_key_placeholder'))
+        # 切换服务商时加载该服务商自己保存的 API Key，避免串用其他服务商的 Key
+        self._api_key_edit.setText(get_ai_api_key(self._saved, provider))
 
         default_url = cfg.get('base_url', '')
         # 所有服务商的默认地址集合：当前值等于任一默认值时视为未自定义，切换时更新
@@ -612,18 +620,76 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         else:
             models = list(cfg.get('models', [])) or [cfg.get('default_model', '')]
         self._model_combo.addItems(models)
-        if saved_model:
+        # 下拉框可编辑，setCurrentText 会直接写入编辑框文本；
+        # 仅当保存的模型属于当前服务商时才恢复，否则选中新服务商默认模型
+        if saved_model and saved_model in models:
             self._model_combo.setCurrentText(saved_model)
         elif provider == 'ollama' and 'qwen3-vl:8b' in models:
             self._model_combo.setCurrentText('qwen3-vl:8b')
         elif provider == 'ollama' and 'qwen3.5:9b' in models:
             self._model_combo.setCurrentText('qwen3.5:9b')
+        elif models:
+            self._model_combo.setCurrentIndex(0)
         self._model_combo.blockSignals(False)
 
+        # 云端服务商：后台实时刷新模型列表（先显示静态列表，获取成功后替换）
+        if provider != 'ollama':
+            self._fetch_cloud_models(provider)
+
         # 无视觉模型提示
-        self._vision_tip.setVisible(provider == 'deepseek')
         if provider == 'deepseek':
+            self._vision_tip.setText(t('dialog.ai_analysis_config.vision_tip'))
+        elif provider == 'zhipu':
+            self._vision_tip.setText(t('dialog.ai_analysis_config.vision_tip_zhipu'))
+        elif provider == 'openai':
+            self._vision_tip.setText(t('dialog.ai_analysis_config.vision_tip_openai'))
+        self._vision_tip.setVisible(provider in ('deepseek', 'zhipu', 'openai'))
+        if provider in ('deepseek', 'zhipu', 'openai'):
             self.adjustSize()
+
+    def _fetch_cloud_models(self, provider):
+        """后台实时获取云端模型列表（失败时保持静态列表，不发信号）"""
+        if not AIAnalyzer:
+            return
+        api_key = self._api_key_edit.text().strip()
+        base_url = self._base_url_edit.text().strip()
+        # 每次请求递增序号，响应回来时只有最新序号才生效，避免切回旧服务商的过期响应覆盖
+        self._models_fetch_seq += 1
+        seq = self._models_fetch_seq
+
+        def _worker():
+            try:
+                analyzer = AIAnalyzer(provider=provider, api_key=api_key or None,
+                                      base_url=base_url or None)
+                models = analyzer.get_available_models()
+            except Exception:
+                models = []
+            self.modelsFetched.emit(provider, seq, models)
+
+        import threading
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_api_key_edited(self):
+        """API Key 输入完成后重新拉取当前云端服务商的模型列表"""
+        provider = self._current_provider()
+        if provider != 'ollama':
+            self._fetch_cloud_models(provider)
+
+    def _on_models_fetched(self, provider, seq, models):
+        """模型列表实时获取完成：仅处理最新序号的响应，过期响应（已切换服务商）直接丢弃"""
+        if provider != self._current_provider() or seq != self._models_fetch_seq:
+            return
+        if not models:
+            return
+        current = self._model_combo.currentText()
+        self._model_combo.blockSignals(True)
+        self._model_combo.clear()
+        self._model_combo.addItems(models)
+        if current in models:
+            self._model_combo.setCurrentText(current)
+        elif models:
+            self._model_combo.setCurrentIndex(0)
+        self._model_combo.blockSignals(False)
 
     def _on_confirm(self):
         config = self.get_config()
@@ -632,16 +698,17 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         self.accept()
 
     def _save_settings(self, config):
-        """将 AI 服务配置保存到用户设置"""
+        """将 AI 服务配置保存到用户设置（API Key 按供应商独立保存）"""
         if not SettingsManager:
             return
         try:
-            SettingsManager().save({
-                'ai_provider': config.get('provider', 'ollama'),
-                'ai_api_key': config.get('api_key', ''),
-                'ai_base_url': config.get('base_url', ''),
-                'ai_model': config.get('model', ''),
-            })
+            provider = config.get('provider', 'ollama')
+            new_settings = set_ai_api_key(
+                SettingsManager().load(), provider, config.get('api_key', ''))
+            new_settings['ai_provider'] = provider
+            new_settings['ai_base_url'] = config.get('base_url', '')
+            new_settings['ai_model'] = config.get('model', '')
+            SettingsManager().save(new_settings)
         except Exception as e:
             print(f"[AI Config] 保存设置失败: {e}")
 

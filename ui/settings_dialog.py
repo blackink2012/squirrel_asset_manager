@@ -1351,7 +1351,7 @@ class SettingsDialog(QtWidgets.QDialog):
         # 兼容旧格式：last_library_path
         old_path = self._settings.get("last_library_path", "")
         if old_path and not any(l.get("path") == old_path for l in libs):
-            libs.insert(0, {"name": "默认库", "path": old_path})
+            libs.insert(0, {"name": os.path.basename(old_path.rstrip("\\/")) or "资产库", "path": old_path})
         default_ref = self._settings.get("default_library", "")
         self._lib_data = libs
         default_idx = 0

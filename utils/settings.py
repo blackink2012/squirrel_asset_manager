@@ -9,6 +9,8 @@ SettingsManager — 应用设置持久化管理
 import os
 import json
 import re
+import tempfile
+import time
 
 
 class SettingsManager:
@@ -28,10 +30,11 @@ class SettingsManager:
         "hdr_path": "",
         "last_export_path": "",
         "window_state": {"width": 1400, "height": 900},
-        # AI 服务配置（provider: ollama / deepseek / qwen）
+        # AI 服务配置（provider: ollama / deepseek / qwen / zhipu）
         "ai_provider": "ollama",
         "ai_ollama_host": "http://localhost:11434",
-        "ai_api_key": "",
+        "ai_api_key": "",       # 旧版共享 Key（兼容读取；新逻辑按供应商存 ai_api_keys）
+        "ai_api_keys": {},      # 各供应商独立 API Key: {provider: key}
         "ai_base_url": "",
         "ai_model": "",
     }
@@ -40,6 +43,7 @@ class SettingsManager:
         self._dir = os.path.join(os.path.expanduser("~"), ".squirrel_asset_manager")
         self._path = os.path.join(self._dir, "app_settings.json")
         self._settings = dict(self.DEFAULT_SETTINGS)
+        self._had_load_error = False  # 上次 load() 是否因文件损坏而失败（供调用方避免覆盖用户配置）
 
     def load(self) -> dict:
         """加载设置，缺失键回退到默认值"""
@@ -54,6 +58,17 @@ class SettingsManager:
                 return merged
         except (json.JSONDecodeError, OSError) as e:
             print(f"[SettingsManager] 加载设置失败: {e}，使用默认值")
+            self._had_load_error = True
+            # 损坏文件先备份，避免后续 set() 覆盖导致用户配置（如 library_paths）永久丢失
+            try:
+                if os.path.isfile(self._path):
+                    bak = self._path + ".bak"
+                    if os.path.exists(bak):
+                        bak = self._path + ".corrupt_" + str(int(time.time()))
+                    os.replace(self._path, bak)
+                    print(f"[SettingsManager] 损坏的设置文件已备份到: {bak}")
+            except OSError as e2:
+                print(f"[SettingsManager] 备份损坏设置文件失败: {e2}")
 
         self._settings = dict(self.DEFAULT_SETTINGS)
         return self._settings
@@ -74,17 +89,49 @@ class SettingsManager:
         self._write_file()
 
     def _write_file(self):
-        """内部写盘"""
+        """内部写盘（原子写入：先写临时文件再替换，避免崩溃/多进程竞争损坏 JSON）"""
         try:
             os.makedirs(self._dir, exist_ok=True)
-            with open(self._path, "w", encoding="utf-8") as f:
-                json.dump(self._settings, f, indent=2, ensure_ascii=False)
+            fd, tmp_path = tempfile.mkstemp(dir=self._dir, suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(self._settings, f, indent=2, ensure_ascii=False)
+                os.replace(tmp_path, self._path)
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
         except OSError as e:
             print(f"[SettingsManager] 保存设置失败: {e}")
 
     @property
     def settings(self) -> dict:
         return dict(self._settings)
+
+
+def get_ai_api_key(settings: dict, provider: str) -> str:
+    """读取指定供应商的 API Key。
+
+    已建立按供应商存储（ai_api_keys 非空）时：只取当前供应商的 Key，其他供应商返回空，
+    避免串用别的服务商的 Key；
+    尚未迁移（ai_api_keys 为空/缺失）时：回退旧版共享 ai_api_key。
+    """
+    keys = settings.get("ai_api_keys")
+    if isinstance(keys, dict) and keys:
+        return keys.get(provider, "")
+    return settings.get("ai_api_key", "")
+
+
+def set_ai_api_key(settings: dict, provider: str, key: str) -> dict:
+    """把 API Key 存入 ai_api_keys[provider]（同时同步旧版 ai_api_key 便于兼容读取），返回新设置副本"""
+    out = dict(settings)
+    keys = dict(out.get("ai_api_keys") or {})
+    keys[provider] = key
+    out["ai_api_keys"] = keys
+    out["ai_api_key"] = key
+    return out
 
 
 def apply_font_size_to_widget(widget, font_size):

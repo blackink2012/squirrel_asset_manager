@@ -746,42 +746,34 @@ class GridBackground:
         self.background_color = QColor(40, 40, 40)
 
     def draw(self, painter: QPainter, rect: QRectF):
-        """绘制网格背景"""
-        # 绘制背景
+        """绘制网格背景（随缩放自动降低线密度，类似 Maya 自适应网格）"""
         painter.fillRect(rect, self.background_color)
 
-        # 计算网格范围
-        left = int(rect.left()) - (int(rect.left()) % self.grid_size)
-        top = int(rect.top()) - (int(rect.top()) % self.grid_size)
+        # 根据当前缩放计算屏幕上的线间距，间距过小时跳过该级别网格，
+        # 大幅减少缩小视图时的绘制线条数（如 0.1 倍缩放时跳过次要网格 ~80% 线条）
+        zoom = painter.worldTransform().m11()
+        minor_spacing = self.grid_size * zoom
+        major_spacing = self.grid_size * 5 * zoom
+
+        if minor_spacing >= 6:
+            self._draw_lines(painter, rect, self.grid_size, self.grid_color, 1)
+        if major_spacing >= 6:
+            self._draw_lines(painter, rect, self.grid_size * 5, self.grid_color_light, 2)
+
+    def _draw_lines(self, painter: QPainter, rect: QRectF, spacing, color, width):
+        """绘制一组网格线"""
+        left = int(rect.left()) - (int(rect.left()) % spacing)
+        top = int(rect.top()) - (int(rect.top()) % spacing)
         right = int(rect.right())
         bottom = int(rect.bottom())
 
-        # 绘制网格线
-        pen = QPen(self.grid_color)
-        pen.setWidth(1)
+        pen = QPen(color)
+        pen.setWidth(width)
         painter.setPen(pen)
 
-        # 垂直线
-        for x in range(left, right + 1, self.grid_size):
+        for x in range(left, right + 1, spacing):
             painter.drawLine(x, top, x, bottom)
-
-        # 水平线
-        for y in range(top, bottom + 1, self.grid_size):
-            painter.drawLine(left, y, right, y)
-
-        # 绘制主要网格线（每5格）
-        pen.setColor(self.grid_color_light)
-        pen.setWidth(2)
-        painter.setPen(pen)
-
-        major_grid = self.grid_size * 5
-        left_major = int(rect.left()) - (int(rect.left()) % major_grid)
-        top_major = int(rect.top()) - (int(rect.top()) % major_grid)
-
-        for x in range(left_major, right + 1, major_grid):
-            painter.drawLine(x, top, x, bottom)
-
-        for y in range(top_major, bottom + 1, major_grid):
+        for y in range(top, bottom + 1, spacing):
             painter.drawLine(left, y, right, y)
 
 
@@ -903,6 +895,45 @@ class CanvasNodeSignals(QObject):
     connection_requested = Signal(object, tuple)
 
 
+# 全局共享字体缓存（QFont/QFontMetrics 创建开销大，需在 QGuiApplication 存在后延迟创建）
+_font_cache = {}
+
+def _get_shared_fonts():
+    """获取全局共享字体（首次调用时创建，避免每个节点每次绘制都新建 QFont）"""
+    if not _font_cache:
+        _font_cache['title'] = QFont("Microsoft YaHei", 9, QFont.Bold)
+        _font_cache['port'] = QFont("Microsoft YaHei", 8)
+        _font_cache['port_metrics'] = QFontMetrics(_font_cache['port'])
+    return _font_cache
+
+
+class FloatingTitleItem(QGraphicsTextItem):
+    """节点名悬浮标签（Maya 风格：悬停在节点上方，与节点整体缩放）"""
+
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        # 标题字体与节点内端口字体一致（同字号），并随视图缩放与节点同比例变化
+        self.setFlag(QGraphicsItem.ItemIsSelectable, False)
+        self.setFlag(QGraphicsItem.ItemIsMovable, False)
+        # 不接收鼠标事件，避免遮挡节点交互
+        self.setAcceptedMouseButtons(Qt.NoButton)
+        self.document().setDocumentMargin(4.0)
+        self.setDefaultTextColor(QColor(235, 235, 235))
+        self.setFont(_get_shared_fonts()['port'])
+        self.setZValue(20)
+        self._bg_color = QColor(35, 35, 35, 215)
+        self._border_color = QColor(140, 140, 140, 170)
+
+    def paint(self, painter, option, widget=None):
+        """绘制背景胶囊 + 文字"""
+        rect = self.boundingRect()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setPen(QPen(self._border_color, 1))
+        painter.setBrush(self._bg_color)
+        painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), 3, 3)
+        super().paint(painter, option, widget)
+
+
 class CanvasNode(QGraphicsRectItem):
     """画布节点基类 - Maya风格"""
 
@@ -930,8 +961,11 @@ class CanvasNode(QGraphicsRectItem):
         self.port_radius = 5
         self.header_height = 28
 
-        # 可折叠状态
-        self.is_collapsed = False
+        # 折叠级别（Maya 三级）：
+        #   2 = 全展开（显示全部属性端口）
+        #   1 = 仅显示有连接的属性端口
+        #   0 = 全收（仅标题栏，无端口）
+        self._collapse_level = 2
         self.collapsed_height = self.header_height
 
         # 设置图形
@@ -939,7 +973,16 @@ class CanvasNode(QGraphicsRectItem):
         self.setFlag(QGraphicsItem.ItemIsMovable, True)
         self.setFlag(QGraphicsItem.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges, True)
+        self.setFlag(QGraphicsItem.ItemUsesExtendedStyleOption, True)
         self.setZValue(10)
+
+        # 性能优化：设备坐标位图缓存 —— 拖动/平移时直接 blit 缓存（接近零成本），
+        # 缩放时自动按新分辨率重渲染，文字保持清晰（效果等同 Maya 节点编辑器）
+        self.setCacheMode(QGraphicsItem.DeviceCoordinateCache)
+
+        # 绘制缓存（渐变等重对象只按需重建）
+        self._header_gradient = None
+        self._grad_key = None
 
         # Maya风格颜色 - 默认值，会根据节点类型覆盖
         self.header_color = QColor(90, 90, 90)
@@ -968,15 +1011,112 @@ class CanvasNode(QGraphicsRectItem):
         self.move_start_pos = None
         self.hovered_collapse_button = False
 
+        # 手动缩放（仅横向：拖动节点右边缘改变宽度）
+        self._resize_mode = None       # None / 'w'
+        self.min_width = 120
+        self._edge_grab = 6            # 边缘拖拽范围
+
+        # 允许悬停事件（用于端口高亮 + 缩放光标反馈）
+        self.setAcceptHoverEvents(True)
+
         self.update_height()
 
+        # 节点名悬浮标签（Maya 风格：在节点上方，独立顶层 item）
+        self._floating_title = FloatingTitleItem(title)
+        self._update_floating_title()
+
+    def _update_floating_title(self):
+        """将悬浮标签定位到节点顶部中心上方（场景坐标）"""
+        t = self._floating_title
+        if t is None or t.scene() is None:
+            return
+        w = t.boundingRect().width()
+        h = t.boundingRect().height()
+        center = self.mapToScene(self.width / 2.0, 0)
+        t.setPos(center.x() - w / 2.0, center.y() - h - 5)
+
+    # ============ 节点缩放（仅横向：拖动右边缘） ============
+    def _get_resize_mode(self, pos) -> str:
+        """根据鼠标位置判断缩放模式: None / 'w'(仅横向)"""
+        w = self.width
+        if pos.x() >= w - self._edge_grab:
+            return 'w'
+        return None
+
+    def _update_resize(self, pos):
+        """根据鼠标位置应用新宽度（高度始终由端口数自动计算）"""
+        self._apply_resize(pos.x())
+
+    def _apply_resize(self, w):
+        """应用新的节点宽度（仅横向）"""
+        w = max(self.min_width, int(w))
+        if w == self.width:
+            return
+        self.width = w
+        self.setRect(0, 0, w, self.height)
+        self.update_port_positions()
+        self._update_floating_title()
+        self.update()
+        if self.scene():
+            self.scene()._on_node_moved(self)
+
+    # ============ 折叠级别（Maya 三级：全收 / 仅连接 / 全展开） ============
+    def cycle_collapse(self):
+        """点击折叠按钮：三级循环 全展开(2) -> 仅连接(1) -> 全收(0) -> 全展开(2)"""
+        self._collapse_level = (self._collapse_level - 1) % 3
+        self._apply_collapse_level()
+
+    def _apply_collapse_level(self):
+        """应用当前折叠级别（重算高度/端口位置并刷新连接）"""
+        self.update_height()
+        self.update()
+        if self.scene():
+            self.scene()._on_node_moved(self)
+
+    def _on_connections_changed(self):
+        """连接增删后刷新（级别 1「仅显示有连接的属性」时可见端口会变化）"""
+        if self._collapse_level == 1:
+            self._apply_collapse_level()
+
+    def _get_connected_port_indices(self) -> set:
+        """返回已连接端口的原始索引集合: {(type, index), ...}"""
+        if self.scene() is None:
+            return set()
+        connected = set()
+        for conn in self.scene()._conns_for.get(self, ()):
+            connected.add(conn.start_port)
+            connected.add(conn.end_port)
+        return connected
+
+    def _is_port_visible(self, port_type: str, index: int) -> bool:
+        """判断端口在当前折叠级别下是否可见"""
+        level = self._collapse_level
+        if level == 2:
+            return True
+        if level == 0:
+            return False
+        return (port_type, index) in self._get_connected_port_indices()
+
+    def _visible_port_indices(self, port_type: str) -> list:
+        """返回当前折叠级别下可见端口的原始索引列表（按行序）"""
+        level = self._collapse_level
+        ports = self.input_ports if port_type == 'input' else self.output_ports
+        if level == 2:
+            return list(range(len(ports)))
+        if level == 0:
+            return []
+        connected = self._get_connected_port_indices()
+        return sorted(i for i in range(len(ports)) if (port_type, i) in connected)
+
     def update_height(self):
-        """根据端口数量更新高度"""
-        if self.is_collapsed:
+        """根据当前折叠级别与可见端口数更新高度"""
+        if self._collapse_level == 0:
             self.height = self.collapsed_height
         else:
             port_height = 22
-            max_ports = max(len(self.input_ports), len(self.output_ports))
+            n_in = len(self._visible_port_indices('input'))
+            n_out = len(self._visible_port_indices('output'))
+            max_ports = max(n_in, n_out)
             self.height = self.header_height + max_ports * port_height + 10
         self.setRect(0, 0, self.width, self.height)
         self.update_port_positions()
@@ -990,28 +1130,21 @@ class CanvasNode(QGraphicsRectItem):
         self.update_height()
         self.update()
 
-    def toggle_collapse(self):
-        """切换折叠状态"""
-        self.is_collapsed = not self.is_collapsed
-        self.update_height()
-        if self.scene():
-            self.scene()._on_node_moved(self)
-
     def update_port_positions(self):
-        """更新端口位置（场景坐标）"""
+        """更新可见端口位置（场景坐标，按可见行序紧凑排列）"""
         self.port_positions.clear()
-        if self.is_collapsed:
+        if self._collapse_level == 0:
             return
 
         port_spacing = 22
         start_y = self.header_height + 11
 
-        for i, port_name in enumerate(self.input_ports):
-            y = start_y + i * port_spacing
+        for row, i in enumerate(self._visible_port_indices('input')):
+            y = start_y + row * port_spacing
             self.port_positions[("input", i)] = self.mapToScene(QPointF(0, y))
 
-        for i, port_name in enumerate(self.output_ports):
-            y = start_y + i * port_spacing
+        for row, i in enumerate(self._visible_port_indices('output')):
+            y = start_y + row * port_spacing
             self.port_positions[("output", i)] = self.mapToScene(QPointF(self.width, y))
 
     def paint(self, painter: QPainter, option, widget=None):
@@ -1020,17 +1153,21 @@ class CanvasNode(QGraphicsRectItem):
 
         # 主体背景 - Maya风格：整体填充相同颜色
         border_color = self.selected_color if self.isSelected() else self.border_color
-        pen = QPen(border_color, 1)
-        painter.setPen(pen)
+        painter.setPen(QPen(border_color, 1))
         painter.setBrush(self.body_color)
         painter.drawRoundedRect(rect, self.corner_radius, self.corner_radius)
 
-        # 标题栏 - 稍亮一点的同色系
+        # 标题栏 - 稍亮一点的同色系（渐变对象缓存，仅当颜色/高度变化时重建）
+        grad_key = (self.header_color.red(), self.header_color.green(),
+                    self.header_color.blue(), int(self.header_height))
+        if grad_key != self._grad_key:
+            g = QLinearGradient(0, 0, 0, self.header_height)
+            g.setColorAt(0, self.header_color)
+            g.setColorAt(1, self.header_color.darker(115))
+            self._header_gradient = g
+            self._grad_key = grad_key
         header_rect = QRectF(0, 0, rect.width(), self.header_height)
-        header_gradient = QLinearGradient(0, 0, 0, self.header_height)
-        header_gradient.setColorAt(0, self.header_color)
-        header_gradient.setColorAt(1, self.header_color.darker(115))
-        painter.setBrush(header_gradient)
+        painter.setBrush(self._header_gradient)
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(header_rect, self.corner_radius, self.corner_radius)
 
@@ -1051,34 +1188,41 @@ class CanvasNode(QGraphicsRectItem):
         painter.setBrush(Qt.NoBrush)
         painter.drawRect(collapse_rect)
 
-        # 绘制折叠箭头
+        # 绘制折叠图标（三级状态：全收=减号 / 仅连接=圆点 / 全展开=加号）
         painter.setPen(QPen(self.text_color))
         collapse_center_x = rect.width() - 14
-        if self.is_collapsed:
+        if self._collapse_level == 0:
             painter.drawLine(collapse_center_x - 3, 14, collapse_center_x + 3, 14)
-            painter.drawLine(collapse_center_x, 11, collapse_center_x, 17)
+        elif self._collapse_level == 1:
+            painter.drawEllipse(QPointF(collapse_center_x, 14), 2, 2)
         else:
             painter.drawLine(collapse_center_x - 3, 14, collapse_center_x + 3, 14)
+            painter.drawLine(collapse_center_x, 11, collapse_center_x, 17)
 
-        # 绘制标题
-        painter.setPen(self.text_color)
-        font = QFont("Microsoft YaHei", 9, QFont.Bold)
-        painter.setFont(font)
-        painter.drawText(8, 2, rect.width() - 28, self.header_height - 4, Qt.AlignLeft | Qt.AlignVCenter, self.title)
+        # 节点名由悬浮标签绘制（Maya 风格：在节点上方，不画在节点内）
+
+        # 绘制右侧横向缩放手柄（短竖线，提示可横向拖拽）
+        grip_pen = QPen(QColor(255, 255, 255, 90), 1)
+        painter.setPen(grip_pen)
+        mid_y = rect.height() / 2.0
+        gx = rect.width() - 4
+        for i in range(3):
+            y = mid_y - 4 + i * 4
+            painter.drawLine(gx, y, gx + 2, y)
 
         # 绘制端口
-        if not self.is_collapsed:
-            self.port_positions.clear()
+        if self._collapse_level != 0:
             self._draw_ports(painter)
 
     def _draw_ports(self, painter: QPainter):
-        """绘制端口 - Maya风格"""
+        """绘制端口 - Maya风格（仅绘制当前折叠级别下可见的端口，紧凑排列）"""
         port_spacing = 22
         start_y = self.header_height + 11
 
         # 绘制输入端口（左侧，灰色）
-        for i, port_name in enumerate(self.input_ports):
-            y = start_y + i * port_spacing
+        for row, i in enumerate(self._visible_port_indices('input')):
+            port_name = self.input_ports[i]
+            y = start_y + row * port_spacing
             
             is_hovered = self.hovered_port == ("input", i)
             color = self.port_hover_color if is_hovered else self.input_port_color
@@ -1091,18 +1235,18 @@ class CanvasNode(QGraphicsRectItem):
             painter.setBrush(color)
             painter.drawEllipse(port_rect)
 
-            # 端口名称
+            # 端口名称（共享字体，避免每次创建 QFont）
             painter.setPen(self.text_color)
-            font = QFont("Microsoft YaHei", 8)
-            painter.setFont(font)
+            painter.setFont(_get_shared_fonts()['port'])
             painter.drawText(8, y - 7, self.width - 16, 14,
                            Qt.AlignLeft | Qt.AlignVCenter, port_name)
 
             self.port_positions[("input", i)] = self.mapToScene(port_center)
 
         # 绘制输出端口（右侧，橙色）
-        for i, port_name in enumerate(self.output_ports):
-            y = start_y + i * port_spacing
+        for row, i in enumerate(self._visible_port_indices('output')):
+            port_name = self.output_ports[i]
+            y = start_y + row * port_spacing
             
             is_hovered = self.hovered_port == ("output", i)
             color = self.port_hover_color if is_hovered else self.output_port_color
@@ -1115,12 +1259,10 @@ class CanvasNode(QGraphicsRectItem):
             painter.setBrush(color)
             painter.drawEllipse(port_rect)
 
-            # 端口名称
+            # 端口名称（共享字体与字宽测量，避免每次创建 QFont/QFontMetrics）
             painter.setPen(self.text_color)
-            font = QFont("Microsoft YaHei", 8)
-            painter.setFont(font)
-            fm = QFontMetrics(font)
-            text_width = fm.horizontalAdvance(port_name)
+            painter.setFont(_get_shared_fonts()['port'])
+            text_width = _get_shared_fonts()['port_metrics'].horizontalAdvance(port_name)
             painter.drawText(self.width - 8 - text_width, y - 7, text_width, 14,
                            Qt.AlignRight | Qt.AlignVCenter, port_name)
 
@@ -1128,7 +1270,7 @@ class CanvasNode(QGraphicsRectItem):
 
     def get_port_position(self, port_type: str, port_index: int) -> QPointF:
         """获取端口位置（场景坐标）"""
-        if self.is_collapsed:
+        if self._collapse_level == 0:
             # 折叠状态下，连接到节点边缘中心
             node_center_y = self.header_height / 2.0
             if port_type == "input":
@@ -1149,47 +1291,90 @@ class CanvasNode(QGraphicsRectItem):
         """获取折叠按钮区域"""
         return QRectF(self.width - 20, 8, 12, 12)
 
+    def hoverMoveEvent(self, event):
+        """悬停移动：更新缩放光标 + 端口高亮（Maya 风格）"""
+        mode = self._get_resize_mode(event.pos())
+        # 端口位置优先于边缘缩放（端口仍可连线）
+        if mode and self._get_port_at_pos(event.pos()) is not None:
+            mode = None
+        if mode == 'w':
+            self.setCursor(Qt.SizeHorCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
+
+        new_hover = self._get_port_at_pos(event.pos())
+        if new_hover != self.hovered_port:
+            self.hovered_port = new_hover
+            self.update()
+        super().hoverMoveEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        """悬停离开：清除高亮与光标"""
+        if self.hovered_port is not None:
+            self.hovered_port = None
+            self.update()
+        self.setCursor(Qt.ArrowCursor)
+        super().hoverLeaveEvent(event)
+
     def mousePressEvent(self, event: QMouseEvent):
         """鼠标按下事件"""
-        # 检查是否点击了折叠按钮
+        if event.button() != Qt.LeftButton:
+            super().mousePressEvent(event)
+            return
+
+        # 检查是否点击了折叠按钮（三级循环）
         collapse_rect = self._get_collapse_button_pos()
-        if collapse_rect.contains(event.pos()) and event.button() == Qt.LeftButton:
-            self.toggle_collapse()
+        if collapse_rect.contains(event.pos()):
+            self.cycle_collapse()
             return
 
         # 检查是否点击了端口
         self.clicked_port = self._get_port_at_pos(event.pos())
-        if self.clicked_port and event.button() == Qt.LeftButton:
+
+        # 检查是否点击了缩放区域（未命中端口时优先横向缩放）
+        resize_mode = self._get_resize_mode(event.pos())
+        if resize_mode and self.clicked_port is None:
+            self._resize_mode = resize_mode
+            self.setCursor(Qt.SizeHorCursor)
+            return
+
+        if self.clicked_port:
             self.connection_requested.emit(self, self.clicked_port)
             self.is_connecting_from_port = True
             return
 
-        if event.button() == Qt.LeftButton:
-            self.is_dragging = True
-            self.drag_start_pos = event.pos()
-            self.move_start_pos = self.pos()
+        self.is_dragging = True
+        self.drag_start_pos = event.pos()
+        self.move_start_pos = self.pos()
 
-            if event.modifiers() != Qt.ShiftModifier:
-                for item in self.scene().selectedItems():
-                    if item != self:
-                        item.setSelected(False)
-            self.setSelected(True)
-            self.node_selected.emit(self)
+        if event.modifiers() != Qt.ShiftModifier:
+            for item in self.scene().selectedItems():
+                if item != self:
+                    item.setSelected(False)
+        self.setSelected(True)
+        self.node_selected.emit(self)
 
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent):
         """鼠标移动事件"""
+        # 拖动节点右边缘横向缩放大小
+        if self._resize_mode:
+            self._update_resize(event.pos())
+            return
         # 如果正在从端口连线，不移动节点
         if self.is_connecting_from_port:
             return
-        
-        if self.is_dragging:
-            self.node_moved.emit(self)
+        # 节点移动由 QGraphicsItem 内部完成，itemChange(ItemPositionHasChanged)
+        # 在位置生效后统一更新端口位置与连接（避免原来重复触发两次）
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         """鼠标释放事件"""
+        if self._resize_mode:
+            self._resize_mode = None
+            self.setCursor(Qt.ArrowCursor)
+            return
         if event.button() == Qt.LeftButton:
             # 如果移动了节点，记录撤销命令
             if self.is_dragging and self.move_start_pos is not None:
@@ -1208,23 +1393,23 @@ class CanvasNode(QGraphicsRectItem):
         super().mouseReleaseEvent(event)
 
     def _get_port_at_pos(self, pos: QPointF) -> tuple:
-        """获取指定位置的端口"""
-        if self.is_collapsed:
+        """获取指定位置的端口（仅检查当前折叠级别下可见的端口）"""
+        if self._collapse_level == 0:
             return None
             
         port_spacing = 22
         start_y = self.header_height + 11
 
         # 检查输入端口
-        for i in range(len(self.input_ports)):
-            y = start_y + i * port_spacing
+        for row, i in enumerate(self._visible_port_indices('input')):
+            y = start_y + row * port_spacing
             port_pos = QPointF(0, y)
             if (pos - port_pos).manhattanLength() < self.port_radius * 2:
                 return ("input", i)
 
         # 检查输出端口
-        for i in range(len(self.output_ports)):
-            y = start_y + i * port_spacing
+        for row, i in enumerate(self._visible_port_indices('output')):
+            y = start_y + row * port_spacing
             port_pos = QPointF(self.width, y)
             if (pos - port_pos).manhattanLength() < self.port_radius * 2:
                 return ("output", i)
@@ -1233,8 +1418,11 @@ class CanvasNode(QGraphicsRectItem):
 
     def itemChange(self, change, value):
         """项目状态变化"""
-        if change == QGraphicsItem.ItemPositionChange:
+        if change == QGraphicsItem.ItemPositionHasChanged:
+            # 位置生效后再更新端口与连接：此时 mapToScene 坐标已是最新，
+            # 且每个移动事件只触发一次（原来 ItemPositionChange 使用旧坐标且重复触发）
             self.update_port_positions()
+            self._update_floating_title()
             self.node_moved.emit(self)
         return super().itemChange(change, value)
 
@@ -1332,6 +1520,10 @@ class InfiniteCanvasScene(QGraphicsScene):
         self.grid = GridBackground(self)
         self.nodes = []
         self.connections = []
+        # 性能优化：连接邻接表 node -> [ConnectionLine, ...]，
+        # 节点移动时只更新与其相连的连接（原来遍历全部连接，O(N) 降为 O(度)）
+        self._conns_for = {}
+        self._moving_batch = False  # 批量移动标记（布局时跳过逐条连接更新）
         
         # 撤销/重做栈
         self.undo_stack = UndoStack()
@@ -1357,6 +1549,11 @@ class InfiniteCanvasScene(QGraphicsScene):
         node.node_selected.connect(self._on_node_selected)
         node.connection_requested.connect(self._on_connection_requested)
         self.addItem(node)
+        # 节点名悬浮标签作为顶层 item 加入场景（随节点移动同步位置）
+        label = getattr(node, '_floating_title', None)
+        if label is not None:
+            self.addItem(label)
+            node._update_floating_title()
         self.nodes.append(node)
         self.node_added.emit(node)
 
@@ -1370,7 +1567,12 @@ class InfiniteCanvasScene(QGraphicsScene):
                     connections_to_remove.append(conn)
             for conn in connections_to_remove:
                 self._remove_connection_internal(conn)
-            
+
+            # 移除节点名悬浮标签
+            label = getattr(node, '_floating_title', None)
+            if label is not None and label.scene() is self:
+                self.removeItem(label)
+
             self.nodes.remove(node)
             self.removeItem(node)
             self.node_removed.emit(node)
@@ -1381,14 +1583,29 @@ class InfiniteCanvasScene(QGraphicsScene):
         connection = ConnectionLine(start_node, end_node, start_port, end_port)
         self.addItem(connection)
         self.connections.append(connection)
+        self._conns_for.setdefault(start_node, []).append(connection)
+        self._conns_for.setdefault(end_node, []).append(connection)
         self.connection_created.emit(start_node, end_node, start_port, end_port)
+        # 级别1（仅显示有连接的属性）的节点需刷新可见端口
+        start_node._on_connections_changed()
+        end_node._on_connections_changed()
         return connection
 
     def _remove_connection_internal(self, connection: ConnectionLine):
         """内部移除连接方法，不记录撤销"""
         if connection in self.connections:
             self.connections.remove(connection)
+            start_node, end_node = connection.start_node, connection.end_node
+            for node in (start_node, end_node):
+                conns = self._conns_for.get(node)
+                if conns and connection in conns:
+                    conns.remove(connection)
             self.removeItem(connection)
+            # 级别1 的节点需刷新可见端口
+            if start_node is not None:
+                start_node._on_connections_changed()
+            if end_node is not None:
+                end_node._on_connections_changed()
 
     # ============ 公共方法（记录撤销） ============
     def add_node(self, title: str = "Node", pos: QPointF = None,
@@ -1443,11 +1660,11 @@ class InfiniteCanvasScene(QGraphicsScene):
                 self._remove_connection_internal(connection)
 
     def _on_node_moved(self, node: CanvasNode):
-        """节点移动处理"""
-        # 更新所有相关连接
-        for conn in self.connections:
-            if conn.start_node == node or conn.end_node == node:
-                conn.update_position()
+        """节点移动处理 - 只更新与该节点相连的连接（邻接表，O(度)）"""
+        if self._moving_batch:
+            return
+        for conn in self._conns_for.get(node, ()):
+            conn.update_position()
 
     def _on_node_selected(self, node: CanvasNode):
         """节点选择处理"""
@@ -1588,7 +1805,11 @@ class InfiniteCanvasView(QGraphicsView):
 
         # 视图设置
         self.setRenderHint(QPainter.Antialiasing)
-        self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        # 性能优化：默认 FullViewportUpdate 每次变化都重绘整个视口（大场景极慢），
+        # 改用 SmartViewportUpdate 只重绘受影响区域
+        self.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)
+        # 每个 item 自行设置完整绘制状态，省去保存/恢复 painter 状态的开销
+        self.setOptimizationFlag(QGraphicsView.DontSavePainterState, True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
@@ -1637,12 +1858,15 @@ class InfiniteCanvasView(QGraphicsView):
             self.is_panning = True
             self.last_mouse_pos = event.pos()
             self.setCursor(Qt.ClosedHandCursor)
+            # 平移期间临时关闭抗锯齿，提高刷新率（结束后恢复）
+            self.setRenderHint(QPainter.Antialiasing, False)
             return
 
         elif event.button() == Qt.LeftButton and event.modifiers() == Qt.ControlModifier:
             self.is_panning = True
             self.last_mouse_pos = event.pos()
             self.setCursor(Qt.ClosedHandCursor)
+            self.setRenderHint(QPainter.Antialiasing, False)
             return
 
         elif event.button() == Qt.LeftButton:
@@ -1682,6 +1906,8 @@ class InfiniteCanvasView(QGraphicsView):
             self.is_panning = False
             self.last_mouse_pos = None
             self.setCursor(Qt.ArrowCursor)
+            # 恢复抗锯齿
+            self.setRenderHint(QPainter.Antialiasing, True)
             return
 
         elif event.button() == Qt.LeftButton:
@@ -1969,9 +2195,15 @@ class MayaNodeGraphAdapter:
                 pos[name] = QPointF(d * x_spacing, current_y)
                 current_y += node_items[name].height + y_spacing * 0.5
 
-        for name, item in node_items.items():
-            item.setPos(pos.get(name, QPointF(0, 0)))
-            item.update_port_positions()
+        # 批量设置位置：跳过 itemChange 触发的逐条连接更新，最后统一刷新一次
+        self.scene._moving_batch = True
+        try:
+            for name, item in node_items.items():
+                item.setPos(pos.get(name, QPointF(0, 0)))
+                item.update_port_positions()
+                item._update_floating_title()
+        finally:
+            self.scene._moving_batch = False
 
         for conn in self.scene.connections:
             conn.update_position()
@@ -2341,8 +2573,13 @@ class MainWindow(QMainWindow):
         self.statusBar.showMessage("已加载测试数据 - 中键拖动画布，滚轮缩放", 5000)
 
     def build_graph(self, nodes, edges_with_attrs, input_attrs, output_attrs):
-        self.simple_edges = self.adapter.build_graph(nodes, edges_with_attrs, input_attrs, output_attrs)
-        self.apply_hierarchy_layout()
+        # 性能优化：构建/布局期间暂停视图刷新，全部完成后一次性重绘（大文件加载提速明显）
+        self.view.setUpdatesEnabled(False)
+        try:
+            self.simple_edges = self.adapter.build_graph(nodes, edges_with_attrs, input_attrs, output_attrs)
+            self.apply_hierarchy_layout()
+        finally:
+            self.view.setUpdatesEnabled(True)
         self._reset_view()
 
     def apply_hierarchy_layout(self):
@@ -2383,6 +2620,12 @@ class MainWindow(QMainWindow):
     def _on_zoom_changed(self, zoom: float):
         """缩放变化处理"""
         self.zoom_label.setText(f"{int(zoom * 100)}%")
+        # 缩放过小时隐藏节点名悬浮标签，避免大量标签重叠遮挡（Maya 同款行为）
+        show = zoom >= 0.35
+        for node in self.scene.nodes:
+            t = getattr(node, '_floating_title', None)
+            if t is not None:
+                t.setVisible(show)
 
     # ============ 撤销/重做功能 ============
     def _undo(self):

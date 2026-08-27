@@ -2,7 +2,7 @@
     "_comment": "双击缩略图命令预设 — 按子库(asset_type)配置。cmd: 命令key, option: 子选项(如导入格式/材质类型等)。option 为空表示无子选项。",
     "materials": {
         "cmd": "import",
-        "option": "ma"
+        "option": ""
     },
     "models": {
         "cmd": "import",
