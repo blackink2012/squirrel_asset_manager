@@ -1,0 +1,55 @@
+{
+  "file_routing": {
+    "textures": [
+      ".png",
+      ".jpg",
+      ".jpeg",
+      ".exr",
+      ".hdr",
+      ".tga",
+      ".tiff",
+      ".tif",
+      ".bmp",
+      ".psd",
+      ".tx",
+      ".dds"
+    ],
+    "root": [
+      ".ma",
+      ".mb"
+    ]
+  },
+  "thumbnail_search_paths": [
+    "{folderName}_ma_fileDependencies/thumbnail.png",
+    "{materialName}_Preview.png"
+  ],
+  "metadata_sources": [
+    {
+      "file_pattern": "{folderName}_ma_fileDependencies/{folderName}.zooInfo",
+      "file_format": "json",
+      "field_mapping": [
+        {
+          "source": "tags",
+          "target": "tags",
+          "processor": "split_comma"
+        }
+      ]
+    },
+    {
+      "file_pattern": "{materialName}.json",
+      "file_format": "json",
+      "field_mapping": [
+        {
+          "source": "tags",
+          "target": "tags",
+          "processor": "none"
+        },
+        {
+          "source": "name",
+          "target": "description",
+          "processor": "none"
+        }
+      ]
+    }
+  ]
+}

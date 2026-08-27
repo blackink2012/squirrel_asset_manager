@@ -1,0 +1,72 @@
+{
+  "thumbnail_search_paths": [
+    "{assetName}_fileDependencies/thumbnail.jpg",
+    "{assetName}_fileDependencies/thumbnail.png",
+    "{assetName}_ma_fileDependencies/thumbnail.jpg",
+    "{assetName}_ma_fileDependencies/thumbnail.png"
+  ],
+  "metadata_sources": [
+    {
+      "file_pattern": "{assetName}_fileDependencies/{assetName}.zooInfo",
+      "file_format": "json",
+      "field_mapping": [
+        {
+          "source": "description",
+          "target": "description",
+          "processor": "none"
+        },
+        {
+          "source": "tags",
+          "target": "tags",
+          "processor": "split_comma"
+        },
+        {
+          "source": "creators",
+          "target": "author",
+          "processor": "none"
+        },
+        {
+          "source": "version",
+          "target": "version",
+          "processor": "none"
+        },
+        {
+          "source": "websites",
+          "target": "source_url",
+          "processor": "none"
+        }
+      ]
+    },
+    {
+      "file_pattern": "{assetName}_ma_fileDependencies/{assetName}.zooInfo",
+      "file_format": "json",
+      "field_mapping": [
+        {
+          "source": "description",
+          "target": "description",
+          "processor": "none"
+        },
+        {
+          "source": "tags",
+          "target": "tags",
+          "processor": "split_comma"
+        },
+        {
+          "source": "creators",
+          "target": "author",
+          "processor": "none"
+        },
+        {
+          "source": "version",
+          "target": "version",
+          "processor": "none"
+        },
+        {
+          "source": "websites",
+          "target": "source_url",
+          "processor": "none"
+        }
+      ]
+    }
+  ]
+}
