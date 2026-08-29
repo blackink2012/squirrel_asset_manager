@@ -37,6 +37,8 @@ class SearchBarWidget(QtWidgets.QWidget):
     tagFilterChanged = QtCore.Signal(list)   # 标签筛选变化
     tagFilterCleared = QtCore.Signal()       # 标签筛选清除
     letterClicked = QtCore.Signal(str)       # 首字母定位（A-Z/#）
+    aiSearchToggled = QtCore.Signal(bool)    # 「AI 搜索」勾选状态变化
+    searchSubmit = QtCore.Signal(str)        # 输入框回车提交
 
     def __init__(self, parent=None, font_size=13):
         super(SearchBarWidget, self).__init__(parent)
@@ -122,6 +124,8 @@ class SearchBarWidget(QtWidgets.QWidget):
             QLineEdit:focus {{ border-color: #5294e2; }}
         """)
         self._search_input.textChanged.connect(self._on_text_changed)
+        self._search_input.returnPressed.connect(
+            lambda: self.searchSubmit.emit(self._search_input.text().strip()))
         layout.addWidget(self._search_input, 1)
 
         # --- 取消搜索按钮 ---
@@ -141,6 +145,28 @@ class SearchBarWidget(QtWidgets.QWidget):
         """)
         self._cancel_btn.clicked.connect(self._cancel_search)
         layout.addWidget(self._cancel_btn)
+
+        # --- AI 搜索开关 ---
+        self._ai_search_cb = QtWidgets.QCheckBox(t("search_bar.ai_search"))
+        self._ai_search_cb.setToolTip(t("search_bar.ai_search.tooltip"))
+        self._ai_search_cb.setStyleSheet("""
+            QCheckBox { color: #a0a0a0; font-size: %dpx; spacing: 6px; }
+            QCheckBox:hover { color: #c8c8c8; }
+            QCheckBox:checked { color: #5294e2; font-weight: bold; }
+            QCheckBox::indicator {
+                width: 14px; height: 14px;
+                border: 1px solid #555555;
+                border-radius: 3px;
+                background-color: #2a2a2a;
+            }
+            QCheckBox::indicator:hover { border-color: #5294e2; }
+            QCheckBox::indicator:checked {
+                border-color: #5294e2;
+                background-color: #5294e2;
+            }
+        """ % max(12, font_size - 1))
+        self._ai_search_cb.toggled.connect(self.aiSearchToggled.emit)
+        layout.addWidget(self._ai_search_cb)
 
         # --- 标签筛选按钮 ---
         self._tag_btn = QtWidgets.QPushButton(t("search_bar.tag_select"))
@@ -311,6 +337,16 @@ class SearchBarWidget(QtWidgets.QWidget):
 
     def text(self):
         return self._search_input.text()
+
+    def is_ai_mode(self):
+        """是否开启 AI 语义搜索"""
+        return self._ai_search_cb.isChecked()
+
+    def set_ai_mode(self, checked):
+        """外部设置 AI 搜索开关（不触发 toggled 信号链）"""
+        self._ai_search_cb.blockSignals(True)
+        self._ai_search_cb.setChecked(bool(checked))
+        self._ai_search_cb.blockSignals(False)
 
     def clear(self):
         """清空搜索和标签筛选"""

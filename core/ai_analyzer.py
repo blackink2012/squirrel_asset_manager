@@ -298,6 +298,36 @@ class AIAnalyzer:
             print(f"[AI Analyzer] Error: {e}")
             return None
 
+    def vision_chat(self, prompt: str, image_bytes: bytes,
+                    temperature: float = 0.2,
+                    max_tokens: int = 2048) -> Optional[str]:
+        """视觉对话：发送图片 + 提示词，返回模型文本回复（供图搜图等场景）。
+
+        与 analyze_image 的区别：本方法不做结构化字段解析，直接返回模型文本，
+        由调用方自行解析（如提取搜索关键词）。
+
+        Returns:
+            str: 模型回复文本；当前模型不支持图片时返回 None
+        """
+        if not self._supports_vision():
+            return None
+        base64_image = base64.b64encode(image_bytes).decode('utf-8')
+        if self._provider == "ollama":
+            return self._chat_ollama_native(
+                prompt, temperature, max_tokens, image_base64=base64_image)
+        return self._chat_completions(
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": [
+                    {"type": "image_url",
+                     "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
+                    {"type": "text", "text": "请按提示词分析这张图片。"},
+                ]},
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
     def _chat_completions(self, messages: List[Dict[str, Any]],
                           temperature: float = 0.3,
                           max_tokens: int = 1024) -> str:
@@ -438,8 +468,12 @@ class AIAnalyzer:
             "options": {"num_predict": max_tokens, "temperature": temperature},
         }
         if image_base64:
-            # 视觉分析：Ollama 原生接口通过顶层 images 字段传 base64 图片
+            # 视觉分析：Ollama 原生接口传 base64 图片。
+            # 旧版 Ollama 识别顶层 images 字段；新版（Ollama 0.33 + qwen3.5 等
+            # 多模态模型）会静默忽略顶层 images，必须同时放到 message 级 images
+            # 才能真正送达模型（否则模型看不到图片，只会按文本提示词臆造结果）。
             payload["images"] = [image_base64]
+            payload["messages"][0]["images"] = [image_base64]
         response = requests.post(url, json=payload, headers=headers, timeout=180)
         response.raise_for_status()
         data = response.json()

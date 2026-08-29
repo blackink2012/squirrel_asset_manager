@@ -2,6 +2,7 @@ import os
 import json
 import subprocess
 import tempfile
+import threading
 import uuid
 import copy
 
@@ -144,6 +145,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
     VIEW_ICON = 0
     VIEW_LIST = 1
     THUMB_MAX_COLUMNS = 16  # 缩略图最大列数（最小卡片），需与 ThumbnailGridWidget._max_columns 保持一致
+
+    # AI 语义搜索：后台线程 → 主线程回填
+    _aiSemanticDone = QtCore.Signal(object)
 
     def __init__(self, parent=None, library_path=None):
         if parent is None:
@@ -716,6 +720,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 t("menu.ai.analyze_hint"))
         qt_connect(action.triggered, self._on_ai_analysis_with_config)
 
+        # AI 搜索预览资产：聊天式自然语言搜索
+        action_search = self._ai_tools_menu.addAction(t("menu.ai_search_preview"))
+        qt_connect(action_search.triggered, self._on_ai_search_preview)
+
         self._ai_tools_menu.addSeparator()
 
         no_action = self._ai_tools_menu.addAction(
@@ -1124,6 +1132,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         qt_connect(self._search_bar.tagFilterChanged, self._on_search_tag_changed)
         qt_connect(self._search_bar.tagFilterCleared, self._on_search_tag_cleared)
         qt_connect(self._search_bar.letterClicked, self._on_letter_clicked)
+        qt_connect(self._search_bar.searchSubmit, self._on_search_submit)
+        qt_connect(self._search_bar.aiSearchToggled, self._on_ai_search_toggled)
+        qt_connect(self._aiSemanticDone, self._on_ai_semantic_done)
 
         qt_connect(self._right_panel.tagFilterRequested, self._on_tag_filter_from_detail)
         qt_connect(self._right_panel.thumbnailCaptureRequested, self._on_preview_thumbnail_capture)
@@ -1152,12 +1163,98 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
     # ── 搜索 ──────────────────────────────────────────
 
     def _on_search(self, keyword):
+        # AI 语义搜索模式下，输入变化不触发普通搜索（由回车提交触发 AI 搜索）
+        if self._search_bar.is_ai_mode():
+            return
         if self._use_mock:
             self._thumbnail_grid.filter_by_search(keyword)
             return
 
         # Dict 模式：让 mgr.search() 处理组合过滤
         self._dict_mode_search_and_set(keyword=keyword)
+
+    def _on_search_submit(self, keyword):
+        """搜索框回车提交：AI 语义搜索模式走 AI 分析，否则直接普通搜索"""
+        if not keyword:
+            return
+        if self._search_bar.is_ai_mode():
+            self._on_ai_semantic_search(keyword)
+        else:
+            self._on_search(keyword)
+
+    def _on_ai_search_toggled(self, checked):
+        """「AI 搜索」勾选变化：开启时提示用法"""
+        if checked:
+            self._status_info.setText(t("search_bar.ai_search.tooltip"))
+
+    def _on_ai_semantic_search(self, text):
+        """AI 语义搜索：自然语言 → AI 提取关键词 → 含备注搜索 → 刷新网格"""
+        if getattr(self, "_ai_search_busy", False):
+            return
+        if self._use_mock or not self._active_mgr:
+            self._status_info.setText(t("ai_search.error_need_library"))
+            return
+        self._ai_search_busy = True
+        self._status_info.setText(t("ai_search.thinking"))
+
+        def _work():
+            payload = {"keywords": [], "sub_library": "", "note": "", "error": "",
+                       "raw": text}
+            try:
+                from ..core.ai_search import AISearchAssistant
+                assistant = AISearchAssistant()
+                if assistant is not None:
+                    payload = assistant.analyze_intent(text)
+                    payload["raw"] = text
+            except Exception as e:
+                print(f"[AISearch] 语义搜索异常: {e}")
+            self._aiSemanticDone.emit(payload)
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _on_ai_semantic_done(self, payload):
+        self._ai_search_busy = False
+        payload = payload or {}
+        raw = payload.get("raw", "")
+        if payload.get("error") == "model_not_found":
+            model = "?"
+            try:
+                from ..core.ai_search import AISearchAssistant
+                asst = AISearchAssistant()
+                if asst and asst.analyzer:
+                    model = asst.analyzer.model
+            except Exception:
+                pass
+            self._status_info.setText(
+                t("ai_search.error_model_not_found_simple", model=model))
+        keywords = payload.get("keywords") or []
+        if not keywords:
+            self._status_info.setText(t("ai_search.error_no_keywords"))
+            return
+        sub_lib = payload.get("sub_library", "")
+        from ..core.ai_search import search_materials_with_notes
+        dicts = search_materials_with_notes(
+            self._active_mgr, keywords, sub_lib, limit=30)
+        used_kw = keywords
+        if not dicts and raw:
+            # AI 关键词零命中 → 回退原文分词搜索，避免「用AI反而搜不到」
+            try:
+                from ..core.ai_search import AISearchAssistant as _Asst
+                fallback_kws = _Asst._fallback_keywords(raw)
+                if fallback_kws:
+                    dicts = search_materials_with_notes(
+                        self._active_mgr, fallback_kws, "", limit=30)
+                    if dicts:
+                        used_kw = fallback_kws
+            except Exception:
+                pass
+        self._thumbnail_grid.set_materials(dicts)
+        # 记录 UI 状态（与 _dict_mode_search_and_set 一致），便于取消筛选恢复
+        self._thumbnail_grid._current_search_kw = " ".join(used_kw)
+        self._thumbnail_grid._active_filters.add("search")
+        self._status_info.setText(
+            t("status.ai_search_result", n=len(dicts),
+              keywords="、".join(used_kw)))
 
     # ── 搜索栏标签筛选 ────────────────────────────────
 
@@ -5508,6 +5605,77 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             self._thumbnail_grid._selected_materials[mid] = material
             self._thumbnail_grid._refresh_card_highlights()
         self._on_ai_analysis_with_config()
+
+    def _on_ai_search_preview(self):
+        """AI 搜索预览资产：打开聊天式搜索对话框（非模态，不锁定主窗口）"""
+        if self._use_mock or not self._active_mgr:
+            QtWidgets.QMessageBox.information(
+                self, t("ai_search.title"), t("ai_search.error_need_library"))
+            return
+        # 已打开则直接激活，避免重复实例
+        dlg = getattr(self, "_ai_search_dlg", None)
+        if dlg is not None:
+            try:
+                dlg.show()
+                dlg.raise_()
+                dlg.activateWindow()
+                return
+            except Exception:
+                self._ai_search_dlg = None
+        from .ai_search_dialog import AISearchDialog
+        dlg = AISearchDialog(self, manager=self._active_mgr)
+        self._ai_search_dlg = dlg
+        dlg.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose)
+        qt_connect(dlg.importAssetRequested, self._import_asset_select_materials)
+        qt_connect(dlg.locateAssetRequested, self._locate_material_in_grid)
+        qt_connect(dlg.dragDroppedOnViewport, self._on_drag_dropped)
+        qt_connect(dlg.destroyed, lambda *a: setattr(self, "_ai_search_dlg", None))
+        dlg.show()
+
+    def _locate_material_in_grid(self, material):
+        """在库中定位：切到资产所属子库 → 打开对应分类 → 选中资产（模拟用户手动查找）"""
+        mid = material.get("id", "")
+        if not mid or self._use_mock or not self._active_mgr:
+            return
+        sub_lib = material.get("sub_library", "") or self._current_root_lib
+        cat_id = (material.get("category", "") or "").strip()
+        grid = self._thumbnail_grid
+        try:
+            if cat_id and cat_id != "all":
+                # 展开并选中资产所属分类（root_lib 精确匹配，跨子库同名分类不串库）
+                self._category_tree._select_by_id(cat_id, sub_lib)
+                self._on_category_selected(cat_id, None, sub_lib)
+            else:
+                # 无有效分类 → 打开资产所属子库的全部资产
+                self._category_tree._select_by_id(sub_lib, sub_lib)
+                self._on_category_selected("all", None, sub_lib)
+        except Exception as e:
+            print(f"[MainWindow] 定位分类失败: {e}")
+        if not any(m.get("id") == mid for m in getattr(grid, "_filtered_materials", [])):
+            # 分类打开后未包含目标资产（分类已失效/被删）→ 回退子库全部
+            try:
+                self._category_tree._select_by_id("all")
+                self._on_category_selected("all", None, sub_lib)
+            except Exception:
+                pass
+        self._select_and_scroll_to(mid)
+
+    def _select_and_scroll_to(self, material_id):
+        """按 id 在网格中选中并滚动到可见（供 AI 搜索定位复用）"""
+        grid = self._thumbnail_grid
+        target = None
+        for m in getattr(grid, "_filtered_materials", []):
+            if m.get("id") == material_id:
+                target = m
+                break
+        if target is None:
+            return
+        grid._selected_material = target
+        grid._selected_materials.clear()
+        grid._selected_materials[material_id] = target
+        grid._refresh_card_highlights()
+        grid.materialSelected.emit(target)
+        grid._scroll_to_selected()
 
     def _on_ai_analysis_with_config(self):
         """弹出配置对话框 → 批量分析"""

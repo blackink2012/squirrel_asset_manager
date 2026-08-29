@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """资产观察窗口 — 双击右侧预览图弹出。
 
-左侧：大图预览（支持多缩略图滚轮 / ◀▶ 切换）
+左侧：大图预览（支持多缩略图滚轮 / 缩略图条切换）
 右侧：资产属性信息
 窗口可拖动、缩放、关闭（QDialog 标准窗口）。
 """
@@ -50,12 +50,9 @@ class AssetPreviewDialog(QtWidgets.QDialog):
                             | QtCore.Qt.WindowMaximizeButtonHint)
         title = self._material.get("name_cn") or self._material.get("name") or t("asset_preview.title")
         self.setWindowTitle(title)
-        self._font_size = self._load_font_size()  # 跟随主窗口全局字号设置
-        scale = self._font_size / 13.0
-        self.resize(int(1350 * scale), int(930 * scale))  # 默认 1.5 倍（900×620 → 1350×930）
-        self.setMinimumSize(int(560 * scale), int(420 * scale))
+        self.resize(1350, 930)  # 默认 1.5 倍（900×620 → 1350×930）
+        self.setMinimumSize(560, 420)
         self._setup_ui()
-        self._apply_font_size()
         self._load_thumb_list()
         self._build_properties()
         self._refresh_preview()
@@ -64,27 +61,6 @@ class AssetPreviewDialog(QtWidgets.QDialog):
         super().showEvent(event)
         # 布局稳定后再渲染一次，避免首帧按旧（小）尺寸绘制导致图片偏小
         QtCore.QTimer.singleShot(0, self._refresh_preview)
-
-    # ── 字体（与主窗口属性栏一致） ────────────────────
-
-    @staticmethod
-    def _load_font_size():
-        """读取全局字号设置（与主窗口一致，默认 13）"""
-        try:
-            from ..utils.settings import SettingsManager
-            sm = SettingsManager()
-            sm.load()
-            return sm.get("font_size", 13)
-        except Exception:
-            return 13
-
-    def _apply_font_size(self):
-        """将全局字号应用到弹窗全部子控件（与主窗口属性栏字体一致）"""
-        try:
-            from ..utils.settings import apply_font_size_to_widget
-            apply_font_size_to_widget(self, self._font_size)
-        except Exception:
-            pass
 
     # ── 右键菜单（复用资产卡片菜单） ──────────────────
 
@@ -132,7 +108,7 @@ class AssetPreviewDialog(QtWidgets.QDialog):
         rv.setContentsMargins(2, 0, 2, 0)
         rv.setSpacing(8)
         header = QtWidgets.QLabel(t("preview_panel.attributes"))
-        header.setStyleSheet("color:#e0e0e0; font-size:13px; font-weight:bold;")
+        header.setStyleSheet("color:#e0e0e0; font-size:14px; font-weight:bold;")
         rv.addWidget(header)
         self._prop_container = QtWidgets.QWidget()
         self._prop_layout = QtWidgets.QVBoxLayout(self._prop_container)
@@ -145,7 +121,7 @@ class AssetPreviewDialog(QtWidgets.QDialog):
         scroll.setWidget(self._prop_container)
         rv.addWidget(scroll, 1)
 
-        # 左右分栏：可拖动调整宽度；窗口缩放时右侧固定宽度不跟随
+        # 左右分栏：分隔条可拖动调整比例；窗口缩放时右侧保持固定宽度不跟随
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         splitter.setHandleWidth(4)
         splitter.setStyleSheet("QSplitter::handle { background-color:#3a3a3a; }")
@@ -220,11 +196,11 @@ class AssetPreviewDialog(QtWidgets.QDialog):
     # ── 多缩略图预览条 ──────────────────────────────
 
     def _build_thumb_strip(self, lv):
-        """构建左侧预览图下方的多缩略图预览条"""
+        """构建左侧预览图下方的多缩略图预览条（116px，原始两倍）"""
         self._thumb_strip = QtWidgets.QScrollArea()
         self._thumb_strip.setWidgetResizable(True)
         self._thumb_strip.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self._thumb_strip.setFixedHeight(72)
+        self._thumb_strip.setFixedHeight(132)
         self._thumb_strip.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._thumb_strip.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._thumb_strip.setStyleSheet(
@@ -257,11 +233,11 @@ class AssetPreviewDialog(QtWidgets.QDialog):
             return
         for idx in range(len(names)):
             btn = QtWidgets.QPushButton()
-            btn.setFixedSize(58, 58)
+            btn.setFixedSize(116, 116)
             btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
             btn.setToolTip(names[idx])
-            btn.setIcon(QtGui.QIcon(self._make_thumb_pixmap(idx, 52)))
-            btn.setIconSize(QtCore.QSize(52, 52))
+            btn.setIcon(QtGui.QIcon(self._make_thumb_pixmap(idx, 104)))
+            btn.setIconSize(QtCore.QSize(104, 104))
             if idx == self._thumb_index:
                 btn.setStyleSheet(
                     "QPushButton { background:#2d4a6f; border:2px solid #5294e2; border-radius:4px; }")
@@ -401,7 +377,7 @@ class AssetPreviewDialog(QtWidgets.QDialog):
             lb = QtWidgets.QLabel(txt)
             lb.setWordWrap(True)
             lb.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
-            lb.setStyleSheet("color:#d0d0d0; font-size:13px; background:transparent;")
+            lb.setStyleSheet("color:#d0d0d0; font-size:12px; background:transparent;")
             self._prop_layout.addWidget(lb)
         self._prop_layout.addStretch(1)
 

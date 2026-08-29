@@ -1847,9 +1847,19 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         return node_files
 
-    def _on_context_menu(self, pos, card):
+    def _on_context_menu(self, pos, card, extra_actions=None, selection=None, top_only=False):
+        """资产卡片右键菜单。
+
+        extra_actions: 可选，外部窗口（AI 搜索等）注入的自定义动作构建器列表，
+            每个构建器签名 builder(menu, mat, font_size) -> {QAction: 标识}，
+            返回的标识在菜单关闭后原样返回（供外部窗口自行处理）。
+        selection: 可选，覆盖本次菜单使用的多选集合（外部调用时避免误操作主窗口选中项）。
+        top_only: 为 True 时只保留「添加到收藏夹」以上的按钮（导入/应用/转换导入等），
+            收藏夹以下（编辑/删除/更新缩略图等）全部裁剪，供外部窗口使用。
+        """
         mat = card.material_data if hasattr(card, 'material_data') else {}
         sub_lib = mat.get('sub_library', '')
+        selected = selection if selection is not None else self._selected_materials
         sm = SettingsManager()
         sm.load()
         font_size = sm.get("font_size", 13)
@@ -2170,58 +2180,77 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             self._build_favorites_submenu(menu, mid, font_size)
             menu.addSeparator()
 
-        select_all_action = menu.addAction(t("common.select_all")) if _is_ctx_enabled(sub_lib, "select_all", ctx_preset) else None
-        duplicate_action = menu.addAction(t("menu.duplicate")) if _is_ctx_enabled(sub_lib, "duplicate", ctx_preset) else None
-        folder_action = menu.addAction(t("common.open_folder")) if _is_ctx_enabled(sub_lib, "open_folder", ctx_preset) else None
-        menu.addSeparator()
-
-        if self._manager:
-            if _is_ctx_enabled(sub_lib, "move_to", ctx_preset):
-                move_sub = self._build_category_submenu(t("menu.move_to"), mid, move=True, font_size=font_size)
-                if move_sub: menu.addMenu(move_sub)
-            if _is_ctx_enabled(sub_lib, "copy_to", ctx_preset):
-                copy_sub = self._build_category_submenu(t("menu.copy_to"), mid, move=False, font_size=font_size)
-                if copy_sub: menu.addMenu(copy_sub)
-        menu.addSeparator()
-
-        edit_action = menu.addAction(t("common.edit")) if _is_ctx_enabled(sub_lib, "edit", ctx_preset) else None
-        cap_action = None
-        imp_thumb_action = None
-        playblast_action = None
-        render_action = None
-        add_thumb_action = None
-        if _is_ctx_enabled(sub_lib, "update_thumbnail", ctx_preset):
-            thumb_menu = QtWidgets.QMenu(t("menu.update_thumbnail"), menu)
-            thumb_menu.setStyleSheet(_get_sub_style(font_size))
-            cap_action = thumb_menu.addAction(t("menu.capture_thumbnail"))
-            imp_thumb_action = thumb_menu.addAction(t("menu.import_thumbnail"))
-            thumb_menu.addSeparator()
-            playblast_action = thumb_menu.addAction(t("menu.maya_playblast"))
-            render_action = thumb_menu.addAction(t("menu.render_image"))
-            add_thumb_action = thumb_menu.addAction(t("menu.add_thumbnail"))
-            menu.addMenu(thumb_menu)
-        
-        update_asset_action = menu.addAction(t("menu.update_asset")) if _is_ctx_enabled(sub_lib, "update_asset", ctx_preset) else None
-        delete_action = menu.addAction(t("common.delete")) if _is_ctx_enabled(sub_lib, "delete", ctx_preset) else None
-        menu.addSeparator()
-
-        # ── 预览节点（zmetal / ma 文件）──
+        select_all_action = duplicate_action = folder_action = edit_action = None
+        cap_action = imp_thumb_action = playblast_action = render_action = add_thumb_action = None
+        update_asset_action = delete_action = ai_action = None
         preview_node_actions = {}
-        if _is_ctx_enabled(sub_lib, "preview_node", ctx_preset):
-            node_files = self._collect_node_files(json_path, mat.get('variant_types', []))
-            if node_files:
-                preview_sub = QtWidgets.QMenu(t("menu.preview_node"), menu)
-                preview_sub.setStyleSheet(_get_sub_style(font_size))
-                for display_name, file_path in node_files:
-                    a = preview_sub.addAction(f'  {display_name}')
-                    preview_node_actions[a] = file_path
-                menu.addMenu(preview_sub)
+        if not top_only:
+            # ── 收藏夹以下的按钮（top_only=True 时全部裁剪）──
+            select_all_action = menu.addAction(t("common.select_all")) if _is_ctx_enabled(sub_lib, "select_all", ctx_preset) else None
+            duplicate_action = menu.addAction(t("menu.duplicate")) if _is_ctx_enabled(sub_lib, "duplicate", ctx_preset) else None
+            folder_action = menu.addAction(t("common.open_folder")) if _is_ctx_enabled(sub_lib, "open_folder", ctx_preset) else None
+            menu.addSeparator()
 
-        ai_action = menu.addAction(t("menu.ai_analyze_thumbnail")) if _is_ctx_enabled(sub_lib, "ai_analysis", ctx_preset) else None
+            if self._manager:
+                if _is_ctx_enabled(sub_lib, "move_to", ctx_preset):
+                    move_sub = self._build_category_submenu(t("menu.move_to"), mid, move=True, font_size=font_size)
+                    if move_sub: menu.addMenu(move_sub)
+                if _is_ctx_enabled(sub_lib, "copy_to", ctx_preset):
+                    copy_sub = self._build_category_submenu(t("menu.copy_to"), mid, move=False, font_size=font_size)
+                    if copy_sub: menu.addMenu(copy_sub)
+            menu.addSeparator()
+
+            edit_action = menu.addAction(t("common.edit")) if _is_ctx_enabled(sub_lib, "edit", ctx_preset) else None
+            cap_action = None
+            imp_thumb_action = None
+            playblast_action = None
+            render_action = None
+            add_thumb_action = None
+            if _is_ctx_enabled(sub_lib, "update_thumbnail", ctx_preset):
+                thumb_menu = QtWidgets.QMenu(t("menu.update_thumbnail"), menu)
+                thumb_menu.setStyleSheet(_get_sub_style(font_size))
+                cap_action = thumb_menu.addAction(t("menu.capture_thumbnail"))
+                imp_thumb_action = thumb_menu.addAction(t("menu.import_thumbnail"))
+                thumb_menu.addSeparator()
+                playblast_action = thumb_menu.addAction(t("menu.maya_playblast"))
+                render_action = thumb_menu.addAction(t("menu.render_image"))
+                add_thumb_action = thumb_menu.addAction(t("menu.add_thumbnail"))
+                menu.addMenu(thumb_menu)
+
+            update_asset_action = menu.addAction(t("menu.update_asset")) if _is_ctx_enabled(sub_lib, "update_asset", ctx_preset) else None
+            delete_action = menu.addAction(t("common.delete")) if _is_ctx_enabled(sub_lib, "delete", ctx_preset) else None
+            menu.addSeparator()
+
+            # ── 预览节点（zmetal / ma 文件）──
+            preview_node_actions = {}
+            if _is_ctx_enabled(sub_lib, "preview_node", ctx_preset):
+                node_files = self._collect_node_files(json_path, mat.get('variant_types', []))
+                if node_files:
+                    preview_sub = QtWidgets.QMenu(t("menu.preview_node"), menu)
+                    preview_sub.setStyleSheet(_get_sub_style(font_size))
+                    for display_name, file_path in node_files:
+                        a = preview_sub.addAction(f'  {display_name}')
+                        preview_node_actions[a] = file_path
+                    menu.addMenu(preview_sub)
+
+            ai_action = menu.addAction(t("menu.ai_analyze_thumbnail")) if _is_ctx_enabled(sub_lib, "ai_analysis", ctx_preset) else None
+
+        # 外部窗口注入的自定义动作（如 AI 搜索的定位/找相似/加入心愿单等）
+        extra_result = {}
+        if extra_actions:
+            for builder in extra_actions:
+                try:
+                    m = builder(menu, mat, font_size)
+                except Exception:
+                    m = {}
+                if m:
+                    extra_result.update(m)
 
         action = qt_exec(menu, card.mapToGlobal(pos))
         if action is None:  # 菜单被取消，不做任何操作
-            return
+            return None
+        if action in extra_result:  # 外部自定义动作 → 返回标识供调用方处理
+            return extra_result[action]
         if action in preview_node_actions:
             self.previewNodeRequested.emit(preview_node_actions[action])
             return
@@ -2252,14 +2281,14 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         elif action == update_asset_action:
             self.updateAssetRequested.emit(mid)
         elif action == delete_action:
-            ids = list(self._selected_materials.keys()) if self._selected_materials else [mid]
+            ids = list(selected.keys()) if selected else [mid]
             self.deleteRequested.emit(ids)
         elif action in import_actions:
             fmt = import_actions[action]
             # 收集所有选中+右键卡片路径
             paths = set()
-            if self._selected_materials:
-                for m in self._selected_materials.values():
+            if selected:
+                for m in selected.values():
                     p = m.get("json_path", "")
                     if p:
                         paths.add(p)
@@ -2276,8 +2305,8 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         elif action in reference_actions:
             fmt = reference_actions[action]
             paths = set()
-            if self._selected_materials:
-                for m in self._selected_materials.values():
+            if selected:
+                for m in selected.values():
                     p = m.get("json_path", "")
                     if p:
                         paths.add(p)
@@ -2289,8 +2318,8 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             fmt = formats[0] if json_path.endswith('.zasset') else os.path.splitext(json_path)[1].lstrip('.')
             # 收集所有选中+右键卡片路径
             paths = set()
-            if self._selected_materials:
-                for m in self._selected_materials.values():
+            if selected:
+                for m in selected.values():
                     p = m.get("json_path", "")
                     if p:
                         paths.add(p)
@@ -2320,19 +2349,23 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             elif action_type == 'lod':
                 self.variantLodDeleteRequested.emit(json_path, args[0], args[1])
 
-    def show_context_menu_for_material(self, mat, global_pos, anchor_widget=None):
-        """供外部窗口（资产观察弹窗）复用资产卡片右键菜单。
+    def show_context_menu_for_material(self, mat, global_pos, anchor_widget=None,
+                                       extra_actions=None, selection=None, top_only=False):
+        """供外部窗口（资产观察弹窗 / AI 搜索等）复用资产卡片右键菜单。
 
         anchor_widget 为菜单锚点（需支持 mapToGlobal/mapFromGlobal，
         并临时挂载 material_data 供 _on_context_menu 读取资产信息），
-        缺省用网格自身。
+        缺省用网格自身。extra_actions / selection / top_only 透传给 _on_context_menu。
+        返回外部自定义动作标识（None 表示未命中外部动作）。
         """
         anchor = anchor_widget if anchor_widget is not None else self
         had = hasattr(anchor, "material_data")
         old = getattr(anchor, "material_data", None)
         anchor.material_data = mat
         try:
-            self._on_context_menu(anchor.mapFromGlobal(global_pos), anchor)
+            return self._on_context_menu(anchor.mapFromGlobal(global_pos), anchor,
+                                         extra_actions=extra_actions, selection=selection,
+                                         top_only=top_only)
         finally:
             if had:
                 anchor.material_data = old
