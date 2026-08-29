@@ -35,7 +35,11 @@ def copy_files_to_maya():
         if os.path.exists(target_squirrel_dir):
             shutil.rmtree(target_squirrel_dir)
 
-        shutil.copytree(source_squirrel_dir, target_squirrel_dir)
+        shutil.copytree(
+            source_squirrel_dir,
+            target_squirrel_dir,
+            ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+        )
 
         return True, maya_pref_dir, target_squirrel_dir
     except Exception as e:
