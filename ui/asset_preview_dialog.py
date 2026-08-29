@@ -50,9 +50,12 @@ class AssetPreviewDialog(QtWidgets.QDialog):
                             | QtCore.Qt.WindowMaximizeButtonHint)
         title = self._material.get("name_cn") or self._material.get("name") or t("asset_preview.title")
         self.setWindowTitle(title)
-        self.resize(1350, 930)  # 默认 1.5 倍（900×620 → 1350×930）
-        self.setMinimumSize(560, 420)
+        self._font_size = self._load_font_size()  # 跟随主窗口全局字号设置
+        scale = self._font_size / 13.0
+        self.resize(int(1350 * scale), int(930 * scale))  # 默认 1.5 倍（900×620 → 1350×930）
+        self.setMinimumSize(int(560 * scale), int(420 * scale))
         self._setup_ui()
+        self._apply_font_size()
         self._load_thumb_list()
         self._build_properties()
         self._refresh_preview()
@@ -61,6 +64,27 @@ class AssetPreviewDialog(QtWidgets.QDialog):
         super().showEvent(event)
         # 布局稳定后再渲染一次，避免首帧按旧（小）尺寸绘制导致图片偏小
         QtCore.QTimer.singleShot(0, self._refresh_preview)
+
+    # ── 字体（与主窗口属性栏一致） ────────────────────
+
+    @staticmethod
+    def _load_font_size():
+        """读取全局字号设置（与主窗口一致，默认 13）"""
+        try:
+            from ..utils.settings import SettingsManager
+            sm = SettingsManager()
+            sm.load()
+            return sm.get("font_size", 13)
+        except Exception:
+            return 13
+
+    def _apply_font_size(self):
+        """将全局字号应用到弹窗全部子控件（与主窗口属性栏字体一致）"""
+        try:
+            from ..utils.settings import apply_font_size_to_widget
+            apply_font_size_to_widget(self, self._font_size)
+        except Exception:
+            pass
 
     # ── 右键菜单（复用资产卡片菜单） ──────────────────
 
@@ -98,28 +122,8 @@ class AssetPreviewDialog(QtWidgets.QDialog):
         self._preview_label.wheelSwitched.connect(self._on_wheel)
         lv.addWidget(self._preview_label, 1)
 
-        # 多缩略图切换行（仅多图时显示）
-        nav_s = "QPushButton { background:#2a2a2a; color:#c8c8c8; border:1px solid #3a3a3a; padding:3px 10px; font-size:12px; border-radius:4px; } QPushButton:hover { background:#3a3a3a; } QPushButton:disabled { color:#666; }"
-        self._prev_btn = QtWidgets.QPushButton("◀")
-        self._prev_btn.setStyleSheet(nav_s)
-        self._prev_btn.setFixedWidth(36)
-        self._prev_btn.clicked.connect(self._on_prev)
-        self._counter = QtWidgets.QLabel("1/1")
-        self._counter.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self._counter.setStyleSheet("color:#9a9a9a; font-size:12px;")
-        self._next_btn = QtWidgets.QPushButton("▶")
-        self._next_btn.setStyleSheet(nav_s)
-        self._next_btn.setFixedWidth(36)
-        self._next_btn.clicked.connect(self._on_next)
-        nav_row = QtWidgets.QHBoxLayout()
-        nav_row.setSpacing(6)
-        nav_row.addWidget(self._prev_btn)
-        nav_row.addWidget(self._counter, 1)
-        nav_row.addWidget(self._next_btn)
-        self._nav_widget = QtWidgets.QWidget()
-        self._nav_widget.setLayout(nav_row)
-        self._nav_widget.setVisible(False)
-        lv.addWidget(self._nav_widget)
+        # 多缩略图预览条（左预览图下方，点击切换主图）
+        self._build_thumb_strip(lv)
 
         # 右：属性
         right = QtWidgets.QWidget()
@@ -128,7 +132,7 @@ class AssetPreviewDialog(QtWidgets.QDialog):
         rv.setContentsMargins(2, 0, 2, 0)
         rv.setSpacing(8)
         header = QtWidgets.QLabel(t("preview_panel.attributes"))
-        header.setStyleSheet("color:#e0e0e0; font-size:14px; font-weight:bold;")
+        header.setStyleSheet("color:#e0e0e0; font-size:13px; font-weight:bold;")
         rv.addWidget(header)
         self._prop_container = QtWidgets.QWidget()
         self._prop_layout = QtWidgets.QVBoxLayout(self._prop_container)
@@ -141,8 +145,18 @@ class AssetPreviewDialog(QtWidgets.QDialog):
         scroll.setWidget(self._prop_container)
         rv.addWidget(scroll, 1)
 
-        root.addWidget(left, 3)
-        root.addWidget(right, 2)
+        # 左右分栏：可拖动调整宽度；窗口缩放时右侧固定宽度不跟随
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        splitter.setHandleWidth(4)
+        splitter.setStyleSheet("QSplitter::handle { background-color:#3a3a3a; }")
+        splitter.addWidget(left)
+        splitter.addWidget(right)
+        splitter.setStretchFactor(0, 1)  # 左侧吸收窗口缩放增量
+        splitter.setStretchFactor(1, 0)  # 右侧保持固定宽度
+        splitter.setCollapsible(0, False)
+        splitter.setCollapsible(1, False)
+        splitter.setSizes([820, 500])
+        root.addWidget(splitter, 1)
 
     # ── 多缩略图 ────────────────────────────────────
 
@@ -157,12 +171,11 @@ class AssetPreviewDialog(QtWidgets.QDialog):
                 self._thumb_names = list_asset_thumbnails(json_path)
             else:
                 self._thumb_names = list_asset_thumbnails(json_path, base_name=self._material.get("name", ""))
-        self._nav_widget.setVisible(len(self._thumb_names) > 1)
-        self._update_nav()
+        self._refresh_thumb_strip()
 
-    def _current_bytes(self):
-        names, idx = self._thumb_names, self._thumb_index
-        mat = self._material
+    def _thumb_bytes_at(self, idx):
+        """返回指定缩略图索引对应的图片字节"""
+        names, mat = self._thumb_names, self._material
         if names and 0 <= idx < len(names):
             if idx == 0 and mat.get("thumb_bytes"):
                 return mat.get("thumb_bytes")
@@ -176,29 +189,115 @@ class AssetPreviewDialog(QtWidgets.QDialog):
                 return None
         return mat.get("thumb_bytes")
 
-    def _update_nav(self):
-        n = len(self._thumb_names)
-        self._counter.setText(f"{self._thumb_index + 1}/{n}" if n else "")
-        self._prev_btn.setEnabled(self._thumb_index > 0)
-        self._next_btn.setEnabled(self._thumb_index < n - 1)
+    def _current_bytes(self):
+        return self._thumb_bytes_at(self._thumb_index)
 
     def _on_prev(self):
         if self._thumb_index > 0:
             self._thumb_index -= 1
-            self._update_nav()
             self._refresh_preview()
+            self._refresh_thumb_strip()
 
     def _on_next(self):
         if self._thumb_index < len(self._thumb_names) - 1:
             self._thumb_index += 1
-            self._update_nav()
             self._refresh_preview()
+            self._refresh_thumb_strip()
+
+    def _on_thumb_select(self, idx):
+        """点击缩略图预览条 → 切换主图"""
+        if 0 <= idx < len(self._thumb_names) and idx != self._thumb_index:
+            self._thumb_index = idx
+            self._refresh_preview()
+            self._refresh_thumb_strip()
 
     def _on_wheel(self, direction):
         if direction > 0:
             self._on_prev()
         else:
             self._on_next()
+
+    # ── 多缩略图预览条 ──────────────────────────────
+
+    def _build_thumb_strip(self, lv):
+        """构建左侧预览图下方的多缩略图预览条"""
+        self._thumb_strip = QtWidgets.QScrollArea()
+        self._thumb_strip.setWidgetResizable(True)
+        self._thumb_strip.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self._thumb_strip.setFixedHeight(72)
+        self._thumb_strip.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._thumb_strip.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._thumb_strip.setStyleSheet(
+            "QScrollArea { background:#141414; border:1px solid #3a3a3a; border-radius:4px; }"
+            "QScrollBar:horizontal { height:6px; background:#222; }"
+            "QScrollBar::handle:horizontal { background:#4a4a4a; border-radius:3px; }"
+            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width:0px; }"
+        )
+        self._thumb_strip_widget = QtWidgets.QWidget()
+        self._thumb_strip_widget.setStyleSheet("background:#141414;")
+        self._strip_layout = QtWidgets.QHBoxLayout(self._thumb_strip_widget)
+        self._strip_layout.setContentsMargins(3, 3, 3, 3)
+        self._strip_layout.setSpacing(4)
+        self._thumb_strip.setWidget(self._thumb_strip_widget)
+        self._thumb_strip.setVisible(False)
+        lv.addWidget(self._thumb_strip)
+
+    def _refresh_thumb_strip(self):
+        """按当前缩略图列表重建预览条（仅多图时显示），当前索引高亮"""
+        layout = self._strip_layout
+        while layout.count():
+            item = layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.setParent(None)
+                w.deleteLater()
+        names = self._thumb_names
+        self._thumb_strip.setVisible(len(names) > 1)
+        if len(names) <= 1:
+            return
+        for idx in range(len(names)):
+            btn = QtWidgets.QPushButton()
+            btn.setFixedSize(58, 58)
+            btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+            btn.setToolTip(names[idx])
+            btn.setIcon(QtGui.QIcon(self._make_thumb_pixmap(idx, 52)))
+            btn.setIconSize(QtCore.QSize(52, 52))
+            if idx == self._thumb_index:
+                btn.setStyleSheet(
+                    "QPushButton { background:#2d4a6f; border:2px solid #5294e2; border-radius:4px; }")
+            else:
+                btn.setStyleSheet(
+                    "QPushButton { background:#2a2a2a; border:2px solid #3a3a3a; border-radius:4px; }"
+                    "QPushButton:hover { border-color:#5a5a5a; }")
+            btn.clicked.connect(lambda checked=False, i=idx: self._on_thumb_select(i))
+            layout.addWidget(btn)
+        layout.addStretch(1)
+        # 让预览条内部 widget 至少与内容同宽（内容超宽时出现横向滚动条）
+        layout.activate()
+        self._thumb_strip_widget.setMinimumWidth(layout.sizeHint().width())
+
+    def _make_thumb_pixmap(self, idx, size):
+        """生成小缩略图（加载失败时显示 ▶ 占位，如 mp4 动图）"""
+        data = self._thumb_bytes_at(idx)
+        pix = QtGui.QPixmap()
+        if data and pix.loadFromData(data) and not pix.isNull():
+            scaled = pix.scaled(size, size, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                                QtCore.Qt.TransformationMode.SmoothTransformation)
+            canvas = QtGui.QPixmap(size, size)
+            canvas.fill(QtGui.QColor("#1a1a1a"))
+            painter = QtGui.QPainter(canvas)
+            x = (size - scaled.width()) // 2
+            y = (size - scaled.height()) // 2
+            painter.drawPixmap(x, y, scaled)
+            painter.end()
+            return canvas
+        canvas = QtGui.QPixmap(size, size)
+        canvas.fill(QtGui.QColor("#222222"))
+        painter = QtGui.QPainter(canvas)
+        painter.setPen(QtGui.QColor(255, 255, 255, 90))
+        painter.drawText(canvas.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, "▶")
+        painter.end()
+        return canvas
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -302,7 +401,7 @@ class AssetPreviewDialog(QtWidgets.QDialog):
             lb = QtWidgets.QLabel(txt)
             lb.setWordWrap(True)
             lb.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
-            lb.setStyleSheet("color:#d0d0d0; font-size:12px; background:transparent;")
+            lb.setStyleSheet("color:#d0d0d0; font-size:13px; background:transparent;")
             self._prop_layout.addWidget(lb)
         self._prop_layout.addStretch(1)
 
