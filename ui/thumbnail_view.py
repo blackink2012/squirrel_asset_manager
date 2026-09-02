@@ -307,11 +307,11 @@ class MaterialTableModel(QtCore.QAbstractTableModel):
                 return "\u2605" if favorited else "\u2606"
             elif col == 1:
                 pix = QtGui.QPixmap(32, 32)
-                pix.fill(QtGui.QColor(mat.get("color", "#606060")))
+                pix.fill(QtGui.QColor("#2a2a2a"))
                 return QtGui.QIcon(pix)
         elif role == QtCore.Qt.ItemDataRole.ForegroundRole:
             if col == 0:
-                return QtGui.QColor("#FFD700") if mat.get("_favorited", False) else QtGui.QColor("#606060")
+                return QtGui.QColor("#FFD700") if mat.get("_favorited", False) else QtGui.QColor("#9a9a9a")
         elif role == QtCore.Qt.ItemDataRole.UserRole:
             return mat
         elif role == QtCore.Qt.ItemDataRole.ToolTipRole:
@@ -393,7 +393,22 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
     VIEW_LIST = 1
 
     DEFAULT_THUMB = 180
-    PADDING = 10
+    # 卡片与容器 UI 的固定外边距（不随缩放变化）；卡片之间间距由 _card_gap() 动态控制
+    MARGIN = 24
+
+    def _card_gap(self):
+        """卡片间距：基于目标列宽（可用宽÷列数）的约 8%，与卡片大小解耦。
+
+        避免 _thumb_size ↔ gap 互相反馈在滚轮时来回震荡。
+        """
+        try:
+            avail = self._scroll.viewport().width() - self.MARGIN * 2
+        except Exception:
+            avail = 0
+        if avail > 40 and self._columns > 0:
+            target = avail // self._columns
+            return max(8, int(target * 0.08))
+        return max(8, int(self._thumb_size * 0.08))
 
     def __init__(self, parent=None):
         super(ThumbnailGridWidget, self).__init__(parent)
@@ -436,6 +451,9 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         self._scroll_timer.timeout.connect(self._update_visible_cards)
         # 框选当前矩形（拖动中由 _icon_mouse_move 直接刷新，不依赖 QTimer）
         self._rubber_pending_rect = None
+        # 首次真正显示前（可能在「加载占位页」隐藏期以窄视口创建了偏小卡片）
+        # 置 True 后由 showEvent 按最终宽度一次性重排，避免"先小后大"弹跳
+        self._popup_layout_done = False
 
         self._setup_icon_view()
         self._setup_list_view()
@@ -446,6 +464,30 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             self._refresh()
             self._icon_container.show()
         QtCore.QTimer.singleShot(0, _first_refresh)
+
+    def showEvent(self, event):
+        """首次显示时视口宽度才最终就绪：用真实宽度重排已有卡片。
+
+        主 UI 弹出时序：后台加载期间网格位于隐藏的加载占位页，可能已按当时的
+        窄视口宽度（小卡片尺寸）创建了占位卡片；切到网格页后宽度变大，若不在此
+        重排，卡片会等 16ms 缩放定时器触发 relayout 才被拉大 —— 恰与后台缩略图
+        陆续回填同时发生，看起来就像"无缩略图的卡片较小、加载后变大"的弹跳。
+        在 showEvent 内同步重排，发生在首次绘制之前，用户不会看到中间的小卡片。
+        """
+        super().showEvent(event)
+        if getattr(self, "_popup_layout_done", False):
+            return
+        self._popup_layout_done = True
+        try:
+            if not hasattr(self, "_scroll") or not hasattr(self, "_icon_container"):
+                return
+            if self._scroll.viewport().width() <= 40:
+                return  # 宽度仍未就绪，交给随后的 resizeEvent 处理
+            self._auto_columns()
+            if self._filtered_materials and self._card_pool:
+                self._relayout_cards()
+        except Exception:
+            pass
 
     def _setup_icon_view(self):
         # 自定义 ScrollArea 支持 Ctrl+滚轮缩放 + 自适应列数
@@ -512,12 +554,13 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
-        scroll.setStyleSheet("QScrollArea { border: none; background-color: #2a2a2a; }")
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: #252525; }")
         scroll.verticalScrollBar().valueChanged.connect(self._on_scroll)
         self._scroll = scroll
 
         self._icon_container = QtWidgets.QWidget()
-        self._icon_container.setStyleSheet("background-color: #2a2a2a;")
+        # 与左侧分类列表背景（#252525）保持一致
+        self._icon_container.setStyleSheet("background-color: #252525;")
         # 虚拟化：不使用布局管理器，直接放置卡片并手动move位置
         self._main_layout = None
 
@@ -591,13 +634,15 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             if prev_state == already_selected:
                 continue
             card.setProperty("_rubber_selected", already_selected)
-            bc = '#5294e2' if already_selected else '#3a3a3a'
-            hover_qss = "" if already_selected else "QFrame#thumbnailCard:hover { border: 2px solid #555555; background-color: #2a2a2a; }"
+            bc = '#5294e2' if already_selected else '#4e4e4e'
+            card_bg = '#373737' if already_selected else '#2f2f2f'
+            hover_qss = "" if already_selected else "QFrame#thumbnailCard:hover { border: 2px solid #6a6a6a; background-color: #3a3a3a; }"
             card.setStyleSheet(
-                f"QFrame#thumbnailCard {{ background-color: #252525;"
+                f"QFrame#thumbnailCard {{ background-color: {card_bg};"
                 f"border: 2px solid {bc}; border-radius: 6px; }}"
                 + hover_qss
             )
+            self._apply_card_state_bg(card)
 
     def _icon_mouse_release(self, event):
         if self._rubber_band and self._rubber_origin:
@@ -853,10 +898,11 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         self.thumbSizeChanged.emit(self._thumb_size)
         if self._view_mode == self.VIEW_ICON:
             if hasattr(self, '_scroll'):
-                avail = self._scroll.viewport().width() - self.PADDING * 2
+                avail = self._scroll.viewport().width() - self.MARGIN * 2
                 if avail >= 40:
                     self._columns = max(self._min_columns,
-                                        min(self._max_columns, avail // self._thumb_size))
+                                        min(self._max_columns,
+                                            avail // (self._thumb_size + self._card_gap())))
                     self._auto_columns()
                 else:
                     self._zoom_timer.start()
@@ -867,26 +913,30 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         """根据列数计算卡片大小，确保横向填满，自动换行"""
         if not hasattr(self, '_icon_container') or not hasattr(self, '_scroll'):
             return
-        avail = self._scroll.viewport().width() - self.PADDING * 2
+        avail = self._scroll.viewport().width() - self.MARGIN * 2
         if avail < 40:  # 太窄，不处理
             return
 
         min_thumb_size = 40
         
-        # 当卡片太小放不下时，自动减少列数（换行）
+        # 当卡片太小放不下时，自动减少列数（换行），尺寸计算扣除列间距
         while self._columns > self._min_columns:
-            calc_size = avail // self._columns
+            calc_size = (avail - (self._columns - 1) * self._card_gap()) // self._columns
             if calc_size >= min_thumb_size:
                 break
             self._columns -= 1
         
-        # 根据列数计算卡片大小，确保横向填满
-        self._thumb_size = max(min_thumb_size, avail // self._columns)
+        # 根据列数计算卡片大小，确保横向填满（间距已解耦，离散台阶无反馈震荡）
+        self._thumb_size = max(min_thumb_size,
+                               (avail - (self._columns - 1) * self._card_gap()) // self._columns)
         
         # 更新容器尺寸以填满视口
         if hasattr(self, '_card_pool') and self._filtered_materials:
             total_h = self._calc_total_height()
-            container_w = max(avail + self.PADDING * 2, self._columns * self._thumb_size + self.PADDING * 2)
+            gap = self._card_gap()
+            container_w = max(avail + self.MARGIN * 2,
+                              self._columns * self._thumb_size
+                              + (self._columns - 1) * gap + self.MARGIN * 2)
             container_h = max(total_h, self._scroll.viewport().height())
             self._icon_container.setFixedSize(container_w, container_h)
             
@@ -901,30 +951,28 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
     def _calc_card_height(self):
         W = self._thumb_size
-        pad = max(3, int(W * 0.06))
-        thumb_sz = W - 4 - pad * 2
+        thumb_sz = W - 4  # 占满卡片内容区（减 2px 边框×2，参考网页版）
         text_h = max(12, int(W * 0.16))
-        gap = max(2, int(W * 0.02))
-        return thumb_sz + text_h + pad * 2 + gap
+        return thumb_sz + text_h
 
     def _calc_total_height(self):
         if not self._filtered_materials:
             return 0
         card_h = self._calc_card_height()
         total_rows = (len(self._filtered_materials) + self._columns - 1) // self._columns
-        padding = self.PADDING
-        return padding * 2 + total_rows * card_h
+        gap = self._card_gap()
+        return self.MARGIN * 2 + total_rows * card_h + max(0, total_rows - 1) * gap
 
     def _calc_card_position(self, idx):
         if idx < 0 or idx >= len(self._filtered_materials):
             return None
         card_w = self._thumb_size
         card_h = self._calc_card_height()
-        padding = self.PADDING
+        gap = self._card_gap()
         row = idx // self._columns
         col = idx % self._columns
-        x = padding + col * card_w
-        y = padding + row * card_h
+        x = self.MARGIN + col * (card_w + gap)
+        y = self.MARGIN + row * (card_h + gap)
 
         return (x, y, card_w, card_h)
 
@@ -936,7 +984,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         card_w = self._thumb_size
         card_h = self._calc_card_height()
-        padding = self.PADDING
+        gap = self._card_gap()
 
         # 计算可见区域范围（带缓冲）
         viewport = self._scroll.viewport()
@@ -961,8 +1009,8 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
             row = i // self._columns
             col = i % self._columns
-            x = padding + col * card_w
-            y = padding + row * card_h
+            x = self.MARGIN + col * (card_w + gap)
+            y = self.MARGIN + row * (card_h + gap)
 
             if mid not in self._card_pool:
                 # 只创建可见区域内的卡片（或强制创建所有）
@@ -982,7 +1030,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
 
         total_h = self._calc_total_height()
-        container_w = max(self._scroll.viewport().width(), self._columns * card_w + padding * 2)
+        container_w = max(self._scroll.viewport().width(), self._columns * card_w + (self._columns - 1) * gap + self.MARGIN * 2)
         container_h = max(total_h, self._scroll.viewport().height())
         self._icon_container.setFixedSize(container_w, container_h)
 
@@ -1036,7 +1084,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         if thumb is None:
             return
         W = self._thumb_size
-        thumb_sz = W - 4 - max(3, int(W * 0.06)) * 2
+        thumb_sz = W - 4  # 与 _create_card 一致：占满卡片内容区
         pix = raw.scaled(thumb_sz, thumb_sz,
                          QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
                          QtCore.Qt.TransformationMode.SmoothTransformation)
@@ -1107,7 +1155,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         """缩放时：调整所有卡片大小和位置，清理不再需要的卡片"""
         card_w = self._thumb_size
         card_h = self._calc_card_height()
-        padding = self.PADDING
+        gap = self._card_gap()
 
         # 只在卡片大小真正改变时才调整大小
         size_changed = (self._last_thumb_size != self._thumb_size)
@@ -1127,8 +1175,8 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
             row = i // self._columns
             col = i % self._columns
-            x = padding + col * card_w
-            y = padding + row * card_h
+            x = self.MARGIN + col * (card_w + gap)
+            y = self.MARGIN + row * (card_h + gap)
 
             if mid in self._card_pool:
                 card = self._card_pool[mid]
@@ -1149,18 +1197,16 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                 card.deleteLater()
 
         total_h = self._calc_total_height()
-        container_w = max(self._scroll.viewport().width(), self._columns * card_w + padding * 2)
+        container_w = max(self._scroll.viewport().width(), self._columns * card_w + (self._columns - 1) * gap + self.MARGIN * 2)
         container_h = max(total_h, self._scroll.viewport().height())
         self._icon_container.setFixedSize(container_w, container_h)
 
     def _resize_card_simple(self, card):
         """简单调整卡片大小（不重建布局，避免闪烁）"""
         W = self._thumb_size
-        pad = max(3, int(W * 0.06))
-        thumb_sz = W - 4 - pad * 2
+        thumb_sz = W - 4  # 占满卡片内容区（与 _create_card 一致）
         text_h = max(12, int(W * 0.16))
-        gap = max(2, int(W * 0.02))
-        card_h = thumb_sz + text_h + pad * 2 + gap
+        card_h = thumb_sz + text_h
         
         card.setFixedSize(W, card_h)
         
@@ -1185,7 +1231,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                                     # 无缩略图：重新绘制文本到新的尺寸
                                     mat = getattr(card, 'material_data', {})
                                     pix = QtGui.QPixmap(thumb_sz, thumb_sz)
-                                    pix.fill(QtGui.QColor(mat.get("color", "#606060")))
+                                    pix.fill(QtGui.QColor("#2f2f2f"))
                                     painter = QtGui.QPainter(pix)
                                     painter.setPen(QtGui.QColor(255, 255, 255, 60))
                                     font = painter.font()
@@ -1206,25 +1252,23 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                                             ci_w.setFixedSize(max(16, int(W * 0.11)), max(16, int(W * 0.11)))
                                             fs_icon = max(12, int(W * 0.09))
                                             ci_w.setStyleSheet(
-                                                f"color: {'#FFD700' if ci_w.text() == '★' else '#606060'};"
+                                                f"color: {'#FFD700' if ci_w.text() == '★' else '#9a9a9a'};"
                                                 f"font-size: {fs_icon}px; background: transparent;")
                                         elif ci_w.objectName() == "nameLabel":
                                             fs_txt = max(9, int(W * 0.07))
                                             ci_w.setStyleSheet(
                                                 f"color: #d0d0d0; font-size: {fs_txt}px; background: transparent;")
             
-            layout.setContentsMargins(pad, pad, pad, pad)
-            layout.setSpacing(gap)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
             layout.update()
 
     def _resize_card_full(self, card, material):
         """重建卡片内部布局（复用子控件），所有尺寸基于当前 W 等比计算"""
         W = self._thumb_size
-        pad = max(3, int(W * 0.06))
-        thumb_sz = W - 4 - pad * 2
+        thumb_sz = W - 4  # 占满卡片内容区（与 _create_card 一致）
         text_h = max(12, int(W * 0.16))
-        gap = max(2, int(W * 0.02))
-        card_h = thumb_sz + text_h + pad * 2 + gap
+        card_h = thumb_sz + text_h
         card.setFixedSize(W, card_h)
 
         thumb = card.findChild(MaterialDragLabel)
@@ -1238,8 +1282,8 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             QtWidgets.QWidget().setLayout(old)
 
         layout = QtWidgets.QVBoxLayout(card)
-        layout.setContentsMargins(pad, pad, pad, pad)
-        layout.setSpacing(gap)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
         if thumb:
             thumb.setParent(card)
@@ -1269,7 +1313,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                                              QtCore.Qt.TransformationMode.SmoothTransformation)
                         else:
                             pix = QtGui.QPixmap(thumb_sz, thumb_sz)
-                            pix.fill(QtGui.QColor(material.get("color", "#606060")))
+                            pix.fill(QtGui.QColor("#2f2f2f"))
                             p = QtGui.QPainter(pix)
                             p.setPen(QtGui.QColor(255, 255, 255, 60))
                             f = p.font(); f.setPointSize(max(8, int(W * 0.08))); p.setFont(f)
@@ -1278,7 +1322,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                             p.end()
                     else:
                         pix = QtGui.QPixmap(thumb_sz, thumb_sz)
-                        pix.fill(QtGui.QColor(material.get("color", "#606060")))
+                        pix.fill(QtGui.QColor("#2f2f2f"))
                         p = QtGui.QPainter(pix)
                         p.setPen(QtGui.QColor(255, 255, 255, 60))
                         f = p.font(); f.setPointSize(max(8, int(W * 0.08))); p.setFont(f)
@@ -1286,11 +1330,12 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                                    material.get("name_cn", ""))
                         p.end()
                 thumb.setPixmap(pix)
-            layout.addWidget(thumb, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+            layout.addWidget(thumb)
 
         text_area = QtWidgets.QWidget()
         text_area.setObjectName("textArea")
         text_area.setFixedHeight(text_h)
+        text_area.setStyleSheet("background-color: #383838;")
         text_row = QtWidgets.QHBoxLayout(text_area)
         text_row.setContentsMargins(0, max(1, int(W * 0.01)), 0, 0)
         text_row.setSpacing(max(2, int(W * 0.015)))
@@ -1301,7 +1346,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             is_fav = material.get("_favorited", False)
             fav.setText("\u2605" if is_fav else "\u2606")
             fav.setStyleSheet(
-                f"color: {'#FFD700' if is_fav else '#606060'};"
+                f"color: {'#FFD700' if is_fav else '#9a9a9a'};"
                 f"font-size: {max(12, int(W * 0.09))}px; background: transparent;")
             text_row.addWidget(fav)
         if name_label:
@@ -1360,12 +1405,10 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
     def _create_card(self, material):
         W = self._thumb_size
-        # ── 全部按 W 比例计算，确保卡片像单一物体等比缩放 ──
-        pad     = max(3, int(W * 0.06))           # 四周边距 ~6%
-        thumb_sz = W - 4 - pad * 2               # -4 = CSS border 2px×2边
-        text_h  = max(12, int(W * 0.16))           # 文本区高度 ~16%
-        gap     = max(2, int(W * 0.02))            # 缩略图与文本间距
-        card_h  = thumb_sz + text_h + pad * 2 + gap
+        # ── 参考网页版卡片：缩略图占满卡片内容区（方形），文本区在下方保持原样 ──
+        thumb_sz = W - 4                  # 占满内容区，减 2px 边框×2，避免溢出
+        text_h  = max(12, int(W * 0.16))   # 文本区高度不变
+        card_h  = thumb_sz + text_h
 
         card = QtWidgets.QFrame()
         card.setFixedSize(W, card_h)
@@ -1373,14 +1416,14 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         card.setObjectName("thumbnailCard")
         card.material_data = material
         card.setStyleSheet(
-            "QFrame#thumbnailCard { background-color: #252525;"
-            "border: 2px solid #3a3a3a; border-radius: 6px; }"
-            "QFrame#thumbnailCard:hover { border: 2px solid #555555; background-color: #2a2a2a; }"
+            "QFrame#thumbnailCard { background-color: #2f2f2f;"
+            "border: 2px solid #4e4e4e; border-radius: 6px; }"
+            "QFrame#thumbnailCard:hover { border: 2px solid #6a6a6a; background-color: #3a3a3a; }"
         )
 
         layout = QtWidgets.QVBoxLayout(card)
-        layout.setContentsMargins(pad, pad, pad, pad)
-        layout.setSpacing(gap)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
         # ── 缩略图 ──
         thumb = MaterialDragLabel(material)
@@ -1461,7 +1504,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         if not pix_loaded:
             pix = QtGui.QPixmap(thumb_sz, thumb_sz)
-            pix.fill(QtGui.QColor(material.get("color", "#606060")))
+            pix.fill(QtGui.QColor("#2f2f2f"))
             painter = QtGui.QPainter(pix)
             painter.setPen(QtGui.QColor(255, 255, 255, 60))
             font = painter.font()
@@ -1474,15 +1517,21 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         # 懒加载：.zasset 且未携带缩略图字节、且无缓存图时，后台异步读取后回填
         if is_zasset and not thumb_bytes and not pix_loaded:
             self._request_thumbnail(mid, material)
-        layout.addWidget(thumb, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(thumb)
 
         # ── 文本区 ──
         text_area = QtWidgets.QWidget()
         text_area.setObjectName("textArea")
         text_area.setFixedHeight(text_h)
+        # 背景由代码按状态（选中/框选/hover）控制，QSS 级联易冲突
+        text_area.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        text_area.setStyleSheet("background-color: #383838;")
+        card._text_area = text_area
 
         text_row = QtWidgets.QHBoxLayout(text_area)
-        text_row.setContentsMargins(0, max(1, int(W * 0.01)), 0, 0)
+        # 文本区样式保持不变；左右保留原水平内边距，避免文字贴卡片边缘
+        pad_h = max(3, int(W * 0.06))
+        text_row.setContentsMargins(pad_h, max(1, int(W * 0.01)), pad_h, 0)
         text_row.setSpacing(max(2, int(W * 0.015)))
 
         fav = QtWidgets.QLabel()
@@ -1492,7 +1541,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         is_fav = material.get("_favorited", False)
         fav.setText("\u2605" if is_fav else "\u2606")
         fav.setStyleSheet(
-            f"color: {'#FFD700' if is_fav else '#606060'};"
+            f"color: {'#FFD700' if is_fav else '#9a9a9a'};"
             f"font-size: {max(12, int(W * 0.09))}px; background: transparent;"
         )
         fav.setToolTip(t("tooltip.toggle_favorite"))
@@ -1524,7 +1573,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             old_style = indicator.styleSheet()
             m = re.search(r'font-size:\s*[\d.]+px', old_style)
             font_part = m.group(0) if m else 'font-size: 15px'
-            new_color = '#FFD700' if new_fav else '#606060'
+            new_color = '#FFD700' if new_fav else '#9a9a9a'
             indicator.setStyleSheet(
                 f"color: {new_color}; {font_part}; background: transparent;"
             )
@@ -1575,6 +1624,20 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
 
         card.mousePressEvent = mouse_press
         card.mouseReleaseEvent = mouse_release
+
+        # hover 进出 → 更新文本区背景（代码控制，避免 QSS 级联冲突）
+        def enter_event(event):
+            card._hovered = True
+            self._apply_card_state_bg(card)
+            QtWidgets.QFrame.enterEvent(card, event)
+
+        def leave_event(event):
+            card._hovered = False
+            self._apply_card_state_bg(card)
+            QtWidgets.QFrame.leaveEvent(card, event)
+
+        card.enterEvent = enter_event
+        card.leaveEvent = leave_event
 
         def mouse_double(event):
             if hasattr(card, 'material_data'):
@@ -1669,6 +1732,21 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
         self._refresh_card_highlights()
         self.selectionChanged.emit()
 
+    def _apply_card_state_bg(self, card):
+        """按卡片状态代码设置文本区背景（选中/框选 > hover > 普通）。
+
+        用代码而非 QSS 级联控制，避免子控件自身样式表与父级样式表冲突导致不生效。
+        """
+        ta = getattr(card, '_text_area', None)
+        if ta is None:
+            return
+        if card.property("_card_selected") or card.property("_rubber_selected"):
+            ta.setStyleSheet("background-color: #3f3f3f;")
+        elif getattr(card, '_hovered', False):
+            ta.setStyleSheet("background-color: #3e3e3e;")
+        else:
+            ta.setStyleSheet("background-color: #383838;")
+
     def _refresh_card_highlights(self):
         """刷新卡片的选中高亮（仅更新状态变化的卡片）"""
         for mid in self._card_pool:
@@ -1681,13 +1759,15 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
             if prev_selected == is_selected:
                 continue
             card.setProperty("_card_selected", is_selected)
-            border_color = '#5294e2' if is_selected else '#3a3a3a'
-            hover_qss = "" if is_selected else "QFrame#thumbnailCard:hover { border: 2px solid #555555; background-color: #2a2a2a; }"
+            border_color = '#5294e2' if is_selected else '#4e4e4e'
+            card_bg = '#373737' if is_selected else '#2f2f2f'
+            hover_qss = "" if is_selected else "QFrame#thumbnailCard:hover { border: 2px solid #6a6a6a; background-color: #3a3a3a; }"
             card.setStyleSheet(
-                f"QFrame#thumbnailCard {{ background-color: #252525;"
+                f"QFrame#thumbnailCard {{ background-color: {card_bg};"
                 f"border: 2px solid {border_color}; border-radius: 6px; }}"
                 + hover_qss
             )
+            self._apply_card_state_bg(card)
 
     def _refresh_card_favorites(self):
         """刷新所有卡片池中已有卡片的收藏星标"""
@@ -1702,7 +1782,7 @@ class ThumbnailGridWidget(QtWidgets.QStackedWidget):
                 old_style = fav.styleSheet()
                 m = re.search(r'font-size:\s*[\d.]+px', old_style) if old_style else None
                 font_part = m.group(0) if m else 'font-size: 15px'
-                new_color = '#FFD700' if is_fav else '#606060'
+                new_color = '#FFD700' if is_fav else '#9a9a9a'
                 fav.setStyleSheet(
                     f"color: {new_color}; {font_part}; background: transparent;"
                 )

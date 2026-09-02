@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Squirrel 资产浏览器</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐿️</text></svg>">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+
+<!-- ══════════ 顶栏 ══════════ -->
+<header class="topbar">
+  <div class="brand" title="Squirrel 资产浏览器">
+    <span class="brand-icon">🐿️</span>
+    <span class="brand-name">Squirrel<em>资产浏览器</em></span>
+  </div>
+
+  <div class="search-wrap">
+    <svg class="icon-search" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 0 0 1.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 0 0-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 0 0 5.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5S14 7.01 14 9.5S11.99 14 9.5 14z"/></svg>
+    <input id="searchInput" type="text" placeholder="搜索资产名称 / 标签 / 节点类型…  ( 按 / 聚焦 )" autocomplete="off">
+    <button id="searchClear" class="btn-ghost" title="清空">✕</button>
+  </div>
+
+  <div class="topbar-right">
+    <span id="libBadge" class="lib-badge" title="点击修改资产库路径">
+      <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+      <span id="libName">未设置</span>
+    </span>
+    <button id="refreshBtn" class="btn-icon" title="重新扫描资产库">
+      <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+    </button>
+    <button id="settingsBtn" class="btn-icon" title="设置">
+      <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.61 3.61 0 0 1 8.4 12c0-1.98 1.62-3.6 3.6-3.6s3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ══════════ 主体 ══════════ -->
+<div class="layout">
+
+  <!-- 左侧栏 -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-scroll">
+      <nav id="libNav" class="lib-nav">
+        <div class="nav-item all" data-lib="" data-cat="" id="navAll">
+          <span class="nav-icon">🗂️</span>
+          <span class="nav-label">全部资产</span>
+          <span class="nav-count" id="navAllCount">0</span>
+        </div>
+      </nav>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-section-title">标签</div>
+      <div class="tag-cloud" id="tagCloud">
+        <span class="tag-hint">选择左侧资产类型后显示标签</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 内容区 -->
+  <main class="content">
+    <div class="content-head">
+      <div class="breadcrumb" id="breadcrumb">
+        <span class="crumb-item">全部资产</span>
+      </div>
+      <div class="head-controls">
+        <div class="active-chips" id="activeChips"></div>
+        <div class="view-controls">
+          <div class="sort-wrap">
+            <select id="sortSelect" title="排序方式">
+              <option value="recent">最新添加</option>
+              <option value="oldest">最早添加</option>
+              <option value="name_asc">名称 A→Z</option>
+              <option value="name_desc">名称 Z→A</option>
+            </select>
+          </div>
+          <div class="density" id="densityCtrl" title="缩略图尺寸">
+            <button data-cols="6" class="dens-btn"> </>
+            <button data-cols="4" class="dens-btn active">◱</button>
+            <button data-cols="2" class="dens-btn">▮</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="result-meta" id="resultMeta"></div>
+
+    <div id="grid" class="grid"></div>
+    <div id="loadMoreWrap" class="load-more-wrap">
+      <button id="loadMoreBtn" class="btn-load-more" hidden>加载更多</button>
+    </div>
+
+    <div id="emptyState" class="empty-state" hidden>
+      <div class="empty-icon">🔎</div>
+      <div class="empty-title">没有找到匹配的资产</div>
+      <div class="empty-sub">试试更换关键词或清除筛选条件</div>
+    </div>
+  </main>
+</div>
+
+<!-- ══════════ 未配置资产库引导 ══════════ -->
+<div class="setup-overlay" id="setupOverlay" hidden>
+  <div class="setup-card">
+    <div class="setup-icon">🐿️</div>
+    <h1>欢迎使用 Squirrel 资产浏览器</h1>
+    <p>浏览你的 Maya 资产库（材质 / 模型 / 灯光 / 贴图 / 场景 / HDR / 动态资产）</p>
+    <p class="setup-hint">首次使用请先设置资产库路径（即包含 materials / models 等子文件夹的目录）</p>
+    <button class="btn-primary" id="setupChooseBtn">选择资产库路径</button>
+  </div>
+</div>
+
+<!-- ══════════ 资产详情弹窗 ══════════ -->
+<div class="modal-backdrop" id="detailModal" hidden>
+  <div class="modal detail-modal">
+    <button class="modal-close" id="detailClose" title="关闭 (Esc)">✕</button>
+    <div class="detail-body">
+      <div class="detail-left">
+        <div class="detail-preview" id="detailPreview"></div>
+        <div class="detail-thumbs" id="detailThumbs" hidden></div>
+      </div>
+      <div class="detail-right">
+        <h2 class="detail-title" id="detailTitle"></h2>
+        <div class="detail-sub" id="detailSub"></div>
+        <div class="detail-tags" id="detailTags"></div>
+        <div class="detail-grid-info" id="detailInfo"></div>
+        <div class="detail-section" id="texSection" hidden>
+          <h3>贴图文件 <span id="texCount"></span></h3>
+          <div class="tex-list" id="texList"></div>
+        </div>
+        <div class="detail-section" id="filesSection" hidden>
+          <h3>包含文件</h3>
+          <div class="entry-chips" id="entryChips"></div>
+        </div>
+        <div class="detail-path-row" id="detailPath"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 设置弹窗 ══════════ -->
+<div class="modal-backdrop" id="settingsModal" hidden>
+  <div class="modal settings-modal">
+    <button class="modal-close" data-close="settingsModal" title="关闭 (Esc)">✕</button>
+    <h2 class="settings-title">设置</h2>
+    <div class="settings-row">
+      <label>资产库路径</label>
+      <div class="settings-input-row">
+        <input type="text" id="libPathInput" placeholder="例如 C:\SquirrelAssetLibrary" spellcheck="false">
+        <button class="btn-secondary" id="browseBtn">浏览…</button>
+      </div>
+      <div class="settings-hint" id="libPathHint">路径需包含 materials / models 等子文件夹（与 Maya 插件共用同一资产库）</div>
+    </div>
+    <div class="settings-row">
+      <label>当前状态</label>
+      <div id="settingsStatus" class="settings-status">—</div>
+    </div>
+    <div class="settings-actions">
+      <button class="btn-primary" id="saveLibBtn">保存并重新扫描</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 文件夹选择器 ══════════ -->
+<div class="modal-backdrop" id="fsModal" hidden>
+  <div class="modal fs-modal">
+    <button class="modal-close" data-close="fsModal" title="关闭 (Esc)">✕</button>
+    <h2 class="settings-title">选择资产库文件夹</h2>
+    <div class="fs-path-row">
+      <button class="btn-icon" id="fsUp" title="上一级">↑</button>
+      <input type="text" id="fsPathInput" spellcheck="false">
+      <button class="btn-secondary" id="fsGo">前往</button>
+    </div>
+    <div class="fs-list" id="fsList"></div>
+    <div class="settings-actions">
+      <button class="btn-primary" id="fsChooseBtn">选择此文件夹</button>
+    </div>
+  </div>
+</div>
+
+<!-- toast -->
+<div class="toast" id="toast" hidden></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

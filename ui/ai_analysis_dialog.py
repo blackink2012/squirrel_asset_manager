@@ -5,11 +5,14 @@ except ImportError:
         return key.format(**kwargs) if kwargs else key
 
 try:
-    from ..utils.settings import SettingsManager, get_ai_api_key, set_ai_api_key
+    from ..utils.settings import (SettingsManager, get_ai_api_key, set_ai_api_key,
+                                  apply_font_size_to_widget, get_ui_font_size)
 except ImportError:
     SettingsManager = None
     get_ai_api_key = lambda settings, provider: settings.get("ai_api_key", "")
     set_ai_api_key = lambda settings, provider, key: settings
+    apply_font_size_to_widget = lambda widget, font_size: None
+    get_ui_font_size = lambda: 13
 
 try:
     from ..core.ai_analyzer import AIAnalyzer
@@ -19,6 +22,15 @@ except ImportError:
 from ..utils.maya_utils import get_qt_modules
 
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
+
+
+def _ui_font_size():
+    """主 UI 配置的字体大小（默认 13），4K 高 DPI 屏幕下与主界面字体/缩放保持一致"""
+    try:
+        return get_ui_font_size()
+    except Exception:
+        return 13
+
 
 _STYLE = """
 QDialog, QWidget { background-color: #252525; }
@@ -109,9 +121,13 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
 
     def _setup_ui(self):
         total = len(self._results)
+        self._font_size = _ui_font_size()
+        self._scale = self._font_size / 13.0
+        self._thumb_size = int(400 * self._scale)
         self.setWindowTitle(t('dialog.ai_batch_results.title', n=total))
-        self.setMinimumSize(1140, 500)
-        self.resize(1240, min(700, 200 + total * 200))
+        self.setMinimumSize(int(1140 * self._scale), int(500 * self._scale))
+        self.resize(int(1240 * self._scale),
+                    min(int(700 * self._scale), int(200 * self._scale) + total * int(200 * self._scale)))
         self.setStyleSheet(_STYLE)
 
         root = QtWidgets.QVBoxLayout(self)
@@ -162,13 +178,13 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
 
         # ====== 右侧: 大缩略图预览 ======
         right_panel = QtWidgets.QWidget()
-        right_panel.setFixedWidth(420)
+        right_panel.setFixedWidth(int(420 * self._scale))
         right_layout = QtWidgets.QVBoxLayout(right_panel)
         right_layout.setContentsMargins(12, 0, 0, 0)
         right_layout.setSpacing(8)
 
         self._preview_thumb = QtWidgets.QLabel()
-        self._preview_thumb.setFixedSize(400, 400)
+        self._preview_thumb.setFixedSize(self._thumb_size, self._thumb_size)
         self._preview_thumb.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._preview_thumb.setStyleSheet(
             'background-color: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 8px;')
@@ -208,6 +224,8 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         self._apply_btn.clicked.connect(self._on_apply)
         btn_row.addWidget(self._apply_btn)
         root.addLayout(btn_row)
+
+        apply_font_size_to_widget(self, self._font_size)
 
         if self._results:
             self._show_thumbnail(0)
@@ -255,7 +273,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         name_cb = QtWidgets.QCheckBox(t('label.ai_apply_name'))
         name_cb.setChecked(True)
         name_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
-        name_cb.setFixedWidth(52)
+        name_cb.setFixedWidth(int(52 * self._scale))
         name_row2 = QtWidgets.QHBoxLayout()
         name_row2.setSpacing(4)
         name_row2.addWidget(name_cb)
@@ -268,7 +286,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         cat_cb = QtWidgets.QCheckBox(t('label.ai_apply_category'))
         cat_cb.setChecked(True)
         cat_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
-        cat_cb.setFixedWidth(52)
+        cat_cb.setFixedWidth(int(52 * self._scale))
         cat_edit = QtWidgets.QLineEdit(result.get('sub_category', ''))
         cat_edit.setPlaceholderText(t('label.sub_category'))
         cat_edit.setMaximumHeight(30)
@@ -280,7 +298,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         tags_cb = QtWidgets.QCheckBox(t('label.ai_apply_tags'))
         tags_cb.setChecked(True)
         tags_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
-        tags_cb.setFixedWidth(52)
+        tags_cb.setFixedWidth(int(52 * self._scale))
         tags_edit = QtWidgets.QLineEdit(', '.join(result.get('tags', [])))
         tags_edit.setPlaceholderText(t('label.tags'))
         tags_edit.setMaximumHeight(30)
@@ -298,7 +316,7 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
         notes_cb = QtWidgets.QCheckBox(t('label.ai_apply_notes'))
         notes_cb.setChecked(True)
         notes_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
-        notes_cb.setFixedWidth(52)
+        notes_cb.setFixedWidth(int(52 * self._scale))
         notes_row = QtWidgets.QHBoxLayout()
         notes_row.setSpacing(4)
         notes_row.addWidget(notes_cb)
@@ -356,7 +374,8 @@ class AIBatchResultsDialog(QtWidgets.QDialog):
             pix = QtGui.QPixmap()
             pix.loadFromData(thumb_bytes)
             if not pix.isNull():
-                pix = pix.scaled(400, 400, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                pix = pix.scaled(self._thumb_size, self._thumb_size,
+                                 QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                                  QtCore.Qt.TransformationMode.SmoothTransformation)
                 self._preview_thumb.setPixmap(pix)
             else:
@@ -477,9 +496,11 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         return self._provider_combo.itemData(idx) or "ollama"
 
     def _setup_ui(self):
+        self._font_size = _ui_font_size()
+        self._scale = self._font_size / 13.0
         self.setWindowTitle(t('dialog.ai_analysis_config.title'))
-        self.setMinimumSize(420, 560)
-        self.resize(440, 600)
+        self.setMinimumSize(int(420 * self._scale), int(560 * self._scale))
+        self.resize(int(440 * self._scale), int(600 * self._scale))
         self.setStyleSheet(_STYLE)
 
         layout = QtWidgets.QVBoxLayout(self)
@@ -493,7 +514,7 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         # 服务商
         provider_layout = QtWidgets.QHBoxLayout()
         provider_label = QtWidgets.QLabel(t('label.ai_provider'))
-        provider_label.setFixedWidth(80)
+        provider_label.setFixedWidth(int(80 * self._scale))
         provider_layout.addWidget(provider_label)
         self._provider_combo = QtWidgets.QComboBox()
         saved_provider = self._saved.get('ai_provider', 'ollama')
@@ -510,7 +531,7 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         # API Key（Ollama 不需要）
         key_layout = QtWidgets.QHBoxLayout()
         key_label = QtWidgets.QLabel(t('label.ai_api_key'))
-        key_label.setFixedWidth(80)
+        key_label.setFixedWidth(int(80 * self._scale))
         key_layout.addWidget(key_label)
         self._api_key_edit = QtWidgets.QLineEdit()
         self._api_key_edit.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
@@ -523,7 +544,7 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         # API 地址
         url_layout = QtWidgets.QHBoxLayout()
         url_label = QtWidgets.QLabel(t('label.ai_base_url'))
-        url_label.setFixedWidth(80)
+        url_label.setFixedWidth(int(80 * self._scale))
         url_layout.addWidget(url_label)
         self._base_url_edit = QtWidgets.QLineEdit()
         self._base_url_edit.setPlaceholderText(t('dialog.ai_analysis_config.base_url_placeholder'))
@@ -534,18 +555,18 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
         # 模型
         model_layout = QtWidgets.QHBoxLayout()
         model_label = QtWidgets.QLabel(t('label.ai_model'))
-        model_label.setFixedWidth(80)
+        model_label.setFixedWidth(int(80 * self._scale))
         model_layout.addWidget(model_label)
         self._model_combo = QtWidgets.QComboBox()
         self._model_combo.setEditable(True)
-        self._model_combo.setMinimumWidth(200)
+        self._model_combo.setMinimumWidth(int(200 * self._scale))
         model_layout.addWidget(self._model_combo, 1)
         layout.addLayout(model_layout)
 
         # 语言
         lang_layout = QtWidgets.QHBoxLayout()
         lang_label = QtWidgets.QLabel(t('label.output_language'))
-        lang_label.setFixedWidth(80)
+        lang_label.setFixedWidth(int(80 * self._scale))
         lang_layout.addWidget(lang_label)
         self._lang_combo = QtWidgets.QComboBox()
         self._lang_combo.addItems(['中文', 'English'])
@@ -586,6 +607,7 @@ class AIAnalysisConfigDialog(QtWidgets.QDialog):
 
         self.modelsFetched.connect(self._on_models_fetched)
         self._on_provider_changed()
+        apply_font_size_to_widget(self, self._font_size)
 
     def _on_provider_changed(self, *_):
         """服务商切换：更新 API Key / 地址 / 模型列表 / 提示"""
@@ -734,8 +756,11 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         self._setup_ui()
     
     def _setup_ui(self):
+        self._font_size = _ui_font_size()
+        self._scale = self._font_size / 13.0
+        self._thumb_size = int(128 * self._scale)
         self.setWindowTitle(t('dialog.ai_analysis.title'))
-        self.setFixedSize(500, 520)
+        self.setFixedSize(int(500 * self._scale), int(520 * self._scale))
         self.setStyleSheet("""
             QDialog { background-color: #252525; }
             QLabel { color: #a0a0a0; }
@@ -786,7 +811,7 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         header_layout.setSpacing(12)
         
         self._thumb_label = QtWidgets.QLabel()
-        self._thumb_label.setFixedSize(128, 128)
+        self._thumb_label.setFixedSize(self._thumb_size, self._thumb_size)
         self._thumb_label.setStyleSheet("background-color: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 8px;")
         self._thumb_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         header_layout.addWidget(self._thumb_label)
@@ -797,7 +822,7 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         
         name_layout = QtWidgets.QHBoxLayout()
         name_label = QtWidgets.QLabel(t('label.original_name'))
-        name_label.setFixedWidth(70)
+        name_label.setFixedWidth(int(70 * self._scale))
         self._original_name = QtWidgets.QLabel('')
         self._original_name.setStyleSheet('color: #ffffff;')
         name_layout.addWidget(name_label)
@@ -806,7 +831,7 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         
         sub_lib_layout = QtWidgets.QHBoxLayout()
         sub_lib_label = QtWidgets.QLabel(t('label.top_category'))
-        sub_lib_label.setFixedWidth(70)
+        sub_lib_label.setFixedWidth(int(70 * self._scale))
         self._sub_library = QtWidgets.QLabel('')
         self._sub_library.setStyleSheet('color: #ffffff;')
         sub_lib_layout.addWidget(sub_lib_label)
@@ -825,7 +850,7 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         self._name_cb = QtWidgets.QCheckBox(t('label.ai_apply_name'))
         self._name_cb.setChecked(True)
         self._name_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
-        self._name_cb.setFixedWidth(70)
+        self._name_cb.setFixedWidth(int(70 * self._scale))
         self._name_cn_edit = QtWidgets.QLineEdit()
         self._name_cn_edit.setPlaceholderText(t('dialog.ai_analysis.name_cn_placeholder'))
         name_cn_layout.addWidget(self._name_cb)
@@ -836,7 +861,7 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         self._category_cb = QtWidgets.QCheckBox(t('label.ai_apply_category'))
         self._category_cb.setChecked(True)
         self._category_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
-        self._category_cb.setFixedWidth(70)
+        self._category_cb.setFixedWidth(int(70 * self._scale))
         self._category_edit = QtWidgets.QLineEdit()
         self._category_edit.setPlaceholderText(t('dialog.ai_analysis.category_placeholder'))
         category_layout.addWidget(self._category_cb)
@@ -847,7 +872,7 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         self._tags_cb = QtWidgets.QCheckBox(t('label.ai_apply_tags'))
         self._tags_cb.setChecked(True)
         self._tags_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
-        self._tags_cb.setFixedWidth(70)
+        self._tags_cb.setFixedWidth(int(70 * self._scale))
         self._tags_edit = QtWidgets.QLineEdit()
         self._tags_edit.setPlaceholderText(t('dialog.ai_analysis.tags_placeholder'))
         tags_layout.addWidget(self._tags_cb)
@@ -859,7 +884,7 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         self._notes_cb.setChecked(True)
         self._notes_cb.setToolTip(t('dialog.ai_analysis.apply_field_tooltip'))
         self._notes_edit = QtWidgets.QTextEdit()
-        self._notes_edit.setFixedHeight(80)
+        self._notes_edit.setFixedHeight(int(80 * self._scale))
         self._notes_edit.setPlaceholderText(t('dialog.ai_analysis.notes_placeholder'))
         notes_layout.addWidget(self._notes_cb)
         notes_layout.addWidget(self._notes_edit)
@@ -885,7 +910,8 @@ class AIAnalysisDialog(QtWidgets.QDialog):
         button_layout.addWidget(apply_btn)
         
         layout.addLayout(button_layout)
-        
+
+        apply_font_size_to_widget(self, self._font_size)
         self._load_data()
     
     def _load_data(self):
@@ -898,8 +924,9 @@ class AIAnalysisDialog(QtWidgets.QDialog):
                 pixmap = QtGui.QPixmap()
                 pixmap.loadFromData(thumb_bytes)
                 if not pixmap.isNull():
-                    pixmap = pixmap.scaled(128, 128, QtCore.Qt.AspectRatioMode.KeepAspectRatio, 
-                                          QtCore.Qt.TransformationMode.SmoothTransformation)
+                    pixmap = pixmap.scaled(self._thumb_size, self._thumb_size,
+                                           QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                                           QtCore.Qt.TransformationMode.SmoothTransformation)
                     self._thumb_label.setPixmap(pixmap)
         
         if self._analysis:

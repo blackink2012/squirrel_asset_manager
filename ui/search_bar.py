@@ -15,12 +15,14 @@ try:
 except AttributeError:
     _QAction = QtWidgets.QAction
 
+import functools as _functools
 
-def _pinyin_first_char(text):
-    """获取文本的拼音首字母（中文取拼音首字母，英文直接大写）"""
-    if not text:
+
+@_functools.lru_cache(maxsize=1024)
+def _pinyin_char(ch):
+    """单字符的拼音首字母（缓存结果：同字符只调一次 pypinyin，避免标签菜单批量构建卡顿）"""
+    if not ch:
         return "#"
-    ch = text[0]
     if "\u4e00" <= ch <= "\u9fff":
         try:
             from pypinyin import pinyin as _py
@@ -28,6 +30,13 @@ def _pinyin_first_char(text):
         except Exception:
             return ch
     return ch.upper()
+
+
+def _pinyin_first_char(text):
+    """获取文本的拼音首字母（中文取拼音首字母，英文直接大写）"""
+    if not text:
+        return "#"
+    return _pinyin_char(text[0])
 
 
 class SearchBarWidget(QtWidgets.QWidget):
@@ -50,6 +59,7 @@ class SearchBarWidget(QtWidgets.QWidget):
         self._pending_text = ""
         self._common_tags = []        # 可用标签列表
         self._active_tags = set()     # 当前选中的标签
+        self._menu_dirty = False      # 标签列表变化标记（菜单打开时懒重建）
         self._setup_ui(font_size)
 
     def set_font_size(self, font_size):
@@ -95,9 +105,13 @@ class SearchBarWidget(QtWidgets.QWidget):
         """)
 
     def set_common_tags(self, tags):
-        """设置可用标签列表（由主窗口传入 config 中的 common_tags）"""
+        """设置可用标签列表（由主窗口传入 config 中的 common_tags）。
+
+        只存数据并标记脏，菜单项在打开时懒重建——避免启动/切库时
+        对大量标签批量执行 pypinyin 拼音转换阻塞主线程。
+        """
         self._common_tags = list(tags)
-        self._rebuild_tag_menu()
+        self._menu_dirty = True
 
     def _setup_ui(self, font_size=13):
         layout = QtWidgets.QHBoxLayout(self)
@@ -215,6 +229,15 @@ class SearchBarWidget(QtWidgets.QWidget):
         # 标签菜单关闭后取消 checked 状态
         self._tag_menu.aboutToHide.connect(self._on_tag_menu_closed)
 
+        # 标签菜单打开时懒重建（仅标签列表变化后重建，避免启动路径批量构建卡顿）
+        self._tag_menu.aboutToShow.connect(self._on_tag_menu_about_to_show)
+
+    def _on_tag_menu_about_to_show(self):
+        """菜单即将打开：标签列表变化时才重建菜单项"""
+        if getattr(self, '_menu_dirty', False):
+            self._rebuild_tag_menu()
+            self._menu_dirty = False
+
     def _rebuild_tag_menu(self):
         """根据 _common_tags 重建标签列表（无闪烁：只替换标签 action 项）"""
         # 兼容 PySide6/shiboken6 与 PySide2/shiboken2（Maya 2022~2024 只有 shiboken2）
@@ -254,9 +277,10 @@ class SearchBarWidget(QtWidgets.QWidget):
             self._tag_menu.insertAction(self._tag_sep, na)
             return
 
-        sorted_tags = sorted(self._common_tags, key=lambda t: _pinyin_first_char(t))
-        for tag in sorted_tags:
-            prefix = _pinyin_first_char(tag)
+        # 每标签只算一次拼音首字母（lru_cache 已按字符缓存，sort 与循环共用）
+        pairs = [(_pinyin_first_char(tag), tag) for tag in self._common_tags]
+        pairs.sort(key=lambda p: p[0])
+        for prefix, tag in pairs:
             action = _QAction(f"{prefix}  {tag}", self._tag_menu)
             action.setCheckable(True)
             action.setChecked(tag in self._active_tags)
@@ -297,7 +321,7 @@ class SearchBarWidget(QtWidgets.QWidget):
         """清除所有标签筛选"""
         self._active_tags.clear()
         self._tag_btn.setText(t("search_bar.tag_select"))
-        self._rebuild_tag_menu()
+        self._menu_dirty = True  # 勾选状态变化，菜单下次打开时重建
         self._search_input.blockSignals(True)
         self._search_input.clear()
         self._search_input.blockSignals(False)
@@ -330,7 +354,7 @@ class SearchBarWidget(QtWidgets.QWidget):
             self._search_input.blockSignals(True)
             self._search_input.setText(" ".join(tags))
             self._search_input.blockSignals(False)
-            self._rebuild_tag_menu()
+            self._menu_dirty = True  # 勾选状态变化，菜单下次打开时重建
             self.tagFilterChanged.emit(tags)
         else:
             self._clear_all_tags()

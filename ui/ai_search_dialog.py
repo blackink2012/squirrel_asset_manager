@@ -11,6 +11,7 @@
 """
 import json
 import os
+import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -25,7 +26,7 @@ try:
         AISearchAssistant, load_ai_search_settings,
         get_ai_search_api_key, set_ai_search_api_key, save_ai_search_config,
         search_materials_with_notes, fetch_available_models,
-        load_wishlist, save_wishlist)
+        load_wishlist, save_wishlist, _expand_bilingual)
 except ImportError:
     AISearchAssistant = None
     load_ai_search_settings = lambda: {}
@@ -36,6 +37,13 @@ except ImportError:
     fetch_available_models = lambda provider, api_key="", base_url="": []
     load_wishlist = lambda: []
     save_wishlist = lambda items: None
+    _expand_bilingual = lambda kws: list(kws)
+
+try:
+    from ..utils.settings import apply_font_size_to_widget, get_ui_font_size
+except ImportError:
+    apply_font_size_to_widget = lambda widget, font_size: None
+    get_ui_font_size = lambda: 13
 
 try:
     from ..core.ai_analyzer import AIAnalyzer
@@ -46,6 +54,25 @@ from ..utils.maya_utils import get_qt_modules, qt_exec, qt_connect
 from .preview_panel import FlowLayout
 
 QtWidgets, QtCore, QtGui, _, _ = get_qt_modules()
+
+# AI 对话框创建时从主 UI 设置同步字体大小（默认 13），4K 高 DPI 下与主界面保持一致
+_ACTIVE_FONT_SIZE = {"v": None}
+
+
+def _ui_fs():
+    """当前生效的 UI 字体大小（对话框创建时从主 UI 设置同步），默认 13"""
+    if _ACTIVE_FONT_SIZE["v"] is None:
+        try:
+            _ACTIVE_FONT_SIZE["v"] = int(get_ui_font_size())
+        except Exception:
+            _ACTIVE_FONT_SIZE["v"] = 13
+    return _ACTIVE_FONT_SIZE["v"]
+
+
+def _font_style(ss, fs=None):
+    """把样式表字符串中的 font-size 统一替换为 fs（默认当前生效字体大小）"""
+    fs = _ui_fs() if fs is None else fs
+    return re.sub(r"font-size:\s*\d+px", f"font-size: {fs}px", ss)
 
 
 def _event_pos(event):
@@ -220,12 +247,12 @@ class _TagChip(QtWidgets.QFrame):
         self._tag = tag
         self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
         self.setToolTip(t("ai_search.keywords_label"))
-        self.setStyleSheet("""
+        self.setStyleSheet(_font_style("""
             QFrame { background-color: #1d4a6f; border: 1px solid #2d5a8f;
                      border-radius: 10px; }
             QFrame:hover { background-color: #2d5a8f; }
             QLabel { color: #9cc4ff; background: transparent; font-size: 12px; }
-        """)
+        """))
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(8, 2, 6, 2)
         lay.setSpacing(5)
@@ -244,10 +271,10 @@ class _TagChip(QtWidgets.QFrame):
         lay = self.layout()
         edit = QtWidgets.QLineEdit(self._tag)
         edit.setFixedWidth(100)
-        edit.setStyleSheet("""
+        edit.setStyleSheet(_font_style("""
             QLineEdit { background-color: #12293f; border: 1px solid #5294e2;
                         border-radius: 4px; color: #9cc4ff; padding: 0 4px; font-size: 12px; }
-        """)
+        """))
         edit.selectAll()
         edit.setFocus()
         lay.replaceWidget(self._label, edit)
@@ -295,11 +322,13 @@ class _ResultCard(QtWidgets.QFrame):
 
     # ── UI ──
     def _build(self):
+        fs = getattr(self._host, "_font_size", _ui_fs())
+        self._thumb_size = int(96 * getattr(self._host, "_scale", 1.0))
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(6, 6, 6, 6)
         lay.setSpacing(4)
         self._thumb_label = QtWidgets.QLabel()
-        self._thumb_label.setFixedSize(96, 96)
+        self._thumb_label.setFixedSize(self._thumb_size, self._thumb_size)
         self._thumb_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._thumb_label.setStyleSheet(
             "background-color: #1a1a1a; border-radius: 4px; color: #606060;")
@@ -309,7 +338,7 @@ class _ResultCard(QtWidgets.QFrame):
         name = self._material.get("name_cn") or self._material.get("name", "")
         self._name_label = QtWidgets.QLabel(name)
         self._name_label.setWordWrap(True)
-        self._name_label.setStyleSheet("color: #e0e0e0; font-size: 12px;")
+        self._name_label.setStyleSheet(f"color: #e0e0e0; font-size: {fs}px;")
         self._name_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._name_label)
 
@@ -327,7 +356,8 @@ class _ResultCard(QtWidgets.QFrame):
         if pix.width() != pix.height():
             s = min(pix.width(), pix.height())
             pix = pix.copy((pix.width() - s) // 2, (pix.height() - s) // 2, s, s)
-        pix = pix.scaled(96, 96, QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+        pix = pix.scaled(self._thumb_size, self._thumb_size,
+                         QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
                          QtCore.Qt.TransformationMode.SmoothTransformation)
         self._thumb_label.setPixmap(pix)
 
@@ -363,7 +393,7 @@ class _ResultCard(QtWidgets.QFrame):
     def _show_simple_menu(self, pos):
         """兜底右键菜单（主窗口网格不可用时）"""
         menu = QtWidgets.QMenu(self)
-        menu.setStyleSheet(_MENU_STYLE)
+        menu.setStyleSheet(_font_style(_MENU_STYLE))
         json_path = self._material.get("json_path", "")
         import_actions = {}
         if json_path and json_path.endswith(".zasset"):
@@ -468,11 +498,13 @@ class _WishlistRow(QtWidgets.QFrame):
             self,
             on_single=lambda: self.clicked.emit(self._material),
             on_double=lambda: self.detailRequested.emit(self._material))
+        self._fs = getattr(self._host, "_font_size", _ui_fs())
+        self._thumb_size = int(92 * getattr(self._host, "_scale", 1.0))
         lay = QtWidgets.QGridLayout(self)
         lay.setContentsMargins(6, 4, 4, 6)
         lay.setSpacing(4)
         self._thumb_label = QtWidgets.QLabel()
-        self._thumb_label.setFixedSize(92, 92)
+        self._thumb_label.setFixedSize(self._thumb_size, self._thumb_size)
         self._thumb_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._thumb_label.setStyleSheet(
             "background-color: #141414; border-radius: 6px; color: #606060;")
@@ -490,7 +522,7 @@ class _WishlistRow(QtWidgets.QFrame):
         name = material.get("name_cn") or material.get("name", "")
         self._name_label = QtWidgets.QLabel(name)
         self._name_label.setWordWrap(True)
-        self._name_label.setStyleSheet("color: #d0d0d0; font-size: 12px;")
+        self._name_label.setStyleSheet(f"color: #d0d0d0; font-size: {self._fs}px;")
         self._name_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         # 长名称可收缩换行，避免撑宽卡片导致右列被视口切掉
         self._name_label.setMinimumWidth(0)
@@ -509,7 +541,8 @@ class _WishlistRow(QtWidgets.QFrame):
             self.set_thumb(pix)
 
     def set_thumb(self, pix):
-        scaled = pix.scaled(86, 86, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+        scaled = pix.scaled(self._thumb_size - 6, self._thumb_size - 6,
+                            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                             QtCore.Qt.TransformationMode.SmoothTransformation)
         self._thumb_label.setPixmap(scaled)
 
@@ -552,17 +585,18 @@ class _ComposeItem(QtWidgets.QFrame):
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
         lay.setSpacing(4)
+        ts = max(30, int(40 * _ui_fs() / 13.0))
         thumb = QtWidgets.QLabel()
-        thumb.setFixedSize(40, 40)
+        thumb.setFixedSize(ts, ts)
         thumb.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         thumb.setStyleSheet("background-color: #1a1a1a; border-radius: 3px;")
-        scaled = pix.scaled(38, 38, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+        scaled = pix.scaled(ts - 2, ts - 2, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                             QtCore.Qt.TransformationMode.SmoothTransformation)
         thumb.setPixmap(scaled)
         lay.addWidget(thumb)
         del_label = QtWidgets.QLabel("✕")
         del_label.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        del_label.setStyleSheet("color: #a06060; font-size: 11px;")
+        del_label.setStyleSheet(f"color: #a06060; font-size: {_ui_fs()}px;")
         del_label.setToolTip(t("ai_search.remove_image"))
         lay.addWidget(del_label)
         del_label.mousePressEvent = lambda e, i=index: self.removeRequested.emit(i)
@@ -586,12 +620,13 @@ class _AIBubble(QtWidgets.QFrame):
         self._build()
 
     def _build(self):
+        fs = getattr(self._host, "_font_size", _ui_fs())
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(12, 10, 12, 10)
         outer.setSpacing(6)
 
         self._head = QtWidgets.QLabel(t("ai_search.keywords_label"))
-        self._head.setStyleSheet("color: #8ab4f8; font-size: 12px;")
+        self._head.setStyleSheet(f"color: #8ab4f8; font-size: {fs}px;")
         outer.addWidget(self._head)
 
         self._chips_wrap = QtWidgets.QWidget()
@@ -601,7 +636,7 @@ class _AIBubble(QtWidgets.QFrame):
 
         self._summary = QtWidgets.QLabel("")
         self._summary.setWordWrap(True)
-        self._summary.setStyleSheet("color: #a0a0a0; font-size: 12px;")
+        self._summary.setStyleSheet(f"color: #a0a0a0; font-size: {fs}px;")
         outer.addWidget(self._summary)
 
         self._grid_container = QtWidgets.QWidget()
@@ -610,14 +645,14 @@ class _AIBubble(QtWidgets.QFrame):
 
         self._expand_label = QtWidgets.QLabel(t("ai_search.expand_all"))
         self._expand_label.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        self._expand_label.setStyleSheet("color: #5294e2; font-size: 12px;")
+        self._expand_label.setStyleSheet(f"color: #5294e2; font-size: {fs}px;")
         self._expand_label.mousePressEvent = self._toggle_expand
         self._expand_label.setVisible(False)
         outer.addWidget(self._expand_label)
 
         self._foot = QtWidgets.QLabel(t("ai_search.footnote"))
         self._foot.setWordWrap(True)
-        self._foot.setStyleSheet("color: #707070; font-size: 11px;")
+        self._foot.setStyleSheet(f"color: #707070; font-size: {fs}px;")
         outer.addWidget(self._foot)
 
     # ── 关键词 chips ──
@@ -711,13 +746,16 @@ class AISearchConfigDialog(QtWidgets.QDialog):
 
     def __init__(self, parent=None, available_models=None):
         super(AISearchConfigDialog, self).__init__(parent)
+        self._font_size = _ui_fs()
+        _ACTIVE_FONT_SIZE["v"] = self._font_size
+        self._scale = self._font_size / 13.0
         self._available_models = available_models or []
         self._providers = AIAnalyzer.PROVIDERS if AIAnalyzer else {}
         self._saved = load_ai_search_settings()
         self._fetch_seq = 0
         self._closed = False
         self.setWindowTitle(t("ai_search.config_title"))
-        self.setMinimumWidth(430)
+        self.setMinimumWidth(int(430 * self._scale))
         self.setStyleSheet(_DIALOG_STYLE)
         self.modelsFetched.connect(self._on_models_fetched)
         self._setup_ui()
@@ -738,7 +776,7 @@ class AISearchConfigDialog(QtWidgets.QDialog):
         # 服务商
         row = QtWidgets.QHBoxLayout()
         lbl = QtWidgets.QLabel(t("label.ai_provider"))
-        lbl.setFixedWidth(80)
+        lbl.setFixedWidth(int(80 * self._scale))
         row.addWidget(lbl)
         self._provider_combo = QtWidgets.QComboBox()
         saved_provider = self._saved.get("ai_search_provider", "ollama")
@@ -755,7 +793,7 @@ class AISearchConfigDialog(QtWidgets.QDialog):
         # API Key（Ollama 不需要）
         row = QtWidgets.QHBoxLayout()
         lbl = QtWidgets.QLabel(t("label.ai_api_key"))
-        lbl.setFixedWidth(80)
+        lbl.setFixedWidth(int(80 * self._scale))
         row.addWidget(lbl)
         self._api_key_edit = QtWidgets.QLineEdit()
         self._api_key_edit.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
@@ -768,7 +806,7 @@ class AISearchConfigDialog(QtWidgets.QDialog):
         # API 地址
         row = QtWidgets.QHBoxLayout()
         lbl = QtWidgets.QLabel(t("label.ai_base_url"))
-        lbl.setFixedWidth(80)
+        lbl.setFixedWidth(int(80 * self._scale))
         row.addWidget(lbl)
         self._base_url_edit = QtWidgets.QLineEdit()
         self._base_url_edit.setText(self._saved.get("ai_search_base_url", ""))
@@ -779,7 +817,7 @@ class AISearchConfigDialog(QtWidgets.QDialog):
         # 模型
         row = QtWidgets.QHBoxLayout()
         lbl = QtWidgets.QLabel(t("label.ai_model"))
-        lbl.setFixedWidth(80)
+        lbl.setFixedWidth(int(80 * self._scale))
         row.addWidget(lbl)
         self._model_combo = QtWidgets.QComboBox()
         self._model_combo.setEditable(True)
@@ -800,6 +838,7 @@ class AISearchConfigDialog(QtWidgets.QDialog):
         btns.addWidget(ok_btn)
         layout.addLayout(btns)
 
+        apply_font_size_to_widget(self, self._font_size)
         self._on_provider_changed()
 
     def _on_provider_changed(self, *_):
@@ -989,9 +1028,13 @@ class AISearchDialog(QtWidgets.QDialog):
         self._defaultModelDone.connect(self._on_default_model_done)
 
         self.setWindowTitle(t("ai_search.title"))
-        self.setMinimumSize(1010, 560)
-        self.resize(1170, 760)
+        self._font_size = _ui_fs()
+        _ACTIVE_FONT_SIZE["v"] = self._font_size
+        self._scale = self._font_size / 13.0
+        self.setMinimumSize(int(1010 * self._scale), int(560 * self._scale))
+        self.resize(int(1170 * self._scale), int(760 * self._scale))
         self.setStyleSheet(_DIALOG_STYLE)
+        self._wish_max_stretch = -1  # 心愿单网格已设置过 stretch 的最大行号（重建时需清理）
         self._setup_ui()
         self._load_wishlist()
         self._reload_analyzer()
@@ -1107,13 +1150,16 @@ class AISearchDialog(QtWidgets.QDialog):
         body.addWidget(self._build_wishlist_panel(), 0)
         root.addLayout(body, 1)
 
+        # 对齐主 UI 字体（含对话框样式表与既有控件的字号）
+        apply_font_size_to_widget(self, self._font_size)
+
     # ── 心愿单 ──────────────────────────────────────────
 
     def _build_wishlist_panel(self):
         """右侧「心愿单」面板：AI 回复中收藏的资产，跨会话持久化"""
         panel = QtWidgets.QFrame()
         panel.setObjectName("wishlistPanel")
-        panel.setFixedWidth(300)
+        panel.setFixedWidth(int(300 * self._scale))
         panel.setStyleSheet("""
             QFrame#wishlistPanel { background-color: #1b1b1b;
                                    border: 1px solid #2a2a2a; border-radius: 8px; }
@@ -1172,6 +1218,10 @@ class AISearchDialog(QtWidgets.QDialog):
 
     def _render_wishlist(self):
         """重建心愿单条目列表（双列网格）"""
+        # QGridLayout 移除条目不会清除行 stretch 设置：旧的 stretch 行变成内容行后，
+        # 会被 widgetResizable 分配的多余纵向空间拉高，导致卡片变成长条。先清掉历史 stretch。
+        for r in range(self._wish_max_stretch + 1):
+            self._wish_layout.setRowStretch(r, 0)
         while self._wish_layout.count():
             item = self._wish_layout.takeAt(0)
             w = item.widget()
@@ -1183,8 +1233,9 @@ class AISearchDialog(QtWidgets.QDialog):
             empty = QtWidgets.QLabel(t("ai_search.wishlist_empty"))
             empty.setWordWrap(True)
             empty.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-            empty.setStyleSheet("color: #7a8ab0; font-size: 12px; padding: 8px;")
+            empty.setStyleSheet(f"color: #7a8ab0; font-size: {self._font_size}px; padding: 8px;")
             self._wish_layout.addWidget(empty, 0, 0, 1, 2)
+            self._wish_max_stretch = 1
             self._wish_layout.setRowStretch(1, 1)
             return
         n = len(self._wishlist)
@@ -1200,7 +1251,8 @@ class AISearchDialog(QtWidgets.QDialog):
             self._wish_layout.addWidget(row, i // 2, i % 2)
             self._wish_rows.append(row)
             self._load_wish_thumb(it.get("id", ""), it)
-        # 尾部留白，条目靠上排列
+        # 尾部留白，条目靠上排列（仅最后一个空行 stretch，不作用于内容行）
+        self._wish_max_stretch = (n + 1) // 2
         self._wish_layout.setRowStretch((n + 1) // 2, 1)
 
     def _load_wish_thumb(self, mid, material):
@@ -1417,33 +1469,34 @@ class AISearchDialog(QtWidgets.QDialog):
 
     def _add_user_text(self, text):
         frame = QtWidgets.QFrame()
-        frame.setStyleSheet("""
+        frame.setStyleSheet(_font_style("""
             QFrame { background-color: #2d4a6f; border-radius: 10px; }
             QLabel { color: #e6f0ff; font-size: 13px; background: transparent; }
-        """)
+        """))
         lay = QtWidgets.QVBoxLayout(frame)
         lay.setContentsMargins(10, 7, 10, 7)
         label = QtWidgets.QLabel(text)
         label.setWordWrap(True)
         lay.addWidget(label)
-        frame.setMaximumWidth(620)
+        frame.setMaximumWidth(int(620 * self._scale))
         self._add_widget(frame, QtCore.Qt.AlignmentFlag.AlignRight)
         self._scroll_to_bottom()
 
     def _add_user_image(self, pix, caption):
         frame = QtWidgets.QFrame()
-        frame.setStyleSheet("""
+        frame.setStyleSheet(_font_style("""
             QFrame { background-color: #2d4a6f; border-radius: 10px; }
             QLabel { color: #e6f0ff; font-size: 12px; background: transparent; }
-        """)
+        """))
         lay = QtWidgets.QVBoxLayout(frame)
         lay.setContentsMargins(8, 8, 8, 8)
         lay.setSpacing(4)
         img = QtWidgets.QLabel()
-        img.setFixedSize(120, 120)
+        img.setFixedSize(int(120 * self._scale), int(120 * self._scale))
         img.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         img.setStyleSheet("background-color: #1a1a1a; border-radius: 6px;")
-        scaled = pix.scaled(116, 116, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+        scaled = pix.scaled(int(116 * self._scale), int(116 * self._scale),
+                            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                             QtCore.Qt.TransformationMode.SmoothTransformation)
         img.setPixmap(scaled)
         lay.addWidget(img, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
@@ -1452,17 +1505,17 @@ class AISearchDialog(QtWidgets.QDialog):
             cap.setWordWrap(True)
             cap.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             lay.addWidget(cap)
-        frame.setMaximumWidth(260)
+        frame.setMaximumWidth(int(260 * self._scale))
         self._add_widget(frame, QtCore.Qt.AlignmentFlag.AlignRight)
         self._scroll_to_bottom()
 
     def _add_user_images(self, pixmaps, text=""):
         """用户气泡：一张或多张图片（+可选文本），右对齐"""
         frame = QtWidgets.QFrame()
-        frame.setStyleSheet("""
+        frame.setStyleSheet(_font_style("""
             QFrame { background-color: #2d4a6f; border-radius: 10px; }
             QLabel { color: #e6f0ff; font-size: 13px; background: transparent; }
-        """)
+        """))
         lay = QtWidgets.QVBoxLayout(frame)
         lay.setContentsMargins(8, 8, 8, 8)
         lay.setSpacing(5)
@@ -1476,29 +1529,30 @@ class AISearchDialog(QtWidgets.QDialog):
             shown = pixmaps[:4]
             for pix in shown:
                 img = QtWidgets.QLabel()
-                img.setFixedSize(84, 84)
+                img.setFixedSize(int(84 * self._scale), int(84 * self._scale))
                 img.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
                 img.setStyleSheet("background-color: #1a1a1a; border-radius: 5px;")
-                scaled = pix.scaled(80, 80, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                scaled = pix.scaled(int(80 * self._scale), int(80 * self._scale),
+                                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                                     QtCore.Qt.TransformationMode.SmoothTransformation)
                 img.setPixmap(scaled)
                 row.addWidget(img)
             if len(pixmaps) > 4:
                 more = QtWidgets.QLabel("+%d" % (len(pixmaps) - 4))
-                more.setStyleSheet("color: #8aa4c8; font-size: 13px;")
-                more.setFixedWidth(30)
+                more.setStyleSheet(f"color: #8aa4c8; font-size: {self._font_size}px;")
+                more.setFixedWidth(int(30 * self._scale))
                 more.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
                 row.addWidget(more)
             row.addStretch()
             lay.addLayout(row)
-        frame.setMaximumWidth(560)
+        frame.setMaximumWidth(int(560 * self._scale))
         self._add_widget(frame, QtCore.Qt.AlignmentFlag.AlignRight)
         self._scroll_to_bottom()
 
     def _add_system(self, text):
         label = QtWidgets.QLabel(text)
         label.setWordWrap(True)
-        label.setStyleSheet("color: #808080; font-size: 12px;")
+        label.setStyleSheet(f"color: #808080; font-size: {self._font_size}px;")
         label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         label.setMargin(2)
         self._add_widget(label)
@@ -1653,6 +1707,8 @@ class AISearchDialog(QtWidgets.QDialog):
         if not keywords:
             self._add_system(t("ai_search.error_no_keywords"))
             return
+        # 中英成对展开：AI 常只回英文，命中对照表的词补中文写法，显示与搜索一致
+        keywords = _expand_bilingual(keywords)
         sub_lib = payload.get("sub_library", "")
         self._context = {
             "text": self._last_user_text,
@@ -1793,6 +1849,8 @@ class AISearchDialog(QtWidgets.QDialog):
         if not keywords:
             self._add_system(t("ai_search.error_no_keywords"))
             return
+        # 中英成对展开：AI 常只回英文，命中对照表的词补中文写法，显示与搜索一致
+        keywords = _expand_bilingual(keywords)
         sub_lib = payload.get("sub_library", "")
         self._context = {
             "text": self._last_user_text,

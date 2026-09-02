@@ -79,6 +79,72 @@ def _assign_shader_to_objects(shader_name, objects):
             pass
     return assigned
 
+
+def _is_assignable_shader(node):
+    """是否为可赋予物体的着色材质节点（排除贴图/工具/分层纹理节点）"""
+    import maya.cmds as cmds
+    try:
+        return cmds.nodeType(node) not in ("place2dTexture", "file", "bump2d", "layeredTexture")
+    except Exception:
+        return False
+
+
+def _rank_material_roots(candidates):
+    """把复合材质体系中的「最终材质」排到前面（纯节点网络判定，不依赖 SG）。
+
+    沿「被谁驱动」的方向（destination）向下游遍历，允许途经 file/工具等中间节点：
+    - 若某候选材质的下游能到达「另一个候选材质」→ 它只是被上层材质消费的子输入；
+    - 若走到网络末端（SG/死端）都遇不到其它候选材质 → 它就是「最后一个非 SG 节点」，
+      即最终材质（要被指定/渲染的材质）。
+
+    因此无 SG 的资产、或含多个 SG 的资产都能正确判定。
+    多个互不连接的材质体系各自保留自己的最终材质；网络无消费关系时保持原顺序。
+    """
+    import maya.cmds as cmds
+    cand = set(candidates)
+    if len(cand) < 2:
+        return list(candidates)
+
+    def _downstream_hits_other(node):
+        """从 node 沿下游遍历，是否能在触及其他候选材质（非自身）前结束"""
+        visited = set()
+        stack = [node]
+        while stack:
+            cur = stack.pop()
+            if cur in visited:
+                continue
+            visited.add(cur)
+            # 着色组/终端的下游是几何体等无关节点，不再展开
+            try:
+                if cmds.nodeType(cur) == 'shadingEngine':
+                    continue
+            except Exception:
+                pass
+            try:
+                outs = cmds.listConnections(cur, destination=True) or []
+            except Exception:
+                outs = []
+            for o in outs:
+                if o in cand and o != node:
+                    return True
+                if o not in visited:
+                    stack.append(o)
+        return False
+
+    consumed = set()
+    for node in candidates:
+        try:
+            if _downstream_hits_other(node):
+                consumed.add(node)
+        except Exception:
+            continue
+
+    if not consumed:
+        return list(candidates)
+    roots = [c for c in candidates if c not in consumed]
+    subs = [c for c in candidates if c in consumed]
+    return roots + subs
+
 try:
     from ..utils.settings import SettingsManager
 except ImportError:
@@ -148,6 +214,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
     # AI 语义搜索：后台线程 → 主线程回填
     _aiSemanticDone = QtCore.Signal(object)
+    # 主库后台加载完成（跨线程 emit → 主线程回填首屏数据）
+    _libraryLoadDone = QtCore.Signal(bool)
 
     def __init__(self, parent=None, library_path=None):
         if parent is None:
@@ -180,15 +248,18 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         _sam_mod = _sys.modules.get('squirrel_asset_manager')
         if _sam_mod:
             _sam_mod.manager = self._material_manager
+        # 主库后台加载完成信号 → 主线程回填首屏（窗口先显示，避免启动卡顿）
+        qt_connect(self._libraryLoadDone, self._on_library_loaded)
         self._init_data_layer(library_path)
         self._restore_window_state()
 
         self._setup_ui()
         self._create_connections()
         self._apply_styles()
-        self._load_data()
-        # 设置搜索栏标签列表
-        self._init_search_bar_tags()
+        # 弹出即恢复预设 UI 状态（视图/缩略图/排序/面板/分栏/选项卡），避免初始状态跳变
+        self._restore_ui_state()
+        # 注：首屏数据（分类树/缩略图/库下拉框）由后台加载完成后的
+        #     _on_library_loaded → _load_data 回填，不在 __init__ 阻塞加载
         # 注：拖拽到视口由 dragDroppedOnViewport 信号处理，无需覆盖层
 
     # ── 数据层 ────────────────────────────────────────
@@ -271,6 +342,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         for lib in self._libraries:
             candidates.append(lib.get("path", ""))
 
+        # 收集去重后的候选路径，交由后台线程逐个尝试加载（窗口先显示，完成后回填）
+        self._load_candidates = []
         seen = set()
         for path in candidates:
             if not path or path in seen:
@@ -278,23 +351,70 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             seen.add(path)
             if not os.path.isdir(path):
                 continue
-            try:
-                ok = self._material_manager.load_library(path)
-            except Exception as e:
-                print(f"[MaterialLibrary] 加载材质库失败: {path}: {e}")
-                ok = False
-            if ok:
-                self._use_mock = False
-                print(f"[MaterialLibrary] 已加载材质库: {path} "
-                      f"({self._material_manager.get_material_count()} 个材质)")
-                return
+            self._load_candidates.append(path)
 
-        # 所有已配置库均不可用：不再静默重建被删除的默认库（避免"还原回默认库"），
-        # 仅记录日志，进入空库状态。
-        print("[MaterialLibrary] 所有已配置资产库均无法加载，进入空库状态")
-        self._use_mock = True
+        # 后台线程加载资产库；加载期间窗口正常显示，完成信号回主线程回填
+        self._library_loaded = False
+        self._loaded_library_path = None
+        self._start_library_load()
+
+    # ── 后台加载资产库 ─────────────────────────────────
+
+    def _start_library_load(self):
+        """后台线程执行 load_library（纯文件/内存操作，无 Maya API，线程安全）。
+
+        窗口先显示，加载完成后 _on_library_loaded 在主线程回填首屏数据，
+        避免启动时全库扫描/缓存解析阻塞 UI。
+        """
+        import threading
+        self._load_thread = threading.Thread(
+            target=self._library_load_worker,
+            args=(list(self._load_candidates),),
+            daemon=True,
+        )
+        self._load_thread.start()
+
+    def _library_load_worker(self, candidates):
+        """后台线程体：逐个尝试加载候选资产库，完成后发信号回主线程"""
+        ok = False
+        try:
+            for path in candidates:
+                try:
+                    ok = self._material_manager.load_library(path)
+                except Exception as e:
+                    print(f"[MaterialLibrary] 加载材质库失败: {path}: {e}")
+                    ok = False
+                if ok:
+                    self._loaded_library_path = path
+                    print(f"[MaterialLibrary] 已加载材质库: {path} "
+                          f"({self._material_manager.get_material_count()} 个材质)")
+                    break
+            if not ok:
+                # 所有已配置库均不可用：不再静默重建被删除的默认库
+                # （避免"还原回默认库"），仅记录日志，进入空库状态。
+                print("[MaterialLibrary] 所有已配置资产库均无法加载，进入空库状态")
+        finally:
+            # 跨线程信号 → 主线程 _on_library_loaded（Qt 队列连接自动投递）
+            self._libraryLoadDone.emit(ok)
+
+    def _on_library_loaded(self, ok):
+        """主线程：后台加载完成，回填首屏数据与状态"""
+        self._library_loaded = True
+        self._use_mock = not ok
+        # 仅当前处于主库视图（分类/收藏页）时回填主库首屏；
+        # 项目页场景由 _restore_tree_selection 填充项目数据，主库数据在切回分类页时补填
+        if self._active_mgr is self._material_manager:
+            self._load_data()
+            # 加载完成，切回网格页（占位页隐藏，一次呈现最终内容）
+            self._center_stack.setCurrentIndex(0)
+        else:
+            self._populate_library_combo()
+        # 标签菜单构建（pypinyin 拼音排序）延迟到下一帧，不阻塞首屏卡片渲染
+        qt_single_shot(0, self._init_search_bar_tags)
+        self._update_status_bar()
 
     def _load_data(self):
+        """后台加载完成后填充首屏数据（由 _on_library_loaded 调用）"""
         self._populate_library_combo()
         if self._use_mock:
             self._thumbnail_grid.set_materials(list(MOCK_MATERIALS))
@@ -310,6 +430,8 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 if root_lib:
                     self._current_root_lib = root_lib
                 self._category_tree._select_by_id(saved_cat, root_lib if root_lib else None)
+                # 同步激活分类，使 _restore_tree_selection 的相等判断命中，跳过重复首屏构建
+                self._category_tree._active_category = saved_cat
                 desc_ids = self._category_tree.get_descendant_ids(saved_cat, root_lib if root_lib else None)
                 self._on_category_selected(saved_cat, desc_ids, root_lib or "materials")
             else:
@@ -361,24 +483,37 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             else:
                 materials = mgr.get_materials(category_id, sub_library=self._current_root_lib)
         dicts = [m.to_dict(include_thumb=False) for m in materials]
-        # 推导资产类型（当前分类所属根子库）
-        asset_type = self._material_manager.ASSET_SUB_LIBRARIES.get(
-            self._current_root_lib, self._current_root_lib)
-        for d in dicts:
-            d["_category_display"] = mgr.get_category_display_name(d.get("category", ""))
-            d["_asset_type"] = asset_type
+        # 推导资产类型（当前分类所属根子库；"全部资产"模式按每个资产自身子库）
+        if self._current_root_lib:
+            asset_type = self._material_manager.ASSET_SUB_LIBRARIES.get(
+                self._current_root_lib, self._current_root_lib)
+            for d in dicts:
+                d["_category_display"] = mgr.get_category_display_name(d.get("category", ""))
+                d["_asset_type"] = asset_type
+        else:
+            for m, d in zip(materials, dicts):
+                sub_lib = getattr(m, "sub_library", "") or ""
+                d["_category_display"] = mgr.get_category_display_name(d.get("category", ""))
+                d["_asset_type"] = self._material_manager.ASSET_SUB_LIBRARIES.get(sub_lib, sub_lib)
         self._thumbnail_grid.set_materials(dicts)
 
     def _load_full_sub_lib(self):
         """加载当前子库所有材质到网格（用于组合筛选）"""
         all_mats = self._material_manager.get_materials(sub_library=self._current_root_lib)
         dicts = [m.to_dict(include_thumb=False) for m in all_mats]
-        asset_type = self._material_manager.ASSET_SUB_LIBRARIES.get(
-            self._current_root_lib, self._current_root_lib)
-        for d in dicts:
-            d["_category_display"] = self._material_manager.get_category_display_name(
-                d.get("category", ""))
-            d["_asset_type"] = asset_type
+        if self._current_root_lib:
+            asset_type = self._material_manager.ASSET_SUB_LIBRARIES.get(
+                self._current_root_lib, self._current_root_lib)
+            for d in dicts:
+                d["_category_display"] = self._material_manager.get_category_display_name(
+                    d.get("category", ""))
+                d["_asset_type"] = asset_type
+        else:
+            for m, d in zip(all_mats, dicts):
+                sub_lib = getattr(m, "sub_library", "") or ""
+                d["_category_display"] = self._material_manager.get_category_display_name(
+                    d.get("category", ""))
+                d["_asset_type"] = self._material_manager.ASSET_SUB_LIBRARIES.get(sub_lib, sub_lib)
         self._thumbnail_grid.set_materials(dicts)
 
     # ── Dict 模式联合搜索 ──────────────────────────
@@ -460,11 +595,20 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         # ── 2. 执行搜索 ──
         results = mgr.search(query)
         dicts = [m.to_dict(include_thumb=False) for m in results]
-        asset_type = mgr.ASSET_SUB_LIBRARIES.get(root_lib, root_lib)
-        for d in dicts:
-            d["_category_display"] = mgr.get_category_display_name(
-                d.get("category", ""))
-            d["_asset_type"] = asset_type
+        if root_lib:
+            # 单子库：统一用当前子库的类型
+            asset_type = mgr.ASSET_SUB_LIBRARIES.get(root_lib, root_lib)
+            for d in dicts:
+                d["_category_display"] = mgr.get_category_display_name(
+                    d.get("category", ""))
+                d["_asset_type"] = asset_type
+        else:
+            # "全部资产"模式（root_lib=None）：每个资产用自身所属子库的类型
+            for m, d in zip(results, dicts):
+                sub_lib = getattr(m, "sub_library", "") or ""
+                d["_category_display"] = mgr.get_category_display_name(
+                    d.get("category", ""))
+                d["_asset_type"] = mgr.ASSET_SUB_LIBRARIES.get(sub_lib, sub_lib)
 
         # ── 3. 设置网格数据（set_materials 会清空筛选状态） ──
         self._thumbnail_grid.set_materials(dicts)
@@ -488,6 +632,13 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         """
         if self._active_mgr is self._project_mgr:
             self._on_refresh_project()
+            return
+        if self._current_root_lib is None:
+            # "全部资产"视图：重建树后保持全部资产（root_lib=None 表示跨所有子库）
+            self._category_tree._tree.blockSignals(True)
+            self._refresh_category_tree()
+            self._category_tree._tree.blockSignals(False)
+            self._on_category_selected("all", [], None)
             return
         cur = self._category_tree.get_active_category()
         sub_lib = self._category_tree.get_active_root_lib()
@@ -581,6 +732,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             self._thumbnail_grid.set_manager(self._material_manager)
         center_layout.addWidget(self._thumbnail_grid, 1)
         self._center_stack.addWidget(center_widget)
+        # 后台加载期间的占位页（默认显示，避免 MOCK 色块 → 真实卡片跳变）
+        self._center_stack.addWidget(self._create_loading_page())
+        self._center_stack.setCurrentIndex(1)
 
         main_splitter.addWidget(self._center_stack)
 
@@ -596,6 +750,18 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
 
         root_layout.addWidget(main_splitter, 1)
         root_layout.addWidget(self._create_status_bar())
+
+    def _create_loading_page(self):
+        """后台加载资产库期间的占位页（整页单色 + 加载文案，避免内容跳变闪烁）"""
+        page = QtWidgets.QWidget()
+        page.setStyleSheet("background-color: #2a2a2a;")
+        layout = QtWidgets.QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        label = QtWidgets.QLabel(t("status.loading_library"))
+        label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        label.setStyleSheet("color: #808080; font-size: 15px;")
+        layout.addWidget(label)
+        return page
 
     def _create_toolbar(self):
         font_size = self._app_settings.get("font_size", 13)
@@ -1514,6 +1680,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         font_size = self._app_settings.get("font_size", 13)
         qss = self._read_qss()
         if qss:
+            # QMessageBox / QInputDialog / QToolTip 等弹出窗口由该 qss 控制字号，
+            # 统一替换为当前主 UI 字体大小，保证提示小窗口与主界面一致
+            import re as _re
+            qss = _re.sub(r'font-size:\s*\d+px', f'font-size: {font_size}px', qss)
             self.setStyleSheet(qss)
         self._force_font_size(font_size)
         self._update_toolbar_font_size(font_size)
@@ -1525,6 +1695,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         import re
         font = QtGui.QFont()
         font.setPointSize(font_size)
+        # 主窗口自身字体：让 QMessageBox / QProgressDialog / QInputDialog 等
+        # 以主窗口为父级的弹出小窗口直接继承主 UI 字体
+        self.setFont(font)
         self.setUpdatesEnabled(False)
         try:
             for w in self.findChildren(QtWidgets.QWidget):
@@ -1618,15 +1791,19 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             _, cat_short = split_cat_id(category_id)
         else:
             cat_short = category_id
-        self._current_root_lib = root_lib
+        # 归一化：信号 str 类型会把 None 转成 ""，统一以 None 表示"全部子库"模式
+        self._current_root_lib = root_lib or None
         if self._use_mock:
             self._thumbnail_grid.filter_by_category(cat_short, descendant_ids)
             return
 
-        # 切换子库时清除旧标签筛选，避免跨库标签串扰
+        # 切换子库时清除旧标签筛选，避免跨库标签串扰。
+        # 仅当存在标签筛选时才触发清除——无标签时跳过，避免 _clear_all_tags
+        # 无条件 emit tagFilterCleared 引发一次多余的 _dict_mode_search_and_set
         if root_lib != getattr(self, '_prev_root_lib', None):
-            self._search_bar._clear_all_tags()
-        self._prev_root_lib = root_lib
+            if self._search_bar._active_tags:
+                self._search_bar._clear_all_tags()
+        self._prev_root_lib = root_lib or None
 
         # 按当前子库刷新标签列表（只显示当前顶级分类的标签）
         self._refresh_search_bar_tags(root_lib)
@@ -2273,6 +2450,7 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             cat_tree = self._active_mgr.get_category_tree()
             self._cached_cat_tree = cat_tree
         self._right_panel.set_edit_categories(cat_tree)
+        self._right_panel.set_asset_types(self._active_mgr.ASSET_SUB_LIBRARIES)
         # 获取当前类型的标签（缓存）
         mat_type = self._current_tag_type()
         cache_key = ('common_tags', mat_type)
@@ -2343,7 +2521,42 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 else:
                     print(f"[MaterialLibrary] 材质创建失败")
             else:
-                # ── 无 .zmetal → PBR 贴图资产，创建 openPBR 材质并连接贴图 ──
+                # ── 无 .zmetal：优先从 .ma/.mb 提取材质网络赋予，回退 PBR 贴图资产 ──
+                ma_mats = []
+                try:
+                    from ..integration.import_executor import _import_ma_mb_material
+                    ma_mats = _import_ma_mb_material(json_path) or []
+                except Exception as e:
+                    print(f"[MaterialLibrary] .ma 材质导入失败: {e}")
+                    ma_mats = []
+                assignable = [m for m in ma_mats if _is_assignable_shader(m)]
+                # 复合材质体系：把「最终材质」排前面（避免把子材质指定给模型）
+                assignable = _rank_material_roots(assignable)
+                # meta 里记录了导出主材质的 node_type，命中者优先（多体系资产也能选对）
+                _want_type = ""
+                try:
+                    _meta0 = ZassetIO.read_meta(json_path) or {}
+                    _want_type = _meta0.get("node_type", "") or ""
+                except Exception:
+                    _want_type = ""
+                if _want_type:
+                    _typed = [m for m in assignable if cmds.nodeType(m) == _want_type]
+                    if _typed:
+                        assignable = _typed + [m for m in assignable if m not in _typed]
+                if assignable:
+                    if not saved_sel:
+                        print(f"[MaterialLibrary] 材质已从 .ma 创建（无选中物体，未赋予）")
+                        return
+                    for mat_name in assignable:
+                        try:
+                            if _assign_shader_to_objects(mat_name, saved_sel):
+                                print(f"[MaterialLibrary] 赋予材质(.ma) {mat_name} ({cmds.nodeType(mat_name)}) → {len(saved_sel)} 个物体")
+                                return
+                        except Exception:
+                            continue
+                    print(f"[MaterialLibrary] .ma 材质赋予失败")
+                    return
+                # 无 .ma/.mb 材质网络 → PBR 贴图资产，创建 openPBR 材质并连接贴图
                 self._apply_pbr_texture_material(json_path, saved_sel, material)
 
         except Exception as e:
@@ -2525,20 +2738,54 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         new_tags = mat_dict.get("tags", mat.tags)
         new_cat = mat_dict.get("category", mat.category)
         new_notes = mat_dict.get("notes", mat.notes)
+        new_node_type = mat_dict.get("node_type", mat.node_type) or ""
+        new_software = mat_dict.get("software", mat.software) or ""
+        new_renderer = mat_dict.get("renderer", mat.renderer) or ""
+        new_color_space = mat_dict.get("color_space", mat.color_space) or ""
+        new_sub_lib = mat_dict.get("sub_library", mat.sub_library) or ""
         mid = mat.id
 
-        cat_changed = new_cat and new_cat != mat.category
-        if cat_changed:
-            self._move_material_to_category(path, new_cat)
+        cat_changed = bool(new_cat) and new_cat != mat.category
+        sub_lib_changed = bool(new_sub_lib) and new_sub_lib != (mat.sub_library or "")
 
-        # 内存立即生效 + 后台写磁盘
+        # 资产类型（子库）变更 → 跨子库移动 .zasset（可同时归入新分类）；
+        # 仅分类变更 → 同子库内移动
+        moved = False
+        if sub_lib_changed:
+            try:
+                moved = mgr.move_material_to_sublibrary(
+                    mid, new_sub_lib,
+                    category_id=new_cat if cat_changed else None)
+            except Exception as e:
+                print(f"[MaterialLibrary] 资产类型变更移动失败: {e}")
+            cat_changed = False  # 跨子库移动已一并处理分类
+        elif cat_changed:
+            self._move_material_to_category(path, new_cat)
+            moved = True
+
+        # 移动后路径可能变化，按 ID 重新获取
+        mat = mgr.get_by_id(mid)
+        if not mat:
+            return
+
+        # 内存立即生效 + 后台写磁盘（分类/子库移动已写过 meta，这里补写全部字段）
         mat.name_cn = new_cn
         mat.tags = new_tags
         mat.notes = new_notes
+        mat.node_type = new_node_type
+        mat.software = new_software
+        mat.renderer = new_renderer
+        mat.color_space = new_color_space
+        mgr._build_search_text(mat)
         mgr._refresh_material_counts()
-        disk_work = lambda: mgr.update_material(mid, {"name_cn": new_cn, "tags": new_tags, "notes": new_notes})
+        updates = {
+            "name_cn": new_cn, "tags": new_tags, "notes": new_notes,
+            "node_type": new_node_type, "software": new_software,
+            "renderer": new_renderer, "color_space": new_color_space,
+        }
         import threading
-        threading.Thread(target=disk_work, daemon=True).start()
+        threading.Thread(target=lambda: mgr.update_material(mid, updates),
+                         daemon=True).start()
 
         # 直接更新卡片标签 + 内存中的 dict（跳过全量 refresh）
         grid = self._thumbnail_grid
@@ -2548,6 +2795,14 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                     dm["name_cn"] = new_cn
                     dm["tags"] = new_tags
                     dm["notes"] = new_notes
+                    dm["node_type"] = new_node_type
+                    dm["software"] = new_software
+                    dm["renderer"] = new_renderer
+                    dm["color_space"] = new_color_space
+                    if sub_lib_changed:
+                        dm["sub_library"] = new_sub_lib
+                        dm["_asset_type"] = mgr.ASSET_SUB_LIBRARIES.get(
+                            new_sub_lib, new_sub_lib)
                     break
 
         card = grid._card_pool.get(mid)
@@ -2556,18 +2811,20 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             if name_label:
                 name_label.setText(new_cn or mat_dict.get("name", ""))
 
-        if cat_changed:
+        if moved:
             self._refresh_category_tree()
             self._refresh_keep_current()
         else:
             grid._apply_fav_flags()
 
-        # 刷新右侧面板
-        mat = self._active_mgr.get_by_path(path)
+        # 刷新右侧面板（移动后按 ID 取最新路径）
+        mat = self._active_mgr.get_by_id(mid)
         if mat:
             d = mat.to_dict()
             d["_category_display"] = self._active_mgr.get_category_display_name(
                 d.get("category", ""))
+            d["_asset_type"] = self._active_mgr.ASSET_SUB_LIBRARIES.get(
+                mat.sub_library or "", mat.sub_library or "-")
             self._right_panel.show_material(d)
 
     def _show_confirm_dialog(self, title, message, is_warning=False):
@@ -2907,6 +3164,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         if index == 0:  # 分类选项卡
             self._active_mgr = self._material_manager
             self._thumbnail_grid.set_manager(self._material_manager)
+            # 启动时若停在项目页，主库首屏未回填；切回分类页时补一次
+            if (getattr(self, '_library_loaded', False)
+                    and self._category_tree.topLevelItemCount() <= 1):
+                self._load_data()
         if index == 1:  # 项目选项卡
             self._load_project_library()
             self._active_mgr = self._project_mgr
@@ -3509,6 +3770,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         zn = "node.zmetal" if "node.zmetal" in all_names else (
             next((n for n in all_names if n.endswith(".zmetal")), ""))
         if not zn:
+            # 无 .zmetal → 兼容 .ma/.mb 材质网络作为参数源
+            if self._apply_material_params_from_ma(json_path, targets):
+                return
             QtWidgets.QMessageBox.warning(self, t("msg.warning"),
                                           t("msg.apply_params_no_zmetal"))
             return
@@ -3558,6 +3822,111 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         else:
             QtWidgets.QMessageBox.warning(self, t("msg.warning"),
                                           t("msg.apply_params_none_applied"))
+
+    def _apply_material_params_from_ma(self, json_path, targets):
+        """右键「应用材质参数」的 .ma/.mb 回退：以资产 .ma/.mb 材质网络为参数源。
+
+        无 .zmetal 时：导入资产 .ma/.mb → 序列化成 zmetal 节点数据 →
+        走与 zmetal 相同的参数应用逻辑（同类直拷/跨类 .mmap 转换）→ 清理临时源材质。
+        """
+        import maya.cmds as cmds
+        try:
+            from ..integration.import_executor import _import_ma_mb_material
+            from ..quicktools.材质转换工具 import MaterialConverter
+        except Exception as e:
+            print(f"[应用材质参数(.ma)] 模块导入失败: {e}")
+            return False
+
+        try:
+            new_mats = _import_ma_mb_material(json_path) or []
+        except Exception as e:
+            print(f"[应用材质参数(.ma)] 材质导入失败: {e}")
+            return False
+        if not new_mats:
+            print(f"[应用材质参数(.ma)] 资产无 .ma/.mb 材质网络: {json_path}")
+            return False
+
+        # 源材质选择：meta 主材质类型 → 与目标同类型 → 网络末端首个
+        cands = [m for m in new_mats if _is_assignable_shader(m)]
+        cands = _rank_material_roots(cands)
+        src = None
+        _want_type = ""
+        try:
+            from ..core.zasset_io import ZassetIO as _Z0
+            _meta0 = _Z0.read_meta(json_path) or {}
+            _want_type = _meta0.get("node_type", "") or ""
+        except Exception:
+            _want_type = ""
+        if _want_type:
+            for m in cands:
+                try:
+                    if cmds.nodeType(m) == _want_type:
+                        src = m
+                        break
+                except Exception:
+                    continue
+        if src is None:
+            t0_type = ""
+            try:
+                t0_type = cmds.nodeType(targets[0]) if targets else ""
+            except Exception:
+                t0_type = ""
+            for m in cands:
+                try:
+                    if cmds.nodeType(m) == t0_type:
+                        src = m
+                        break
+                except Exception:
+                    continue
+        if src is None:
+            src = cands[0] if cands else None
+        if src is None:
+            print(f"[应用材质参数(.ma)] 未找到可用的源材质")
+            return False
+
+        def _cleanup():
+            """清理临时导入的源材质节点（贴图节点若已被目标引用则保留）"""
+            for m in new_mats:
+                try:
+                    if cmds.objExists(m):
+                        cmds.delete(m)
+                except Exception:
+                    pass
+
+        # 序列化源材质为 zmetal 节点数据（复用 zmetal 全量序列化）
+        src_data = None
+        try:
+            from ..integration.zjg_core import _serialize_node
+            _nodes = {}
+            _serialize_node(src, _nodes)
+            src_data = _nodes.get(src)
+        except Exception as e:
+            print(f"[应用材质参数(.ma)] 源材质序列化失败: {e}")
+            src_data = None
+        if not src_data:
+            _cleanup()
+            return False
+
+        conv = MaterialConverter(self)
+        applied = []
+        for tgt in targets:
+            try:
+                if conv.apply_zmetal_to_material(src_data, src, tgt, copy_textures=True):
+                    applied.append(tgt)
+            except Exception as e:
+                print(f"[应用材质参数(.ma)] 应用到 {tgt} 失败: {e}")
+
+        _cleanup()
+
+        if applied:
+            try:
+                cmds.select(applied, replace=True)
+            except Exception:
+                pass
+            print(f"[应用材质参数(.ma)] 已应用到 {len(applied)} 个材质: {applied}")
+            return True
+        print(f"[应用材质参数(.ma)] 无属性被应用（可能缺少 .mmap 映射）")
+        return False
 
     def _on_convert_import(self, mat, target):
         """右键「转换导入 ▶」：把材质资产导入 Maya 场景后，转换为选定的目标材质类型。
@@ -6166,6 +6535,15 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 except Exception:
                     pass
 
+                # 缓存原资产注释：新导出的 meta.json 不含 notes，替换后需写回，避免注释被清空
+                old_notes = ""
+                try:
+                    from ..core.zasset_io import ZassetIO
+                    _pre_meta = ZassetIO.read_meta(old_path) or {}
+                    old_notes = _pre_meta.get("notes", "") or ""
+                except Exception:
+                    old_notes = getattr(mat, "notes", "") or ""
+
                 # 原子替换（使用 shutil.move 兼容跨盘移动）
                 tmp_rename = old_path + ".update_tmp"
                 try:
@@ -6185,6 +6563,9 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
                 from ..core.zasset_io import ZassetIO
                 new_meta = ZassetIO.read_meta(old_path)
                 new_meta["id"] = mat.id
+                # 恢复原资产注释（更新资产不清空用户备注）
+                if old_notes:
+                    new_meta["notes"] = old_notes
                 ZassetIO.update_meta_inplace(old_path, new_meta)
 
                 self._on_refresh()
@@ -7384,6 +7765,17 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         if 0 <= tab_index < self._left_panel_container.count():
             self._left_panel_container.setCurrentIndex(tab_index)
 
+        # 数据依赖的分类树/项目恢复延迟到窗口显示后（等待主库后台加载）
+        self._restored_tab_index = tab_index
+        qt_single_shot(0, self._restore_tree_selection)
+
+    def _restore_tree_selection(self):
+        """数据依赖的分类树/项目库恢复（show 后执行；主库数据未就绪时跳过分类恢复）"""
+        if not self._settings_mgr:
+            return
+        s = self._app_settings
+        tab_index = getattr(self, '_restored_tab_index', 0)
+
         # 根据当前选项卡恢复对应的分类树
         if tab_index == 1:
             # 项目选项卡：先加载项目库再恢复选中
@@ -7405,6 +7797,10 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
             expanded_ids = s.get("expanded_ids", [])
             if expanded_ids:
                 self._category_tree.set_expanded_ids(expanded_ids)
+            # 分类选中依赖主库数据；数据未加载完成时跳过
+            # （由 _on_library_loaded → _load_data 恢复上次分类）
+            if not getattr(self, '_library_loaded', False):
+                return
             active_cat = s.get("active_category", "")
             active_root_lib = s.get("active_root_lib", "")
             # _load_data 已同步加载保存的分类，无需重复加载
@@ -7550,6 +7946,6 @@ class MaterialLibraryWindow(QtWidgets.QMainWindow):
         cls._instance = cls(parent=maya_window, library_path=library_path)
         cls._instance.setObjectName(cls.WINDOW_NAME)
         cls._instance.show()
-        # 延迟恢复 UI 状态（窗口显示后异步执行，避免阻塞启动）
-        QtCore.QTimer.singleShot(0, cls._instance._restore_ui_state)
+        # 注：UI 预设状态已在 __init__ 同步恢复；数据恢复（分类/项目）由
+        #     _restore_ui_state 内部延迟执行，等待主库后台加载完成
         cls._instance._update_status_bar()

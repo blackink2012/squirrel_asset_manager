@@ -1,7 +1,7 @@
 {
     "_comment": "导出资产UI预设 — 按 asset_type 区分。用户可以手动编辑此文件调整默认值。",
     "_default": {
-        "zmetal": true,
+        "zmetal": false,
         "zmetal_merge": true,
         "mcm": false,
         "mcm_min_count": 2,
@@ -23,7 +23,7 @@
         "thumb_source": "screenshot"
     },
     "materials": {
-        "zmetal": true,
+        "zmetal": false,
         "zmetal_merge": false,
         "mcm": false,
         "mcm_min_count": 2,
@@ -67,8 +67,8 @@
         "thumb_source": "screenshot"
     },
     "lights": {
-        "zmetal": true,
-        "zmetal_merge": true,
+        "zmetal": false,
+        "zmetal_merge": false,
         "mcm": false,
         "mcm_min_count": 2,
         "ma": true,
@@ -90,7 +90,7 @@
     },
     "textures": {
         "zmetal": false,
-        "zmetal_merge": true,
+        "zmetal_merge": false,
         "mcm": false,
         "mcm_min_count": 2,
         "ma": false,
@@ -112,7 +112,7 @@
     },
     "scenes": {
         "zmetal": false,
-        "zmetal_merge": true,
+        "zmetal_merge": false,
         "mcm": false,
         "mcm_min_count": 2,
         "ma": true,
@@ -155,8 +155,8 @@
         "thumb_source": "screenshot"
     },
     "ani": {
-        "zmetal": true,
-        "zmetal_merge": true,
+        "zmetal": false,
+        "zmetal_merge": false,
         "mcm": false,
         "mcm_min_count": 2,
         "ma": true,

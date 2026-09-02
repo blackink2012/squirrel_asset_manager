@@ -366,6 +366,28 @@ def _process_texture_paths_in_maya(json_filepath, copy_textures=False):
                 resolved = os.path.normpath(os.path.join(json_dir, cur)).replace('\\', '/')
                 new_path = resolved
             
+            def _set_tex_path(node, path):
+                """设置 fileTextureName 并保护 colorSpace（防止色彩管理文件规则把 Raw 覆盖为 sRGB）"""
+                try:
+                    cs_attr = node + '.colorSpace'
+                    ign_attr = node + '.ignoreColorSpaceFileRules'
+                    orig_cs = cmds.getAttr(cs_attr) if cmds.objExists(cs_attr) else None
+                    orig_ign = None
+                    if cmds.objExists(ign_attr):
+                        orig_ign = cmds.getAttr(ign_attr)
+                        if not orig_ign:
+                            cmds.setAttr(ign_attr, True)
+                    cmds.setAttr(node + '.fileTextureName', path, type='string')
+                    if orig_ign is not None:
+                        cmds.setAttr(ign_attr, orig_ign)
+                    if orig_cs is not None:
+                        cmds.setAttr(cs_attr, orig_cs, type='string')
+                except Exception:
+                    try:
+                        cmds.setAttr(node + '.fileTextureName', path, type='string')
+                    except Exception:
+                        pass
+
             if new_path:
                 if copy_textures and os.path.isfile(new_path):
                     try:
@@ -378,12 +400,12 @@ def _process_texture_paths_in_maya(json_filepath, copy_textures=False):
                         dst = os.path.join(sourceimages_dir, basename).replace('\\', '/')
                         if not os.path.exists(dst) or os.path.getmtime(new_path) != os.path.getmtime(dst):
                             shutil.copy2(new_path, dst)
-                        cmds.setAttr(node + '.fileTextureName', dst, type='string')
+                        _set_tex_path(node, dst)
                     except Exception as e:
                         _log_debug(f"拷贝纹理失败 {new_path}: {e}")
-                        cmds.setAttr(node + '.fileTextureName', new_path, type='string')
+                        _set_tex_path(node, new_path)
                 else:
-                    cmds.setAttr(node + '.fileTextureName', new_path, type='string')
+                    _set_tex_path(node, new_path)
                 print(f"  [纹理路径] {node}: {current_path} -> {new_path}")
         except Exception:
             pass

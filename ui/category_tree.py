@@ -284,6 +284,18 @@ class CategoryTreeWidget(QtWidgets.QWidget):
     def _populate_tree(self):
         """完全镜像文件系统：self._categories 来自 get_category_tree()"""
         self._tree.clear()
+        # 顶部"全部资产"节点（id="all"，root_lib=None → 跨所有子库显示全部资产）
+        total = sum(int(c.get("material_count", 0) or 0) for c in self._categories)
+        label = t("category.all", no_warn=True)
+        all_item = QtWidgets.QTreeWidgetItem()
+        all_item.setText(0, f"  {label}  ({total})" if total > 0 else f"  {label}")
+        all_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, "all")
+        all_item.setData(0, QtCore.Qt.ItemDataRole.UserRole + 1, False)
+        all_item.setData(0, QtCore.Qt.ItemDataRole.UserRole + 2, 0)
+        all_item.setData(0, QtCore.Qt.ItemDataRole.UserRole + 3, None)
+        all_item.setForeground(0, QtGui.QColor(self.CATEGORY_COLORS.get("all", "#5294e2")))
+        all_item.setFont(0, QtGui.QFont())
+        self._tree.addTopLevelItem(all_item)
         for cat in self._categories:
             self._add_category_item(None, cat, 0)
 
@@ -374,7 +386,7 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         if self._tree.topLevelItemCount() > 0:
             self._tree.setCurrentItem(self._tree.topLevelItem(0))
             self._active_category = "all"
-            self.categorySelected.emit("all", [], "materials")
+            self.categorySelected.emit("all", [], None)
 
     def _select_category(self, category_id):
         """选中分类并发射信号（category_id 可为 short_id 或 composite，含 root_lib 信息）"""
@@ -393,7 +405,8 @@ class CategoryTreeWidget(QtWidgets.QWidget):
             root_lib, category_id = split_cat_id(category_id)
         else:
             composite = category_id
-            root_lib = category_id
+            # "全部资产"节点：root_lib=None 表示跨所有子库
+            root_lib = None if category_id == "all" else category_id
         self._active_category = composite
         descendant_ids = [category_id]
         if category_id != "all":
@@ -453,12 +466,34 @@ class CategoryTreeWidget(QtWidgets.QWidget):
         if category_id:
             self._tree.clearSelection()
             self._tree.setCurrentItem(item)
+            if category_id == "all":
+                # 双击"全部资产"：切换所有顶级分类（子库）展开/折叠，
+                # 并必然切换到全部资产显示
+                self._toggle_all_top_level()
+                self._select_all()
+                return
             # 展开时临时断开itemExpanded信号，避免双重级联
             if item.childCount() > 0:
                 self._tree.itemExpanded.disconnect(self._on_item_expanded)
                 item.setExpanded(not item.isExpanded())
                 self._tree.itemExpanded.connect(self._on_item_expanded)
             self._select_category(category_id)
+
+    def _toggle_all_top_level(self):
+        """切换所有顶级分类（子库节点）的展开/折叠状态。
+
+        任一顶级分类未展开 → 全部展开；全部已展开 → 全部收起。
+        """
+        tops = []
+        for i in range(self._tree.topLevelItemCount()):
+            item = self._tree.topLevelItem(i)
+            if item.childCount() > 0 and item.data(0, QtCore.Qt.ItemDataRole.UserRole) != "all":
+                tops.append(item)
+        if not tops:
+            return
+        expand = any(not it.isExpanded() for it in tops)
+        for it in tops:
+            it.setExpanded(expand)
 
     def _on_item_expanded(self, item):
         """展开节点时不再强制切换选中，避免级联搜索刷新"""

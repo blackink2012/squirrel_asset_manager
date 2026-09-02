@@ -1,7 +1,15 @@
 import os
 import json
 import base64
-import requests
+try:
+    import requests  # noqa: F401  旧版 Maya 自带 requests
+except ImportError:
+    # Maya 2027（Python 3.13）无 requests：回退标准库 urllib 实现。
+    # 兼容两种加载方式：插件包内加载（..utils）/ QuickTool 顶层 core 包加载（utils）
+    try:
+        from ..utils.http_compat import requests
+    except ImportError:
+        from utils.http_compat import requests
 from typing import Optional, Dict, Any, List
 
 

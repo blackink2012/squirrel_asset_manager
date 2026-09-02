@@ -2,7 +2,7 @@
 """材质属性面板 — 显示模式 + 内联编辑 + 3D 预览"""
 
 import os
-from ..utils.maya_utils import get_qt_modules
+from ..utils.maya_utils import get_qt_modules, qt_exec
 
 try:
     from ..utils.i18n import t
@@ -151,6 +151,161 @@ class _WheelSwitchLabel(QtWidgets.QLabel):
         event.accept()
 
 
+class _EditableLabel(QtWidgets.QLabel):
+    """属性显示标签：双击发出 doubleClicked 信号（进入对应字段编辑）"""
+    doubleClicked = QtCore.Signal()
+
+    def mouseDoubleClickEvent(self, event):
+        self.doubleClicked.emit()
+        event.accept()
+
+
+class _TagPickerDialog(QtWidgets.QDialog):
+    """添加标签弹窗：手动输入新标签，或点击常用标签快速添加；当前标签点 ✖ 移除。
+
+    标签逻辑与属性编辑页一致：常用标签点击即加入（已加入的不显示），
+    已加入标签以 ✖ pill 展示、点击移除；所有改动实时写入 material['tags']。
+    """
+
+    commonTagRequested = QtCore.Signal(str)  # 出现常用标签库以外的新标签 → 同步 config
+
+    def __init__(self, parent, material, common_tags, font_size=12):
+        super().__init__(parent)
+        self._material = material
+        self._common_tags = list(common_tags or [])
+        self._font_size = font_size
+        self.setWindowTitle(t("preview_panel.tag_picker_title"))
+        self.setMinimumWidth(380)
+        self.setStyleSheet("background-color:#2a2a2a;")
+        self._build_ui()
+        self._rebuild()
+
+    def _build_ui(self):
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(8)
+
+        # ── 手动输入行 ──
+        input_row = QtWidgets.QHBoxLayout()
+        input_row.setSpacing(6)
+        self._input = QtWidgets.QLineEdit()
+        self._input.setPlaceholderText(t("preview_panel.tag_input_placeholder"))
+        self._input.setStyleSheet(
+            "QLineEdit { background:#1a1a1a; color:#e0e0e0; border:1px solid #4a4a4a; "
+            "border-radius:4px; padding:5px 8px; font-size:12px; }"
+            "QLineEdit:focus { border-color:#5294e2; }")
+        self._input.returnPressed.connect(self._add_input_tag)
+        input_row.addWidget(self._input)
+        add_btn = QtWidgets.QPushButton(t("preview_panel.add_tag"))
+        add_btn.setStyleSheet(
+            "QPushButton { background:#5294e2; color:#fff; border:none; padding:6px 16px; "
+            "font-size:12px; border-radius:4px; } QPushButton:hover { background:#6aa8f0; }")
+        add_btn.clicked.connect(self._add_input_tag)
+        input_row.addWidget(add_btn)
+        layout.addLayout(input_row)
+
+        # ── 当前标签（✖ 移除） ──
+        layout.addWidget(self._make_label(t("common.tag")))
+        self._current_flow = FlowWidget()
+        layout.addWidget(self._current_flow)
+
+        # ── 常用标签（点击添加） ──
+        self._common_label = self._make_label(t("preview_panel.common_tags"))
+        layout.addWidget(self._common_label)
+        self._common_flow = FlowWidget()
+        layout.addWidget(self._common_flow)
+
+        # ── 关闭按钮 ──
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.addStretch()
+        close_btn = QtWidgets.QPushButton(t("common.close"))
+        close_btn.setStyleSheet(
+            "QPushButton { background:#3a3a3a; color:#d0d0d0; border:none; padding:6px 18px; "
+            "font-size:12px; border-radius:4px; } QPushButton:hover { background:#4a4a4a; }")
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+    def _make_label(self, text):
+        lbl = QtWidgets.QLabel(text)
+        lbl.setStyleSheet("color:#a0a0a0; font-size:11px;")
+        return lbl
+
+    # ── 数据 ────────────────────────────────────────
+
+    def _tags(self):
+        return self._material.setdefault("tags", [])
+
+    def _rebuild(self):
+        ts = self._font_size
+        tags = self._tags()
+
+        # 当前标签
+        while self._current_flow.flow.count():
+            it = self._current_flow.flow.takeAt(0)
+            if it.widget():
+                it.widget().deleteLater()
+        if tags:
+            for tag in tags:
+                b = QtWidgets.QPushButton(f"\u2716 {tag}")
+                b.setStyleSheet(
+                    f"QPushButton {{ background:#2a3a4a; color:#5294e2; border:1px solid #3a5a7a; "
+                    f"border-radius:10px; padding:1px 7px; font-size:{ts}px; }}"
+                    "QPushButton:hover { background:#3a1a1a; color:#e06060; }")
+                b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+                b.clicked.connect(lambda _=False, tg=tag: self._remove_tag(tg))
+                self._current_flow.flow.addWidget(b)
+        else:
+            self._current_flow.flow.addWidget(self._make_label(t("preview_panel.tag_empty")))
+
+        # 常用标签（已添加的不显示；一个都没有时整段隐藏）
+        while self._common_flow.flow.count():
+            it = self._common_flow.flow.takeAt(0)
+            if it.widget():
+                it.widget().deleteLater()
+        available = [tg for tg in self._common_tags if tg not in tags]
+        if available:
+            self._common_label.setVisible(True)
+            self._common_flow.setVisible(True)
+            for tag in available:
+                b = QtWidgets.QPushButton(tag)
+                b.setStyleSheet(
+                    f"QPushButton {{ background:#333; color:#888; border:1px solid #444; "
+                    f"border-radius:8px; padding:1px 6px; font-size:{ts}px; }}"
+                    "QPushButton:hover { background:#2d4a6f; color:#5294e2; border-color:#5294e2; }")
+                b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+                b.clicked.connect(lambda _=False, tg=tag: self._add_tag(tg))
+                self._common_flow.flow.addWidget(b)
+        else:
+            self._common_label.setVisible(False)
+            self._common_flow.setVisible(False)
+
+    # ── 操作 ────────────────────────────────────────
+
+    def _add_input_tag(self):
+        tag = self._input.text().strip()
+        if not tag:
+            return
+        self._add_tag(tag)
+        self._input.clear()
+        self._input.setFocus()
+
+    def _add_tag(self, tag):
+        tags = self._tags()
+        if tag in tags:
+            return
+        tags.append(tag)
+        if tag not in self._common_tags:
+            self.commonTagRequested.emit(tag)
+        self._rebuild()
+
+    def _remove_tag(self, tag):
+        tags = self._tags()
+        if tag in tags:
+            tags.remove(tag)
+            self._rebuild()
+
+
 # ── 材质属性面板 ────────────────────────────────────
 
 class PreviewPanelWidget(QtWidgets.QWidget):
@@ -169,6 +324,7 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         self._material = None
         self._font_size = 13
         self._common_tags = []
+        self._asset_types = {}  # 子库 key → 显示名（资产类型下拉用）
         self._edit_snapshot = {}
         self._gif_movie = None  # GIF 动图引用
         self._mp4_player = None  # QMediaPlayer MP4 播放器
@@ -299,29 +455,27 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         hr.addWidget(lbl); hr.addStretch(1)
 
         self._fav_btn = QtWidgets.QPushButton("☆")
-        self._fav_btn.setFixedSize(22, 22); self._fav_btn.setToolTip(t("common.favorite"))
-        self._fav_btn.setStyleSheet("QPushButton { background:transparent; color:#606060; border:none; font-size:15px; } QPushButton:hover { color:#FFD700; }")
+        self._fav_btn.setToolTip(t("common.favorite"))
         self._fav_btn.clicked.connect(self._on_fav); self._fav_btn.setVisible(False)
         hr.addWidget(self._fav_btn)
 
         self._edit_btn = QtWidgets.QPushButton("✏")
-        self._edit_btn.setFixedSize(22, 22); self._edit_btn.setToolTip(t("common.edit"))
-        self._edit_btn.setStyleSheet("QPushButton { background:transparent; color:#808080; border:none; font-size:13px; } QPushButton:hover { color:#5294e2; }")
-        self._edit_btn.clicked.connect(self._enter_edit)
+        self._edit_btn.setToolTip(t("common.edit"))
+        self._edit_btn.clicked.connect(lambda: self._enter_edit())
         hr.addWidget(self._edit_btn)
 
         self._save_btn = QtWidgets.QPushButton("✔")
-        self._save_btn.setFixedSize(22, 22); self._save_btn.setToolTip(t("common.save"))
-        self._save_btn.setStyleSheet("QPushButton { background:transparent; color:#5294e2; border:none; font-size:13px; } QPushButton:hover { color:#6ab0ff; }")
+        self._save_btn.setToolTip(t("common.save"))
         self._save_btn.clicked.connect(self._save); self._save_btn.setVisible(False)
         hr.addWidget(self._save_btn)
 
         self._cancel_btn = QtWidgets.QPushButton("✖")
-        self._cancel_btn.setFixedSize(22, 22); self._cancel_btn.setToolTip(t("common.cancel"))
-        self._cancel_btn.setStyleSheet("QPushButton { background:transparent; color:#808080; border:none; font-size:13px; } QPushButton:hover { color:#e06060; }")
+        self._cancel_btn.setToolTip(t("common.cancel"))
         self._cancel_btn.clicked.connect(self._cancel); self._cancel_btn.setVisible(False)
         hr.addWidget(self._cancel_btn)
         lyt.addLayout(hr)
+        # 图标按钮尺寸/字号跟随字体缩放（4K/大字体下更清晰）
+        self._update_header_buttons()
 
         # ── 显示/编辑栈 ──
         self._stack = QtWidgets.QStackedWidget()
@@ -334,10 +488,11 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         w = QtWidgets.QWidget()
         l = QtWidgets.QVBoxLayout(w); l.setContentsMargins(0, 2, 0, 0); l.setSpacing(4)
 
-        self._d_name = QtWidgets.QLabel("-")
+        self._d_name = _EditableLabel("-")
         self._d_name.setStyleSheet("color:#d0d0d0; font-size:13px; font-weight:bold;")
         self._d_name.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         l.addWidget(self._d_name)
+        self._wire_editable(self._d_name, "name_cn")
 
         self._d_asset_name = QtWidgets.QLabel("")
         self._d_asset_name.setStyleSheet("color:#707070; font-size:11px;")
@@ -345,15 +500,17 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         self._d_asset_name.setVisible(False)
         l.addWidget(self._d_asset_name)
 
-        self._d_type = QtWidgets.QLabel(t("preview_panel.node_type") + ": -")
+        self._d_type = _EditableLabel(t("preview_panel.node_type") + ": -")
         self._d_type.setStyleSheet("color:#909090; font-size:11px;")
         self._d_type.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         l.addWidget(self._d_type)
+        self._wire_editable(self._d_type, "node_type")
 
-        self._d_asset = QtWidgets.QLabel(t("preview_panel.asset_type") + ": -")
+        self._d_asset = _EditableLabel(t("preview_panel.asset_type") + ": -")
         self._d_asset.setStyleSheet("color:#909090; font-size:11px;")
         self._d_asset.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         l.addWidget(self._d_asset)
+        self._wire_editable(self._d_asset, "sub_library")
 
         self._d_cat = QtWidgets.QLabel(t("common.category") + ": -")
         self._d_cat.setStyleSheet("color:#909090; font-size:11px;")
@@ -383,23 +540,26 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         l.addWidget(self._d_resolution)
 
         # ── 材质文件元信息 ──
-        self._d_software = QtWidgets.QLabel("")
+        self._d_software = _EditableLabel("")
         self._d_software.setStyleSheet("color:#707070; font-size:10px;")
         self._d_software.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         self._d_software.setVisible(False)
         l.addWidget(self._d_software)
+        self._wire_editable(self._d_software, "software")
 
-        self._d_renderer = QtWidgets.QLabel("")
+        self._d_renderer = _EditableLabel("")
         self._d_renderer.setStyleSheet("color:#707070; font-size:10px;")
         self._d_renderer.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         self._d_renderer.setVisible(False)
         l.addWidget(self._d_renderer)
+        self._wire_editable(self._d_renderer, "renderer")
 
-        self._d_colorspace = QtWidgets.QLabel("")
+        self._d_colorspace = _EditableLabel("")
         self._d_colorspace.setStyleSheet("color:#707070; font-size:10px;")
         self._d_colorspace.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         self._d_colorspace.setVisible(False)
         l.addWidget(self._d_colorspace)
+        self._wire_editable(self._d_colorspace, "color_space")
 
         self._d_export = QtWidgets.QLabel("")
         self._d_export.setStyleSheet("color:#707070; font-size:10px;")
@@ -411,47 +571,94 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         sep.setStyleSheet("color:#3a3a3a; margin:2px 0;")
         l.addWidget(sep)
 
-        l.addWidget(QtWidgets.QLabel(t("common.tag"))); l.itemAt(l.count()-1).widget().setStyleSheet("color:#808080; font-size:11px;")
+        tag_header = _EditableLabel(t("common.tag"))
+        tag_header.setStyleSheet("color:#808080; font-size:11px;")
+        l.addWidget(tag_header)
+        self._wire_editable(tag_header, "tags")
 
         self._d_tags = FlowWidget()
         l.addWidget(self._d_tags)
 
-        self._d_notes = QtWidgets.QLabel("")
+        self._d_notes = _EditableLabel("")
         self._d_notes.setStyleSheet("color:#888888; font-size:11px; padding-top:4px;")
         self._d_notes.setWordWrap(True)
         self._d_notes.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         self._d_notes.setVisible(False)
         l.addWidget(self._d_notes)
+        self._wire_editable(self._d_notes, "notes")
 
         l.addStretch()
         return w
 
     def _build_edit(self):
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background:transparent; }")
         w = QtWidgets.QWidget()
-        l = QtWidgets.QVBoxLayout(w); l.setContentsMargins(0, 2, 0, 0); l.setSpacing(4)
+        w.setStyleSheet("background:transparent;")
+        l = QtWidgets.QVBoxLayout(w); l.setContentsMargins(0, 2, 4, 0); l.setSpacing(4)
 
         s = "background:#333; border:1px solid #4a4a4a; border-radius:3px; padding:4px 6px; color:#e0e0e0; font-size:12px;"
+        sc = ("QComboBox { background:#333; border:1px solid #4a4a4a; border-radius:3px; padding:3px 5px; "
+              "color:#e0e0e0; font-size:12px; } QComboBox::drop-down { border:none; } "
+              "QComboBox QAbstractItemView { background:#333; color:#e0e0e0; font-size:12px; }")
+
+        def _label(text):
+            lb = QtWidgets.QLabel(text)
+            lb.setStyleSheet("color:#808080; font-size:11px;")
+            return lb
+
+        l.addWidget(_label(t("common.name")))
         self._e_name = QtWidgets.QLineEdit(); self._e_name.setStyleSheet(s)
-        l.addWidget(QtWidgets.QLabel(t("common.name"))); l.addWidget(self._e_name)
+        l.addWidget(self._e_name)
 
-        self._e_cat = QtWidgets.QComboBox()
-        self._e_cat.setStyleSheet("QComboBox { background:#333; border:1px solid #4a4a4a; border-radius:3px; padding:3px 5px; color:#e0e0e0; font-size:12px; } QComboBox::drop-down { border:none; } QComboBox QAbstractItemView { background:#333; color:#e0e0e0; font-size:12px; }")
-        l.addWidget(QtWidgets.QLabel(t("common.category"))); l.addWidget(self._e_cat)
+        l.addWidget(_label(t("preview_panel.material_type")))
+        self._e_node_type = QtWidgets.QLineEdit(); self._e_node_type.setStyleSheet(s)
+        l.addWidget(self._e_node_type)
 
-        l.addWidget(QtWidgets.QLabel(t("common.tag")))
+        l.addWidget(_label(t("preview_panel.asset_type")))
+        self._e_asset_type = QtWidgets.QComboBox(); self._e_asset_type.setStyleSheet(sc)
+        l.addWidget(self._e_asset_type)
+
+        l.addWidget(_label(t("common.category")))
+        self._e_cat = QtWidgets.QComboBox(); self._e_cat.setStyleSheet(sc)
+        l.addWidget(self._e_cat)
+
+        l.addWidget(_label(t("preview_panel.software")))
+        self._e_software = QtWidgets.QLineEdit(); self._e_software.setStyleSheet(s)
+        l.addWidget(self._e_software)
+
+        l.addWidget(_label(t("preview_panel.renderer")))
+        self._e_renderer = QtWidgets.QLineEdit(); self._e_renderer.setStyleSheet(s)
+        l.addWidget(self._e_renderer)
+
+        l.addWidget(_label(t("preview_panel.color_space")))
+        self._e_color_space = QtWidgets.QComboBox(); self._e_color_space.setStyleSheet(sc)
+        self._e_color_space.setEditable(True)
+        for _cs in ("sRGB", "Raw", "ACEScg", "Linear sRGB", "Utility - Raw", "Output - sRGB"):
+            self._e_color_space.addItem(_cs)
+        l.addWidget(self._e_color_space)
+
+        l.addWidget(_label(t("common.tag")))
         self._e_tags = FlowWidget()
         l.addWidget(self._e_tags)
 
-        add = QtWidgets.QPushButton(t("preview_panel.add_tag"))
-        add.setStyleSheet("QPushButton { background:transparent; color:#5294e2; border:none; font-size:11px; } QPushButton:hover { color:#6ab0ff; }")
-        add.clicked.connect(self._add_tag)
-        l.addWidget(add)
+        self._add_tag_btn = QtWidgets.QPushButton(t("preview_panel.add_tag"))
+        self._add_tag_btn.setStyleSheet("QPushButton { background:transparent; color:#5294e2; border:none; font-size:11px; } QPushButton:hover { color:#6ab0ff; }")
+        self._add_tag_btn.clicked.connect(self._add_tag)
+        l.addWidget(self._add_tag_btn)
 
-        l.addWidget(QtWidgets.QLabel(t("preview_panel.common_tags")))
-        self._e_common = FlowWidget()
-        l.addWidget(self._e_common)
+        l.addWidget(_label(t("preview_panel.notes")))
+        self._e_notes = QtWidgets.QPlainTextEdit()
+        self._e_notes.setStyleSheet(s)
+        self._e_notes.setPlaceholderText(t("preview_panel.notes_placeholder"))
+        self._e_notes.setMaximumHeight(90)
+        l.addWidget(self._e_notes)
+
         l.addStretch()
-        return w
+        scroll.setWidget(w)
+        return scroll
 
     def _build_preview(self):
         w = QtWidgets.QWidget()
@@ -539,9 +746,9 @@ class PreviewPanelWidget(QtWidgets.QWidget):
             self._d_cat.setText(t("common.category") + ": -")
             self._d_filetype.setText(t("preview_panel.format") + ": -")
             self._d_filesize.setText(t("preview_panel.size") + ": -")
-            self._d_resolution.setText("")
+            self._d_resolution.setText(""); self._d_resolution.hide()
             for lb in [self._d_software, self._d_renderer, self._d_colorspace, self._d_export]:
-                lb.setText("")
+                lb.setText(""); lb.hide()
             self._rebuild_display_tags([])
             self._d_notes.setVisible(False)
             self._show_empty_preview()
@@ -570,22 +777,14 @@ class PreviewPanelWidget(QtWidgets.QWidget):
             self._d_resolution.hide()
 
         sw = material.get('software')
-        if sw:
-            self._d_software.setText(t("preview_panel.software_value", value=sw))
-            self._d_software.show()
-        else:
-            self._d_software.hide()
-        if material.get('renderer'):
-            self._d_renderer.setText(t("preview_panel.renderer_value", value=material.get('renderer')))
-            self._d_renderer.show()
-        else:
-            self._d_renderer.hide()
+        self._d_software.setText(t("preview_panel.software_value", value=sw or "-"))
+        self._d_software.show()
+        rv = material.get('renderer')
+        self._d_renderer.setText(t("preview_panel.renderer_value", value=rv or "-"))
+        self._d_renderer.show()
         cs = material.get("color_space")
-        if cs:
-            self._d_colorspace.setText(t("preview_panel.color_space_value", value=cs))
-            self._d_colorspace.show()
-        else:
-            self._d_colorspace.hide()
+        self._d_colorspace.setText(t("preview_panel.color_space_value", value=cs or "-"))
+        self._d_colorspace.show()
         ed = material.get("create_date") or material.get("export_date", "")
         if ed:
             self._d_export.setText(t("preview_panel.create_time_value", value=ed))
@@ -596,9 +795,11 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         notes = material.get("notes", "")
         if notes:
             self._d_notes.setText(t("preview_panel.notes_value", value=notes))
-            self._d_notes.setVisible(True)
+            self._d_notes.setStyleSheet("color:#888888; font-size:11px; padding-top:4px;")
         else:
-            self._d_notes.setVisible(False)
+            self._d_notes.setText(t("preview_panel.notes_empty"))
+            self._d_notes.setStyleSheet("color:#5a5a5a; font-size:11px; padding-top:4px;")
+        self._d_notes.setVisible(True)
         self._update_fav_btn()
         self._load_thumb_list(material)
         self._draw_preview(material, clear_events=True)
@@ -784,10 +985,33 @@ class PreviewPanelWidget(QtWidgets.QWidget):
             size /= 1024
         return f"{size:.1f} TB"
 
+    def _update_header_buttons(self):
+        """标题行图标按钮（收藏/编辑/保存/取消）尺寸与字号跟随字体缩放。
+
+        固定 22px 在高 DPI（4K）下过小，改为按 _font_size 比例计算。
+        """
+        fs = self._font_size
+        sz = max(24, int(fs * 1.8))  # 13 → 24px
+        for b in (self._fav_btn, self._edit_btn, self._save_btn, self._cancel_btn):
+            b.setFixedSize(sz, sz)
+        self._fav_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:#606060; border:none; font-size:{fs + 2}px; }}"
+            f"QPushButton:hover {{ color:#FFD700; }}")
+        self._edit_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:#808080; border:none; font-size:{fs + 1}px; }}"
+            f"QPushButton:hover {{ color:#5294e2; }}")
+        self._save_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:#5294e2; border:none; font-size:{fs + 1}px; }}"
+            f"QPushButton:hover {{ color:#6ab0ff; }}")
+        self._cancel_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:#808080; border:none; font-size:{fs + 1}px; }}"
+            f"QPushButton:hover {{ color:#e06060; }}")
+
     def set_font_size(self, font_size):
         self._font_size = font_size
         from ..utils.settings import apply_font_size_to_widget
         apply_font_size_to_widget(self, font_size)
+        self._update_header_buttons()
         if self._material:
             self._rebuild_display_tags(self._material.get("tags", []))
 
@@ -840,6 +1064,7 @@ class PreviewPanelWidget(QtWidgets.QWidget):
                 )
             b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
             b.clicked.connect(lambda checked=False, tag=t: self._on_tag_clicked(tag))
+            b.installEventFilter(self)  # 双击标签 pill → 进入标签编辑
             self._d_tags.flow.addWidget(b)
 
     def _on_tag_clicked(self, tag):
@@ -905,31 +1130,91 @@ class PreviewPanelWidget(QtWidgets.QWidget):
             mid = self._material.get("id", "")
             if mid: self.favoriteToggled.emit(mid, fav)
 
+    # ── 双击编辑 ────────────────────────────────────
+
+    def _wire_editable(self, label, field):
+        """显示标签双击 → 进入编辑模式并定位到对应字段"""
+        label.doubleClicked.connect(lambda: self._enter_edit(field))
+        label.setToolTip(t("preview_panel.double_click_hint"))
+
+    def eventFilter(self, obj, event):
+        # 显示模式下双击标签 pill → 进入标签编辑
+        if (event.type() == QtCore.QEvent.Type.MouseButtonDblClick
+                and self._stack.currentIndex() == 0 and self._material):
+            self._enter_edit("tags")
+            return True
+        return super().eventFilter(obj, event)
+
     # ── 编辑模式 ────────────────────────────────────
 
-    def _enter_edit(self):
+    def _enter_edit(self, focus_field=None):
         if not self._material: return
+        m = self._material
         self._edit_snapshot = {
-            "name_cn": self._material.get("name_cn", ""),
-            "tags": list(self._material.get("tags", [])),
-            "category": self._material.get("category", ""),
+            "name_cn": m.get("name_cn", ""),
+            "tags": list(m.get("tags", [])),
+            "category": m.get("category", ""),
+            "node_type": m.get("node_type", ""),
+            "sub_library": m.get("sub_library", ""),
+            "software": m.get("software", ""),
+            "renderer": m.get("renderer", ""),
+            "color_space": m.get("color_space", ""),
+            "notes": m.get("notes", ""),
+            "_asset_type": m.get("_asset_type", ""),
         }
-        self._e_name.setText(self._material.get("name_cn", ""))
-        idx = self._e_cat.findData(self._material.get("category", ""))
-        if idx >= 0: self._e_cat.setCurrentIndex(idx)
+        self._e_name.setText(m.get("name_cn", ""))
+        idx = self._e_cat.findData(m.get("category", ""))
+        self._e_cat.setCurrentIndex(idx if idx >= 0 else 0)
+        self._e_node_type.setText(m.get("node_type", ""))
+        idx = self._e_asset_type.findData(m.get("sub_library", ""))
+        self._e_asset_type.setCurrentIndex(idx if idx >= 0 else 0)
+        self._e_software.setText(m.get("software", ""))
+        self._e_renderer.setText(m.get("renderer", ""))
+        self._e_color_space.setCurrentText(m.get("color_space", ""))
+        self._e_notes.setPlainText(m.get("notes", ""))
         self._rebuild_edit_tags()
-        self._rebuild_common_tags()
         self._edit_btn.setVisible(False)
         self._fav_btn.setVisible(False)
         self._save_btn.setVisible(True)
         self._cancel_btn.setVisible(True)
         self._stack.setCurrentIndex(1)
+        self._focus_edit_field(focus_field)
+
+    def _focus_edit_field(self, field):
+        """双击进入编辑后，聚焦并高亮对应字段控件"""
+        widget = {
+            "name_cn": self._e_name,
+            "node_type": self._e_node_type,
+            "sub_library": self._e_asset_type,
+            "category": self._e_cat,
+            "software": self._e_software,
+            "renderer": self._e_renderer,
+            "color_space": self._e_color_space,
+            "notes": self._e_notes,
+        }.get(field)
+        if widget is not None:
+            widget.setFocus(QtCore.Qt.FocusReason.MouseFocusReason)
+            if isinstance(widget, QtWidgets.QLineEdit):
+                widget.selectAll()
+        elif field == "tags":
+            self._add_tag_btn.setFocus(QtCore.Qt.FocusReason.MouseFocusReason)
 
     def _save(self):
         if not self._material: return
-        self._material["name_cn"] = self._e_name.text().strip()
+        m = self._material
+        m["name_cn"] = self._e_name.text().strip()
         idx = self._e_cat.currentIndex()
-        if idx >= 0: self._material["category"] = self._e_cat.currentData()
+        if idx >= 0 and self._e_cat.currentData():
+            m["category"] = self._e_cat.currentData()
+        m["node_type"] = self._e_node_type.text().strip()
+        idx = self._e_asset_type.currentIndex()
+        if idx >= 0 and self._e_asset_type.itemData(idx):
+            m["sub_library"] = self._e_asset_type.itemData(idx)
+            m["_asset_type"] = self._e_asset_type.currentText()
+        m["software"] = self._e_software.text().strip()
+        m["renderer"] = self._e_renderer.text().strip()
+        m["color_space"] = self._e_color_space.currentText().strip()
+        m["notes"] = self._e_notes.toPlainText().strip()
         self._exit_edit()
         self.editRequested.emit(self._material)
 
@@ -945,10 +1230,9 @@ class PreviewPanelWidget(QtWidgets.QWidget):
         self._save_btn.setVisible(False)
         self._cancel_btn.setVisible(False)
         self._stack.setCurrentIndex(0)
-        # 刷新显示
+        # 全量刷新显示（含软件/渲染器/色彩空间/注释等新字段）
         if self._material:
-            self._d_name.setText(self._material.get("name_cn", "-"))
-            self._rebuild_display_tags(self._material.get("tags", []))
+            self.show_material(self._material)
 
     # ── 编辑标签 ────────────────────────────────────
 
@@ -970,45 +1254,18 @@ class PreviewPanelWidget(QtWidgets.QWidget):
                 if self._material and t in self._material.get("tags", []):
                     self._material["tags"].remove(t)
                     QtCore.QTimer.singleShot(0, self._rebuild_edit_tags)
-                    QtCore.QTimer.singleShot(10, self._rebuild_common_tags)
             return h
         b.clicked.connect(remove(tag))
         self._e_tags.flow.addWidget(b)
 
-    def _rebuild_common_tags(self):
-        while self._e_common.flow.count():
-            it = self._e_common.flow.takeAt(0)
-            if it.widget(): it.widget().deleteLater()
-        current = set(self._material.get("tags", [])) if self._material else set()
-        for t in self._common_tags:
-            if t not in current:
-                b = QtWidgets.QPushButton(t)
-                ts = self._font_size
-                b.setStyleSheet(f"QPushButton {{ background:#333; color:#888; border:1px solid #444; border-radius:8px; padding:1px 6px; font-size:{ts}px; }} QPushButton:hover {{ background:#2d4a6f; color:#5294e2; border-color:#5294e2; }}")
-                b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-                def add(tag):
-                    def h():
-                        if self._material:
-                            self._material.setdefault("tags", [])
-                            if tag not in self._material["tags"]:
-                                self._material["tags"].append(tag)
-                                self._add_edit_pill(tag)
-                                QtCore.QTimer.singleShot(0, self._rebuild_common_tags)
-                    return h
-                b.clicked.connect(add(t))
-                self._e_common.flow.addWidget(b)
-
     def _add_tag(self):
-        t_input, ok = QtWidgets.QInputDialog.getText(self, t("preview_panel.add_tag"), t("preview_panel.new_tag") + ":")
-        if ok and t_input.strip():
-            tag = t_input.strip()
-            if self._material:
-                self._material.setdefault("tags", [])
-                if tag not in self._material["tags"]:
-                    self._material["tags"].append(tag)
-                    self._add_edit_pill(tag)
-                    self._rebuild_common_tags()
-                    self.commonTagRequested.emit(tag)  # 通知主窗口同步到 config
+        """打开标签选择弹窗：可输入新标签或点选常用标签（改动实时写入 material['tags']）"""
+        if not self._material:
+            return
+        dlg = _TagPickerDialog(self, self._material, self._common_tags, self._font_size)
+        dlg.commonTagRequested.connect(self.commonTagRequested)
+        qt_exec(dlg)
+        self._rebuild_edit_tags()
 
     # ── 外部接口 ────────────────────────────────────
 
@@ -1023,6 +1280,22 @@ class PreviewPanelWidget(QtWidgets.QWidget):
 
     def set_common_tags(self, tags):
         self._common_tags = list(tags)
+
+    def set_asset_types(self, asset_types):
+        """资产类型（子库）下拉数据：{子库 key: 显示名}"""
+        self._asset_types = dict(asset_types or {})
+        if not hasattr(self, "_e_asset_type"):
+            return
+        current = self._e_asset_type.currentData()
+        self._e_asset_type.blockSignals(True)
+        self._e_asset_type.clear()
+        for key, name in self._asset_types.items():
+            self._e_asset_type.addItem(name, key)
+        if current:
+            idx = self._e_asset_type.findData(current)
+            if idx >= 0:
+                self._e_asset_type.setCurrentIndex(idx)
+        self._e_asset_type.blockSignals(False)
 
     # ── 3D 预览 ─────────────────────────────────────
 

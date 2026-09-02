@@ -315,7 +315,7 @@ def fetch_available_models(provider, api_key="", base_url="", _ttl=30):
     """
     if not AIAnalyzer:
         return []
-    import requests
+    from ..utils.http_compat import requests  # Maya 2027 无 requests 时回退标准库 urllib
     cache_key = provider if provider == "ollama" else (provider, (base_url or "").rstrip("/"))
     now = time.time()
     cached = _model_cache.get(cache_key)
@@ -355,23 +355,25 @@ def fetch_available_models(provider, api_key="", base_url="", _ttl=30):
 
 
 class AISearchAssistant:
-    """把自然语言搜索意图转成资产库 tag 关键词（概括性）。"""
+    """把自然语言搜索意图转成资产库 tag 关键词（概括性，强制中英成对）。"""
 
     _INTENT_PROMPT = (
         "你是资产库搜索助手。用户用自然语言描述想要的资产，"
         "请提取 3~6 个「概括性搜索关键词」(tag) 并判断资产子库类型。\n"
-        "资产库中英文命名都可能存在，每个概念请同时输出中文和英文关键词。\n"
+        "资产库中英文命名都可能存在，必须每个概念同时给出英文(en)和中文(zh)，"
         "只输出严格 JSON，不要输出其他内容：\n"
-        '{"keywords": ["关键词1", "关键词2"], "sub_library": "materials", "note": "一句话说明"}\n'
+        '{"keywords": [{"en": "metal", "zh": "金属"}, {"en": "wood", "zh": "木"}], '
+        '"sub_library": "materials", "note": "一句话说明"}\n'
         "sub_library 取值：materials | models | textures | lights | scenes | hdr\n"
     )
 
     _IMAGE_PROMPT = (
         "你是资产库搜索助手。请观察这张参考图片，提取 3~6 个「概括性搜索关键词」(tag) "
         "并判断资产子库类型。\n"
-        "资产库中英文命名都可能存在，每个概念请同时输出中文和英文关键词。\n"
+        "资产库中英文命名都可能存在，必须每个概念同时给出英文(en)和中文(zh)，"
         "只输出严格 JSON，不要输出其他内容：\n"
-        '{"keywords": ["关键词1", "关键词2"], "sub_library": "materials", "note": "一句话说明"}\n'
+        '{"keywords": [{"en": "metal", "zh": "金属"}], '
+        '"sub_library": "materials", "note": "一句话说明"}\n'
         "sub_library 取值：materials | models | textures | lights | scenes | hdr\n"
     )
 
@@ -512,7 +514,7 @@ class AISearchAssistant:
             "options": {"num_predict": max_tokens, "temperature": temperature},
             "images": images_b64,  # 旧版 Ollama 兼容（新版会静默忽略顶层 images）
         }
-        import requests
+        from ..utils.http_compat import requests  # Maya 2027 无 requests 时回退标准库 urllib
         response = requests.post(
             url, json=payload, headers={"Content-Type": "application/json"},
             timeout=180)
@@ -548,6 +550,7 @@ class AISearchAssistant:
                 parsed = AIAnalyzer.extract_json(raw)
                 if isinstance(parsed, dict):
                     keywords = self._clean_keywords(parsed.get("keywords"))
+                    keywords = self._ensure_bilingual(keywords)  # 强制中英成对
                     sub_lib = self._clean_sub_library(parsed.get("sub_library"))
                     if keywords:
                         return {"keywords": keywords, "sub_library": sub_lib,
@@ -594,6 +597,7 @@ class AISearchAssistant:
             parsed = AIAnalyzer.extract_json(raw)
             if isinstance(parsed, dict):
                 keywords = self._clean_keywords(parsed.get("keywords"))
+                keywords = self._ensure_bilingual(keywords)  # 强制中英成对
                 sub_lib = self._clean_sub_library(parsed.get("sub_library"))
                 if keywords:
                     return {"keywords": keywords, "sub_library": sub_lib,
@@ -624,8 +628,10 @@ class AISearchAssistant:
             prompt = (
                 "你是资产库搜索助手。请综合观察这%d张参考图片，"
                 "提取 3~6 个「概括性搜索关键词」(tag) 并判断资产子库类型。\n"
+                "资产库中英文命名都可能存在，必须每个概念同时给出英文(en)和中文(zh)，"
                 "只输出严格 JSON，不要输出其他内容：\n"
-                '{"keywords": ["关键词1", "关键词2"], "sub_library": "materials", "note": "一句话说明"}\n'
+                '{"keywords": [{"en": "metal", "zh": "金属"}], '
+                '"sub_library": "materials", "note": "一句话说明"}\n'
                 "sub_library 取值：materials | models | textures | lights | scenes | hdr\n"
             ) % image_count
         if text and text.strip():
@@ -636,14 +642,24 @@ class AISearchAssistant:
 
     @staticmethod
     def _clean_keywords(keywords):
-        """清洗 AI 返回的关键词列表（去空白/重复/限制数量，双语场景放宽到 12）"""
+        """清洗 AI 返回的关键词列表。
+
+        兼容两种格式：纯字符串列表，或成对对象 [{"en": "...", "zh": "..."}]；
+        成对对象展开为中英两个词。去空白/重复，限制 12 个（双语成对场景）。
+        """
         if not isinstance(keywords, list):
             return []
         out = []
         for kw in keywords:
-            kw = str(kw).strip().strip('"\'')
-            if kw and kw not in out:
-                out.append(kw)
+            if isinstance(kw, dict):
+                for k in (kw.get("en"), kw.get("zh")):
+                    k = str(k).strip().strip('"\'') if k else ""
+                    if k and k not in out:
+                        out.append(k)
+            else:
+                k = str(kw).strip().strip('"\'')
+                if k and k not in out:
+                    out.append(k)
         return out[:12]
 
     @staticmethod
@@ -654,6 +670,52 @@ class AISearchAssistant:
         sub_lib = sub_lib.strip().lower()
         return sub_lib if sub_lib in _SUB_LIBRARIES else ""
 
+    def _ensure_bilingual(self, keywords):
+        """强制关键词中英成对：本地对照表展开 + 单语时调用模型补齐另一种语言。
+
+        模型即使只回英文（或只回中文），也会补上中文（或英文）写法，
+        保证搜索命中中英文命名；翻译失败时原样返回。
+        """
+        keywords = _expand_bilingual(keywords)
+        if not keywords:
+            return keywords
+        has_cjk = any(re.search(r"[\u4e00-\u9fff]", k) for k in keywords)
+        has_ascii = any(re.search(r"[A-Za-z]", k) for k in keywords)
+        if has_cjk and has_ascii:
+            return keywords  # 已含中英两种写法，无需再调模型
+        try:
+            pairs = self._translate_pairs(keywords)
+        except Exception:
+            return keywords
+        out = list(keywords)
+        for en, zh in pairs:
+            if en and en not in out:
+                out.append(en)
+            if zh and zh not in out:
+                out.append(zh)
+        return out[:12]
+
+    def _translate_pairs(self, words):
+        """调用模型把关键词同时译成中英成对，返回 [(en, zh), ...]，失败返回 []。"""
+        if not self._analyzer:
+            return []
+        prompt = (
+            "你是翻译助手。请把下面每个搜索关键词同时给出英文(en)和中文(zh)写法，"
+            "保持顺序，只输出严格 JSON：\n"
+            '{"keywords": [{"en": "metal", "zh": "金属"}, ...]}\n'
+            "关键词：" + "、".join(words)
+        )
+        raw = self._analyzer.chat_text(prompt, temperature=0.1, max_tokens=512)
+        parsed = AIAnalyzer.extract_json(raw) if raw else None
+        if not isinstance(parsed, dict):
+            return []
+        pairs = []
+        for it in parsed.get("keywords") or []:
+            if isinstance(it, dict):
+                pairs.append((str(it.get("en") or "").strip(),
+                              str(it.get("zh") or "").strip()))
+        return pairs
+
     @staticmethod
     def _is_model_not_found(e) -> bool:
         """判断异常是否为服务端返回「模型不存在」(404 not found)。
@@ -661,7 +723,7 @@ class AISearchAssistant:
         Ollama 对未安装的模型请求 /api/chat 会返回 404 + "model ... not found"。
         """
         try:
-            import requests
+            from ..utils.http_compat import requests  # noqa: F401
             if isinstance(e, requests.HTTPError):
                 resp = getattr(e, "response", None)
                 if resp is not None and resp.status_code == 404:

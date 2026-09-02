@@ -212,7 +212,7 @@ class AssetCreateDialog(QtWidgets.QDialog):
             print(f"[ExportPreset] 未加载到预设 (path={preset_path}), "
                   f"使用内置默认值 asset_type={self._asset_type}")
 
-        self._export_zmetal = entry.get("zmetal", True)
+        self._export_zmetal = entry.get("zmetal", False)
         self._export_ma = entry.get("ma", False)
         self._export_mb = entry.get("mb", False)
         self._export_fbx = entry.get("fbx", False)
